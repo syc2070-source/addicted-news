@@ -1,0 +1,310 @@
+// backend/src/crawler/newsCrawler.ts
+import 'dotenv/config';
+import 'reflect-metadata';
+import { DataSource } from 'typeorm';
+import Parser from 'rss-parser';
+import { Article } from '../articles/article.entity';
+import { SOURCES, SourceConfig } from './sourceConfig';
+
+/**
+ * 운영 포인트
+ * - sourceUrl: "원문 최종 URL" (가능하면 원문, 아니면 구글URL)
+ * - googleUrl: "구글 RSS entry 링크"
+ * - 중복 기준(우선순위):
+ *   1) sourceUrl 동일
+ *   2) googleUrl 동일
+ *   3) title + publishedAt + source 동일
+ */
+
+type RssItem = {
+  title?: string;
+  link?: string;
+  isoDate?: string;
+  pubDate?: string;
+  contentSnippet?: string;
+  content?: string;
+};
+
+type Candidate = {
+  title: string;
+  teaser?: string;
+  summary: string;
+  category: string;
+  region: string;
+  source: string;
+  sourceUrl: string;
+  googleUrl?: string;
+  origin: string;
+  isTop: boolean;
+  isFeature: boolean;
+  publishedAt: string;
+};
+
+const parser = new Parser<RssItem>({
+  customFields: {
+    item: ['source', 'media:content'],
+  },
+});
+
+// -------------------- DB 연결(.env 권장) --------------------
+const DB_HOST = process.env.DB_HOST || 'localhost';
+const DB_PORT = Number(process.env.DB_PORT || 5432);
+const DB_USER = process.env.DB_USER || 'postgres';
+const DB_PASS = String(process.env.DB_PASSWORD ?? '');
+const DB_NAME = process.env.DB_NAME || 'addiction_news';
+
+const ds = new DataSource({
+  type: 'postgres',
+  host: DB_HOST,
+  port: DB_PORT,
+  username: DB_USER,
+  password: DB_PASS,
+  database: DB_NAME,
+  entities: [Article],
+  synchronize: false,
+  logging: false,
+});
+
+// -------------------- 유틸 --------------------
+function toYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parsePublishedAt(item: RssItem): string {
+  const raw = item.isoDate || item.pubDate;
+  if (!raw) return toYmd(new Date());
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return toYmd(new Date());
+  return toYmd(dt);
+}
+
+function normalizeText(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function makeTeaser(item: RssItem): string | undefined {
+  const t = normalizeText(item.contentSnippet || item.content || '');
+  if (!t) return undefined;
+  return t.length > 480 ? t.slice(0, 480) : t;
+}
+
+/**
+ * 스포츠 "비도박" 기사 자동 제외
+ */
+function shouldExcludeSportsNonGambling(title: string, text: string): boolean {
+  const all = (title + ' ' + text).toLowerCase();
+
+  const sports = [
+    'soccer', 'football', 'baseball', 'basketball', 'tennis',
+    'premier league', 'mlb', 'nba', 'uefa', 'fifa',
+    '축구', '야구', '농구', '테니스', '배구', '골프', '경기', '리그', '선수', '감독',
+  ];
+
+  const gambling = [
+    'bet', 'bets', 'betting', 'wager', 'odds', 'sportsbook', 'casino', 'gambling',
+    '도박', '베팅', '배당', '승부', '토토', '스포츠토토', '카지노',
+  ];
+
+  const hasSports = sports.some((k) => all.includes(k));
+  const hasGambling = gambling.some((k) => all.includes(k));
+
+  return hasSports && !hasGambling;
+}
+
+/**
+ * ✅ 개선: 타임아웃 추가 (5초 제한)
+ * Google News URL → 원문 URL 추출
+ */
+async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // ✅ 5초 타임아웃
+
+    const res = await fetch(maybeGoogleUrl, {
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    clearTimeout(timeout);
+
+    const finalUrl = res.url || maybeGoogleUrl;
+
+    // canonical 태그 확인
+    if (finalUrl.includes('news.google.com')) {
+      const html = await res.text();
+      const m = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+      if (m?.[1]) return m[1];
+    }
+
+    return finalUrl;
+  } catch (err) {
+    // 타임아웃 또는 네트워크 오류 시 원본 URL 반환
+    return maybeGoogleUrl;
+  }
+}
+
+/** RSS에서 후보 기사 뽑기 */
+async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
+  try {
+    console.log(`  ├─ [${conf.id}] RSS 파싱 중...`); // ✅ 로그
+    const feed = await parser.parseURL(conf.url);
+    const items = (feed.items || []).slice(0, 30);
+    console.log(`  ├─ [${conf.id}] ${items.length}개 아이템 발견`); // ✅ 로그
+
+    const out: Candidate[] = [];
+    let processedCount = 0;
+
+    for (const it of items) {
+      const title = normalizeText(it.title || '');
+      if (!title) continue;
+
+      const publishedAt = parsePublishedAt(it);
+      const teaser = makeTeaser(it);
+      const summary = teaser || title;
+
+      const googleUrl = it.link ? String(it.link) : undefined;
+      const baseUrl = googleUrl || conf.url;
+
+      // 스포츠 비도박 제외
+      if (shouldExcludeSportsNonGambling(title, summary)) continue;
+
+      // ✅ 원문 URL 추출 (타임아웃 적용됨)
+      const sourceUrl = baseUrl.includes('news.google.com')
+        ? await resolveFinalUrl(baseUrl)
+        : baseUrl;
+
+      out.push({
+        title,
+        teaser,
+        summary,
+        category: conf.category,
+        region: conf.region,
+        source: conf.sourceName,
+        sourceUrl,
+        googleUrl,
+        origin: 'crawler',
+        isTop: false,
+        isFeature: false,
+        publishedAt,
+      });
+
+      processedCount++;
+      if (processedCount % 10 === 0) {
+        console.log(`  │   └─ ${processedCount}/${items.length} 처리 중...`); // ✅ 진행률
+      }
+    }
+
+    console.log(`  └─ [${conf.id}] 완료: ${out.length}개 수집\n`); // ✅ 로그
+    return out;
+  } catch (err) {
+    console.error(`  └─ [${conf.id}] ❌ RSS 크롤링 실패:`, err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
+// -------------------- 중복 방지(운영 기준) --------------------
+async function isDuplicate(repo: any, c: Candidate): Promise<boolean> {
+  if (c.sourceUrl) {
+    const hit1 = await repo.findOne({ where: { sourceUrl: c.sourceUrl } });
+    if (hit1) return true;
+  }
+
+  if (c.googleUrl) {
+    const hit2 = await repo.findOne({ where: { googleUrl: c.googleUrl } });
+    if (hit2) return true;
+  }
+
+  const hit3 = await repo.findOne({
+    where: { title: c.title, publishedAt: c.publishedAt, source: c.source },
+  });
+  return !!hit3;
+}
+
+// -------------------- 저장 --------------------
+async function saveCandidates(list: Candidate[]) {
+  const repo = ds.getRepository(Article);
+
+  let inserted = 0;
+  let skipped = 0;
+
+  console.log(`\n💾 DB 저장 시작 (총 ${list.length}개 후보)...`); // ✅ 로그
+
+  for (const c of list) {
+    const dup = await isDuplicate(repo, c);
+    if (dup) {
+      skipped += 1;
+      continue;
+    }
+
+    const entity = repo.create({
+      title: c.title,
+      teaser: c.teaser,
+      summary: c.summary,
+      category: c.category,
+      region: c.region,
+      source: c.source,
+      sourceUrl: c.sourceUrl,
+      googleUrl: c.googleUrl,
+      origin: c.origin,
+      isTop: c.isTop,
+      isFeature: c.isFeature,
+      publishedAt: c.publishedAt,
+    });
+
+    await repo.save(entity);
+    inserted += 1;
+
+    if (inserted % 10 === 0) {
+      console.log(`  ├─ ${inserted}개 저장됨...`); // ✅ 진행률
+    }
+  }
+
+  console.log(`  └─ 저장 완료!\n`); // ✅ 로그
+  return { inserted, skipped };
+}
+
+// -------------------- 실행 엔트리 --------------------
+async function main() {
+  console.log('\n========================================');
+  console.log('🚀 Addicted News Crawler START');
+  console.log('========================================\n');
+
+  await ds.initialize();
+  console.log('✅ DB 연결 완료\n');
+
+  console.log(`📡 총 ${SOURCES.length}개 소스 크롤링 시작...\n`);
+
+  const all: Candidate[] = [];
+  for (let i = 0; i < SOURCES.length; i++) {
+    const conf = SOURCES[i];
+    console.log(`[${i + 1}/${SOURCES.length}] ${conf.sourceName} (${conf.category} / ${conf.region})`);
+    const got = await crawlOneSource(conf);
+    all.push(...got);
+  }
+
+  const { inserted, skipped } = await saveCandidates(all);
+
+  console.log('========================================');
+  console.log('📊 크롤링 결과:');
+  console.log(`  - 수집: ${all.length}개`);
+  console.log(`  - 저장: ${inserted}개`);
+  console.log(`  - 중복: ${skipped}개`);
+  console.log('========================================');
+  console.log('✅ Addicted News Crawler END\n');
+
+  await ds.destroy();
+}
+
+main().catch(async (e) => {
+  console.error('\n❌ 크롤러 치명적 오류:', e);
+  try {
+    if (ds.isInitialized) await ds.destroy();
+  } catch {}
+  process.exit(1);
+});

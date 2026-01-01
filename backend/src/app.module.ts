@@ -1,27 +1,34 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Article } from './articles/article.entity';
 import { ArticlesModule } from './articles/articles.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'syc512951',   //
-      database: 'addiction_news',
-      entities: [Article],
-      synchronize: false,
-      autoLoadEntities: true,
-      logging: true,
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env'], // backend 루트의 .env
     }),
+
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get<string>('DB_HOST'),
+        port: Number(config.get<string>('DB_PORT') || 5432),
+        username: config.get<string>('DB_USER'),
+        password: config.get<string>('DB_PASSWORD'),
+        database: config.get<string>('DB_NAME'),
+        entities: [Article],
+        synchronize: false,
+        autoLoadEntities: true,
+        logging: true,
+      }),
+    }),
+
     ArticlesModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

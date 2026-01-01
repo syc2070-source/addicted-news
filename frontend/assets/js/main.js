@@ -1,5 +1,5 @@
 // 백엔드 API 주소
-const API_BASE = "http://localhost:4000";
+const API_BASE = "http://localhost:4000";  // ✅ 수정!
 
 const CATEGORY_KEYS = [
   "종합",
@@ -12,6 +12,18 @@ const CATEGORY_KEYS = [
   "종교",
   "시사 이슈",
 ];
+
+// 프론트에서 쓰는 한글 카테고리 → 백엔드 URL 슬러그 매핑
+const CATEGORY_SLUG_MAP = {
+  "중독정책": "policy",
+  "알코올·약물중독": "alcohol",
+  "도박중독": "gambling",
+  "게임·디지털중독": "game",
+  "AI 관련 정책과 중독": "ai",
+  "공동체": "community",
+  "종교": "religion",
+  "시사 이슈": "issue",
+};
 
 const DEMO_ARTICLES = [
   {
@@ -141,7 +153,7 @@ let state = {
   category: "종합",
   search: "",
   summaryOpen: new Set(),
-  viewMode: "summary", // "summary": 5개, "full": 20개
+  viewMode: "summary", // "summary": 요약 모드, "full": 카테고리 전체 보기(백엔드 호출)
 };
 
 // ---------- 초기 로드 ----------
@@ -155,7 +167,9 @@ document.addEventListener("DOMContentLoaded", () => {
 // 백엔드에서 기사 불러오기 (없으면 데모 데이터)
 async function loadArticles() {
   try {
-    const res = await fetch(`${API_BASE}/articles/latest`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE}/articles/latest`, {
+      cache: "no-store",
+    });
     if (!res.ok) throw new Error("API error " + res.status);
     const data = await res.json();
     ARTICLES = Array.isArray(data) && data.length ? data : DEMO_ARTICLES;
@@ -279,9 +293,7 @@ function renderHighlights(baseList) {
     return;
   }
 
-  list.sort(
-    (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)
-  );
+  list.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
   let topNews = list.find((a) => a.isTop) || list[0];
   const features = list
@@ -374,9 +386,7 @@ function renderArticles() {
     });
   }
 
-  base.sort(
-    (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt)
-  );
+  base.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
   renderHighlights(base);
 
@@ -461,13 +471,14 @@ function renderArticles() {
     if (state.viewMode === "summary") {
       btn.textContent = "더보기 (이 카테고리 전체 기사 보기)";
       btn.onclick = () => {
-        state.viewMode = "full";
-        renderArticles();
+        // ✅ 여기서 백엔드 페이지네이션 API 호출
+        loadCategoryFullFromBackend(state.category);
       };
     } else {
       btn.textContent = "요약 목록으로 돌아가기";
       btn.onclick = () => {
         state.viewMode = "summary";
+        state.summaryOpen.clear();
         window.scrollTo({ top: 0, behavior: "smooth" });
         renderArticles();
       };
@@ -476,7 +487,13 @@ function renderArticles() {
 
     const info = document.createElement("div");
     info.className = "load-more-text";
-    info.textContent = "카테고리별 전체 기사는 최대 20개까지 표시됩니다.";
+    if (state.viewMode === "summary") {
+      info.textContent =
+        "더보기를 누르면 이 카테고리의 최신 기사 최대 20개를 불러옵니다.";
+    } else {
+      info.textContent =
+        "카테고리별 전체 기사는 화면에서 최대 20개까지 표시되며, 그 이후 데이터는 데이터베이스에 저장됩니다.";
+    }
     loadMoreEl.appendChild(info);
   }
 }
@@ -566,6 +583,76 @@ function renderArticleCardInto(container) {
 
     container.appendChild(card);
   };
+}
+
+// ---------- 카테고리 전체 보기(백엔드 페이지네이션 호출) ----------
+async function loadCategoryFullFromBackend(categoryName) {
+  const slug = CATEGORY_SLUG_MAP[categoryName];
+  const container = document.getElementById("articlesWrap");
+  const titleEl = document.getElementById("articlesTitle");
+  const metaEl = document.getElementById("articlesMeta");
+  const loadMoreEl = document.getElementById("loadMoreWrap");
+
+  // 슬러그가 없으면 기존 로컬 방식으로 fallback
+  if (!slug) {
+    state.viewMode = "full";
+    renderArticles();
+    return;
+  }
+
+  container.innerHTML =
+    '<div style="font-size:13px;color:#6b7280;">기사 불러오는 중…</div>';
+  loadMoreEl.innerHTML = "";
+  titleEl.textContent = categoryName + " 최신 기사 (전체 보기)";
+  metaEl.textContent = "";
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/articles/category/${slug}/paged?page=1&limit=20`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) throw new Error("API error " + res.status);
+    const data = await res.json(); // { items, page, limit, total }
+
+    const list = Array.isArray(data.items) ? data.items : [];
+    state.viewMode = "full";
+
+    container.innerHTML = "";
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "조건에 맞는 기사가 없습니다.";
+      empty.style.fontSize = "13px";
+      empty.style.color = "#6b7280";
+      container.appendChild(empty);
+    } else {
+      list.forEach(renderArticleCardInto(container));
+    }
+
+    metaEl.textContent = `총 ${data.total}건 중 ${list.length}건 표시 (최대 20개까지 화면에 표시)`;
+
+    // 요약으로 돌아가기 버튼/문구
+    loadMoreEl.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.textContent = "요약 목록으로 돌아가기";
+    btn.onclick = () => {
+      state.viewMode = "summary";
+      state.summaryOpen.clear();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      renderArticles();
+    };
+    loadMoreEl.appendChild(btn);
+
+    const info = document.createElement("div");
+    info.className = "load-more-text";
+    info.textContent =
+      "이 카테고리의 전체 기사는 화면에서 최대 20개까지 표시되며, 그 이후 데이터는 데이터베이스에 저장됩니다.";
+    loadMoreEl.appendChild(info);
+  } catch (e) {
+    console.error("카테고리 전체 기사 로딩 실패:", e);
+    container.innerHTML =
+      '<div style="font-size:13px;color:#b91c1c;">기사 로딩 중 오류가 발생했습니다.</div>';
+  }
 }
 
 // ---------- 오늘의 주요 이슈 ----------
