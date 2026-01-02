@@ -4,81 +4,129 @@
   <meta charset="UTF-8" />
   <title>중독뉴스 | Addiction News</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="중독 관련 뉴스, 정책, 연구를 한눈에. 중독사회 연구허브의 뉴스 플랫폼" />
 
   <!-- 외부 CSS -->
   <link rel="stylesheet" href="./assets/css/style.css" />
 </head>
 <body>
 <div class="page">
+  
+  <!-- ========== 헤더 ========== -->
   <header>
     <div class="header-inner">
-      <div class="brand">
-        <div class="brand-logo">
-          <span class="logo-a">A</span><span class="logo-n">N</span>
-        </div>
-        <div>
-          <div class="brand-text-title">중독뉴스</div>
-          <div class="brand-text-sub">Addiction News</div>
+      
+      <!-- 최상단 바: 날짜 + 문의/로그인 -->
+      <div class="header-top-bar">
+        <div class="header-date" id="currentDate"></div>
+        <div class="header-utils">
+          <a href="mailto:contact@addiction-society.org">문의</a>
+          <a href="#" onclick="alert('준비중입니다.')">로그인</a>
         </div>
       </div>
-      <nav class="nav-menu">
-        <div class="nav-item" onclick="alert('중독사회 메인으로 연결 예정입니다.')">
+      
+      <!-- 브랜드 - 제명 이미지 -->
+      <div class="header-brand">
+        <img src="./assets/images/logo.png" alt="중독뉴스 Addiction News" class="brand-logo-img" />
+      </div>
+      
+      <!-- 네비게이션 - 오른쪽 정렬 -->
+      <nav class="nav-main">
+        <div class="nav-item" onclick="alert('소개 페이지 준비중입니다.')">소개</div>
+        <div class="nav-item highlight" onclick="location.href='https://addiction-society.org'">
           중독사회
         </div>
-        <div class="nav-item active">중독뉴스</div>
-        <div class="nav-item">소개</div>
-        <div class="nav-item">문의</div>
       </nav>
+      
     </div>
   </header>
 
-  <main class="main-wrap">
-    <section class="top-panel">
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input
-          id="searchInput"
-          type="text"
-          class="search-input"
-          placeholder="키워드로 기사 검색 (제목, 태그, 요약)"
-        />
-      </div>
-
-      <!-- 검색 자동완성 리스트 -->
-      <div id="searchSuggest" class="autocomplete-wrap"></div>
-
-      <div class="category-tabs" id="categoryTabs"></div>
-    </section>
-
-    <section>
-      <div class="top-highlights" id="topHighlights"></div>
-
-      <div class="articles-header">
-        <div class="articles-title" id="articlesTitle"></div>
-        <div class="articles-meta" id="articlesMeta"></div>
-      </div>
-
-      <div class="articles-wrap" id="articlesWrap"></div>
-      <div class="load-more-wrap" id="loadMoreWrap"></div>
-    </section>
-
-    <aside class="hot-sidebar">
-      <div class="card">
-        <div class="card-title">오늘의 주요 이슈 뉴스</div>
-        <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:6px;">
-          각 카테고리에서 자동 선정된 상위 이슈입니다 (최신 기사 기준).
+  <!-- ========== 카테고리 바 ========== -->
+  <div class="category-bar">
+    <div class="category-bar-inner">
+      <div class="search-wrap">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            id="searchInput"
+            type="text"
+            class="search-input"
+            placeholder="키워드로 기사 검색"
+          />
         </div>
-        <div class="hot-list" id="hotList"></div>
+        <div id="searchSuggest" class="autocomplete-wrap"></div>
+      </div>
+      <div class="category-tabs" id="categoryTabs">
+        <!-- JS에서 생성 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 메인 3단 레이아웃 (1:2:1) ========== -->
+  <main class="main-wrap">
+    
+    <!-- 왼쪽: 중독 기획기사 -->
+    <aside class="sidebar-left">
+      <div class="sidebar-title">중독 기획기사</div>
+      <div class="feature-list" id="featureList">
+        <!-- JS에서 생성 -->
       </div>
     </aside>
+
+    <!-- 가운데: 메인 콘텐츠 -->
+    <section class="main-content">
+      
+      <!-- 메인 뷰 -->
+      <div id="mainView">
+        <div class="top-news" id="topNews"></div>
+        <div id="categorySections"></div>
+      </div>
+      
+      <!-- 카테고리 상세 페이지 -->
+      <div id="categoryDetailPage" class="category-detail-page"></div>
+      
+    </section>
+
+    <!-- 오른쪽: 중독이슈 -->
+    <aside class="sidebar-right">
+      <div class="sidebar-title">중독이슈</div>
+      <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:12px;margin-top:-8px;">
+        편집자가 선정한 주요 이슈
+      </div>
+      <div class="issue-list" id="issueList"></div>
+    </aside>
+    
   </main>
 
+  <!-- ========== 푸터 (문의 제거) ========== -->
   <footer>
-    ⓒ 중독사회 · 중독뉴스 Addiction Society Hub · 문의: contact@example.org
+    <div>
+      ⓒ <span id="year"></span> 중독사회 · 중독뉴스 
+      <span style="margin: 0 8px;">|</span>
+      Addiction Society Hub
+    </div>
   </footer>
+  
 </div>
 
 <!-- 외부 JS -->
 <script src="./assets/js/main.js"></script>
+
+<!-- 날짜 표시 -->
+<script>
+  (function() {
+    const now = new Date();
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const day = now.getDate();
+    const weekday = weekdays[now.getDay()];
+    
+    const dateStr = `${year}년 ${month}월 ${day}일(${weekday})`;
+    document.getElementById('currentDate').textContent = dateStr;
+    document.getElementById('year').textContent = year;
+  })();
+</script>
+
 </body>
 </html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>중독뉴스 | Addiction News</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- 외부 CSS -->
+  <link rel="stylesheet" href="./assets/css/style.css" />
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-logo">
+          <span class="logo-a">A</span><span class="logo-n">N</span>
+        </div>
+        <div>
+          <div class="brand-text-title">중독뉴스</div>
+          <div class="brand-text-sub">Addiction News</div>
+        </div>
+      </div>
+      <nav class="nav-menu">
+        <div class="nav-item" onclick="alert('중독사회 메인으로 연결 예정입니다.')">
+          중독사회
+        </div>
+        <div class="nav-item active">중독뉴스</div>
+        <div class="nav-item">소개</div>
+        <div class="nav-item">문의</div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main-wrap">
+    <section class="top-panel">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input
+          id="searchInput"
+          type="text"
+          class="search-input"
+          placeholder="키워드로 기사 검색 (제목, 태그, 요약)"
+        />
+      </div>
+
+      <!-- 검색 자동완성 리스트 -->
+      <div id="searchSuggest" class="autocomplete-wrap"></div>
+
+      <div class="category-tabs" id="categoryTabs"></div>
+    </section>
+
+    <section>
+      <div class="top-highlights" id="topHighlights"></div>
+
+      <div class="articles-header">
+        <div class="articles-title" id="articlesTitle"></div>
+        <div class="articles-meta" id="articlesMeta"></div>
+      </div>
+
+      <div class="articles-wrap" id="articlesWrap"></div>
+      <div class="load-more-wrap" id="loadMoreWrap"></div>
+    </section>
+
+    <aside class="hot-sidebar">
+      <div class="card">
+        <div class="card-title">오늘의 주요 이슈 뉴스</div>
+        <div style="font-size:11px;color:var(--color-text-muted);margin-bottom:6px;">
+          각 카테고리에서 자동 선정된 상위 이슈입니다 (최신 기사 기준).
+        </div>
+        <div class="hot-list" id="hotList"></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    ⓒ 중독사회 · 중독뉴스 Addiction Society Hub · 문의: contact@example.org
+  </footer>
+</div>
+
+<!-- 외부 JS -->
+<script src="./assets/js/main.js"></script>
+</body>
+</html>
