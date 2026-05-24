@@ -674,6 +674,186 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
   }
 }
 
+// ---------- Statory news discovery (C-6-c) ----------
+function _displaySource(collectMethod: string): string {
+  const map: Record<string, string> = {
+    gnews_rss: 'Google News',
+    gdelt: 'GDELT',
+    naver_news: '네이버뉴스',
+    mediacloud: 'MediaCloud',
+    world_press_rss: 'World Press',
+  };
+  const key = (collectMethod || '').trim();
+  return map[key] ?? (key || 'Statory');
+}
+
+function resolveStatoryPublishedAt(item: Record<string, unknown>): string {
+  const pubYear = item.pub_year;
+  if (typeof pubYear === 'number' && pubYear > 0) {
+    return `${pubYear}-01-01`;
+  }
+  if (pubYear != null && !Number.isNaN(Number(pubYear))) {
+    const y = Number(pubYear);
+    if (y > 0) return `${y}-01-01`;
+  }
+  const meta = item.source_meta;
+  if (meta && typeof meta === 'object') {
+    for (const key of ['published', 'published_at', 'pubdate']) {
+      const val = (meta as Record<string, unknown>)[key];
+      if (val == null) continue;
+      const dt = new Date(String(val));
+      if (!Number.isNaN(dt.getTime())) return toYmd(dt);
+    }
+  }
+  return toYmd(new Date());
+}
+
+function statoryItemToCandidate(item: Record<string, unknown>, query: string): Candidate | null {
+  const titleRaw = typeof item.title === 'string' ? item.title : '';
+  const title = normalizeText(titleRaw);
+  if (!title) return null;
+
+  const abstract =
+    typeof item.abstract_text === 'string' ? item.abstract_text.trim() : '';
+  const url = typeof item.url === 'string' && item.url.trim() ? item.url.trim() : '#';
+  const collectMethod =
+    typeof item.collect_method === 'string' ? item.collect_method : '';
+  const region = process.env.STATORY_NEWS_REGION_HINT?.trim() || 'KR';
+  const lang = detectLanguage(`${title} ${abstract}`);
+
+  return {
+    title,
+    originalTitle: titleRaw.trim() || title,
+    teaser: null,
+    summary: abstract,
+    keywords: query ? [query] : [],
+    category: '중독사회와 회복',
+    region,
+    source: _displaySource(collectMethod),
+    sourceUrl: url,
+    googleUrl: null,
+    imageUrl: null,
+    origin: 'statory',
+    isTop: false,
+    isFeature: false,
+    publishedAt: resolveStatoryPublishedAt(item),
+    lang,
+    isForeign: lang !== 'ko',
+    blocked: false,
+    blockedReason: null,
+  };
+}
+
+async function finalizeStatoryCandidate(
+  partial: Candidate,
+  minScore: number,
+): Promise<Candidate | null> {
+  const rawTitle = normalizeText(partial.originalTitle || partial.title);
+  if (!rawTitle) return null;
+  if (isDuplicateInSession(rawTitle)) return null;
+
+  const rawContent = partial.summary || rawTitle;
+  if (shouldBlockByDomain(partial.sourceUrl)) return null;
+
+  const lang = partial.lang;
+  const isForeign = partial.isForeign;
+
+  if (isForeign) {
+    if (MAX_FOREIGN_ARTICLES === 0) return null;
+    if (foreignArticleCount >= MAX_FOREIGN_ARTICLES) return null;
+    if (!isOpenAIAvailable || !openai) return null;
+  }
+
+  const addictionScore = calculateAddictionScore(rawTitle, rawContent);
+  if (addictionScore < minScore) return null;
+
+  const pack = await generateKoreanPack(rawTitle, rawContent, lang, partial.category);
+  if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) return null;
+
+  if (isForeign) foreignArticleCount++;
+
+  const titleKo = isForeign ? pack.titleKo.trim() : rawTitle;
+  const teaserKo = pack.teaser || null;
+  const summaryKo = isForeign
+    ? pack.summary
+    : enforceThreeLines(pack.summary || rawContent.slice(0, 400), rawTitle);
+  const keywordsKo = pack.keywords.length > 0 ? pack.keywords : partial.keywords;
+
+  if (isForeign) {
+    const translatedScore = calculateAddictionScore(
+      `${titleKo}\n${summaryKo}`,
+      keywordsKo.join(' '),
+    );
+    if (translatedScore < minScore) return null;
+  }
+
+  const finalCategory: CategoryName = pack.suggestedCategory
+    ? normalizeCategory(pack.suggestedCategory)
+    : classifyCategory(
+        titleKo,
+        `${summaryKo} ${keywordsKo.join(' ')}`,
+        partial.category,
+      );
+
+  return {
+    ...partial,
+    title: titleKo,
+    originalTitle: rawTitle,
+    teaser: teaserKo,
+    summary: summaryKo,
+    keywords: keywordsKo,
+    category: finalCategory,
+    lang,
+    isForeign,
+  };
+}
+
+async function loadStatoryCandidates(): Promise<Candidate[]> {
+  const base = process.env.STATORY_API_URL?.trim();
+  if (!base) return [];
+
+  try {
+    const query = process.env.STATORY_NEWS_QUERY?.trim() ?? '중독';
+    const limitRaw = process.env.STATORY_NEWS_LIMIT;
+    const parsedLimit = limitRaw ? parseInt(limitRaw, 10) : 20;
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : 20;
+    const regionHint = process.env.STATORY_NEWS_REGION_HINT?.trim() ?? 'KR';
+
+    const res = await fetch(`${base.replace(/\/+$/, '')}/api/search/news`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        limit,
+        region_hint: regionHint,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = (await res.json()) as {
+      success?: boolean;
+      items?: unknown[];
+    };
+    if (json?.success === false) return [];
+
+    const items = Array.isArray(json?.items) ? json.items : [];
+    const minScore = 1;
+    const out: Candidate[] = [];
+
+    for (const it of items) {
+      if (!it || typeof it !== 'object') continue;
+      const partial = statoryItemToCandidate(it as Record<string, unknown>, query);
+      if (!partial) continue;
+      const finalized = await finalizeStatoryCandidate(partial, minScore);
+      if (finalized) out.push(finalized);
+    }
+    return out;
+  } catch (e) {
+    console.warn('[statory] news fetch failed:', e);
+    return [];
+  }
+}
+
 // ---------- DB 중복 체크 ----------
 async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
   if (await repo.findOne({ where: { sourceUrl: c.sourceUrl } })) return true;
@@ -768,6 +948,9 @@ async function main() {
     const got = await crawlOneSource(conf);
     all.push(...got);
   }
+
+  const statoryCands = await loadStatoryCandidates();
+  all.push(...statoryCands);
 
   const result = await saveCandidates(all);
   const elapsed = Math.round((Date.now() - startTime) / 1000);
