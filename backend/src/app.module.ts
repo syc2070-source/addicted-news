@@ -3,12 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Article } from './articles/article.entity';
 import { ArticlesModule } from './articles/articles.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env'], // backend 루트의 .env
+      envFilePath: ['.env'],
     }),
 
     TypeOrmModule.forRootAsync({
@@ -29,6 +30,7 @@ import { ArticlesModule } from './articles/articles.module';
     }),
 
     ArticlesModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

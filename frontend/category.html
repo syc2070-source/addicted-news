@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>카테고리 - 중독뉴스</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <!-- 헤더 -->
+  <header class="header">
+    <div class="header-top">
+      <span class="date" id="current-date"></span>
+      <div class="header-links">
+        <a href="about.html">소개</a>
+        <a href="admin.html">관리자</a>
+      </div>
+    </div>
+    <div class="header-logo">
+      <a href="index.html">
+        <img src="assets/images/logo.png" alt="중독뉴스" class="logo">
+      </a>
+    </div>
+    <nav class="nav-main">
+      <a href="index.html">종합</a>
+      <a href="category.html?cat=중독정책">중독정책</a>
+      <a href="category.html?cat=알코올·약물중독">알코올·약물중독</a>
+      <a href="category.html?cat=도박중독">도박중독</a>
+      <a href="category.html?cat=게임·디지털중독">게임·디지털중독</a>
+      <a href="category.html?cat=중독사회와 회복">중독사회와 회복</a>
+    </nav>
+  </header>
+
+  <!-- 메인 콘텐츠 -->
+  <main class="main-content">
+    <div class="special-page">
+      <h1 id="category-title" class="special-page-title">카테고리</h1>
+      <div id="category-articles" class="special-articles-list">
+        <!-- 기사 30개 로드 -->
+      </div>
+    </div>
+  </main>
+
+  <!-- 푸터 -->
+  <footer class="footer">
+    <p>&copy; 2026 중독뉴스. All rights reserved.</p>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+  <script>
+    document.getElementById('current-date').textContent = 
+      new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  </script>
+</body>
+</html>

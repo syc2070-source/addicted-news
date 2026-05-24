@@ -1,132 +1,144 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>중독뉴스 | Addiction News</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="중독 관련 뉴스, 정책, 연구를 한눈에. 중독사회 연구허브의 뉴스 플랫폼" />
-
-  <!-- 외부 CSS -->
-  <link rel="stylesheet" href="./assets/css/style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>중독뉴스 - 중독 관련 뉴스 큐레이션</title>
+  <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
-<div class="page">
-  
-  <!-- ========== 헤더 ========== -->
-  <header>
-    <div class="header-inner">
-      
-      <!-- 최상단 바: 날짜 + 문의/로그인 -->
-      <div class="header-top-bar">
-        <div class="header-date" id="currentDate"></div>
-        <div class="header-utils">
-          <a href="mailto:contact@addiction-society.org">문의</a>
-          <a href="#" onclick="alert('준비중입니다.')">로그인</a>
-        </div>
+  <!-- 헤더 -->
+  <header class="header">
+    <div class="header-top">
+      <span class="date" id="current-date"></span>
+      <div class="header-links" style="font-size: 16px; font-weight: 500;">
+        <a href="about.html">소개</a>
+        <a href="admin.html" target="_blank">관리자</a>
       </div>
-      
-      <!-- 브랜드 - 제명 이미지 -->
-      <div class="header-brand">
-        <img src="./assets/images/logo.png" alt="중독뉴스 Addiction News" class="brand-logo-img" />
-      </div>
-      
-      <!-- 네비게이션 - 오른쪽 정렬 -->
-      <nav class="nav-main">
-        <div class="nav-item" onclick="alert('소개 페이지 준비중입니다.')">소개</div>
-        <div class="nav-item highlight" onclick="location.href='https://addiction-society.org'">
-          중독사회
-        </div>
-      </nav>
-      
     </div>
+    <div class="header-logo">
+      <a href="index.html">
+        <img src="assets/images/logo.png" alt="중독뉴스" class="logo">
+      </a>
+      <div class="header-sub-links">
+        <a href="https://addiction-society.com" target="_blank">중독사회</a>
+        <span class="divider">|</span>
+        <a href="https://rapha-community.com" target="_blank">라파공동체</a>
+      </div>
+    </div>
+    <nav class="nav-main">
+      <a href="index.html" class="active">종합</a>
+      <a href="category.html?cat=중독정책">중독정책</a>
+      <a href="category.html?cat=알코올·약물중독">알코올·약물중독</a>
+      <a href="category.html?cat=도박중독">도박중독</a>
+      <a href="category.html?cat=게임·디지털중독">게임·디지털중독</a>
+      <a href="category.html?cat=중독사회와 회복">중독사회와 회복</a>
+    </nav>
   </header>
 
-  <!-- ========== 카테고리 바 ========== -->
-  <div class="category-bar">
-    <div class="category-bar-inner">
-      <div class="search-wrap">
-        <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input
-            id="searchInput"
-            type="text"
-            class="search-input"
-            placeholder="키워드로 기사 검색"
-          />
+  <!-- 메인 콘텐츠: 1:2:1 비율 -->
+  <main class="main-content">
+    <div class="content-wrapper layout-1-2-1">
+      <!-- 왼쪽 (1): 라파뉴스 + 기획기사 -->
+      <aside class="column-left">
+        <!-- 라파뉴스 -->
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">라파뉴스</h3>
+            <a href="rapha.html" class="sidebar-more">더보기</a>
+          </div>
+          <div id="rapha-news" class="sidebar-box-content">
+          </div>
         </div>
-        <div id="searchSuggest" class="autocomplete-wrap"></div>
+        
+        <!-- 기획기사 -->
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">기획기사</h3>
+            <a href="feature.html" class="sidebar-more">더보기</a>
+          </div>
+          <div id="feature-news" class="sidebar-box-content">
+          </div>
+        </div>
+      </aside>
+
+      <!-- 중앙 (2): 메인 뉴스 -->
+      <div class="column-center">
+        <!-- TOP 뉴스 -->
+        <section class="section top-news-section">
+          <h2 class="section-title">TOP NEWS</h2>
+          <div id="top-news" class="top-news-container">
+          </div>
+        </section>
+
+        <!-- 중독정책 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">중독정책</h2>
+            <a href="category.html?cat=중독정책" class="more-link">더보기</a>
+          </div>
+          <div id="cat-policy" class="articles-grid"></div>
+        </section>
+
+        <!-- 알코올·약물중독 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">알코올·약물중독</h2>
+            <a href="category.html?cat=알코올·약물중독" class="more-link">더보기</a>
+          </div>
+          <div id="cat-alcohol" class="articles-grid"></div>
+        </section>
+
+        <!-- 도박중독 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">도박중독</h2>
+            <a href="category.html?cat=도박중독" class="more-link">더보기</a>
+          </div>
+          <div id="cat-gambling" class="articles-grid"></div>
+        </section>
+
+        <!-- 게임·디지털중독 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">게임·디지털중독</h2>
+            <a href="category.html?cat=게임·디지털중독" class="more-link">더보기</a>
+          </div>
+          <div id="cat-digital" class="articles-grid"></div>
+        </section>
+
+        <!-- 중독사회와 회복 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">중독사회와 회복</h2>
+            <a href="category.html?cat=중독사회와 회복" class="more-link">더보기</a>
+          </div>
+          <div id="cat-issue" class="articles-grid"></div>
+        </section>
       </div>
-      <div class="category-tabs" id="categoryTabs">
-        <!-- JS에서 생성 -->
-      </div>
+
+      <!-- 오른쪽 (1): 중독이슈 -->
+      <aside class="column-right">
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">중독이슈</h3>
+          </div>
+          <div id="sidebar-news" class="sidebar-box-content">
+          </div>
+        </div>
+      </aside>
     </div>
-  </div>
-
-  <!-- ========== 메인 3단 레이아웃 (1:2:1) ========== -->
-  <main class="main-wrap">
-    
-    <!-- 왼쪽: 중독 기획기사 -->
-    <aside class="sidebar-left">
-      <div class="sidebar-title">중독 기획기사</div>
-      <div class="feature-list" id="featureList">
-        <!-- JS에서 생성 -->
-      </div>
-    </aside>
-
-    <!-- 가운데: 메인 콘텐츠 -->
-    <section class="main-content">
-      
-      <!-- 메인 뷰 -->
-      <div id="mainView">
-        <div class="top-news" id="topNews"></div>
-        <div id="categorySections"></div>
-      </div>
-      
-      <!-- 카테고리 상세 페이지 -->
-      <div id="categoryDetailPage" class="category-detail-page"></div>
-      
-    </section>
-
-    <!-- 오른쪽: 중독이슈 -->
-    <aside class="sidebar-right">
-      <div class="sidebar-title">중독이슈</div>
-      <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:12px;margin-top:-8px;">
-        편집자가 선정한 주요 이슈
-      </div>
-      <div class="issue-list" id="issueList"></div>
-    </aside>
-    
   </main>
 
-  <!-- ========== 푸터 (문의 제거) ========== -->
-  <footer>
-    <div>
-      ⓒ <span id="year"></span> 중독사회 · 중독뉴스 
-      <span style="margin: 0 8px;">|</span>
-      Addiction Society Hub
-    </div>
+  <!-- 푸터 -->
+  <footer class="footer">
+    <p>&copy; 2026 중독뉴스. All rights reserved.</p>
   </footer>
-  
-</div>
 
-<!-- 외부 JS -->
-<script src="./assets/js/main.js"></script>
-
-<!-- 날짜 표시 -->
-<script>
-  (function() {
-    const now = new Date();
-    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-    const weekday = weekdays[now.getDay()];
-    
-    const dateStr = `${year}년 ${month}월 ${day}일(${weekday})`;
-    document.getElementById('currentDate').textContent = dateStr;
-    document.getElementById('year').textContent = year;
-  })();
-</script>
-
+  <script src="assets/js/main.js"></script>
+  <script>
+    document.getElementById('current-date').textContent = 
+      new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  </script>
 </body>
 </html>

@@ -4,13 +4,23 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // ✅ CORS 설정 추가 (이것만!)
   app.enableCors({
-    origin: 'http://localhost:8080',  // 프론트엔드 주소
+    origin: (origin, callback) => {
+      if (!origin || origin === 'null') {
+        callback(null, true);
+        return;
+      }
+      if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   });
   
-  await app.listen(process.env.PORT || 4000);
-  console.log(`🚀 백엔드 API 서버: http://localhost:4000`);
+  const port = process.env.PORT || 4000;
+  await app.listen(port);
+  console.log(`🚀 백엔드 API 서버: http://localhost:${port}`);
 }
 bootstrap();

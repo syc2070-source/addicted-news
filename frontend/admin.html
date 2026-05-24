@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>중독뉴스 관리자</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Pretendard', sans-serif; background: #f5f5f5; }
+    
+    .login-wrap { max-width: 400px; margin: 100px auto; padding: 40px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .login-wrap h1 { font-size: 24px; margin-bottom: 24px; text-align: center; }
+    .login-wrap input { width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .login-wrap button { width: 100%; padding: 12px; background: #c41e3a; color: #fff; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+    .login-wrap button:hover { background: #9a1830; }
+    
+    .admin-wrap { max-width: 1200px; margin: 0 auto; padding: 20px; display: none; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px; background: #fff; border-radius: 8px; }
+    .admin-header h1 { font-size: 20px; }
+    .admin-header-buttons { display: flex; gap: 8px; }
+    .admin-header button { padding: 8px 16px; background: #666; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    .admin-header button.primary { background: #1a73e8; }
+    .admin-header button.primary:hover { background: #1557b0; }
+    
+    .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #fff; padding: 20px; border-radius: 8px; text-align: center; }
+    .stat-card .num { font-size: 32px; font-weight: 700; color: #c41e3a; }
+    .stat-card .label { font-size: 13px; color: #666; margin-top: 4px; }
+    
+    .section { background: #fff; border-radius: 8px; margin-bottom: 24px; }
+    .section-header { padding: 16px; border-bottom: 1px solid #eee; font-weight: 600; }
+    .section-body { padding: 16px; }
+    
+    .article-list { display: flex; flex-direction: column; gap: 12px; }
+    .article-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid #eee; border-radius: 4px; }
+    .article-item:hover { background: #f9f9f9; }
+    .article-info { flex: 1; }
+    .article-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .article-meta { font-size: 12px; color: #999; }
+    .article-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .article-actions button { padding: 6px 12px; font-size: 12px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
+    .article-actions button:hover { background: #f5f5f5; }
+    .article-actions button.active { background: #c41e3a; color: #fff; border-color: #c41e3a; }
+    .article-actions button.rapha-active { background: #ff9800; color: #fff; border-color: #ff9800; }
+    .article-actions button.feature-active { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .article-actions button.issue-active { background: #9c27b0; color: #fff; border-color: #9c27b0; }
+    .article-actions button.danger { color: #c41e3a; }
+    .article-actions button.danger:hover { background: #c41e3a; color: #fff; }
+    
+    .filters { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filters select, .filters input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+    .filters input { width: 200px; }
+    
+    .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+    .pagination button { padding: 8px 12px; border: 1px solid #ddd; background: #fff; border-radius: 4px; cursor: pointer; }
+    .pagination button:hover { background: #f5f5f5; }
+    .pagination button.active { background: #c41e3a; color: #fff; border-color: #c41e3a; }
+    
+    .badge { display: inline-block; padding: 2px 6px; font-size: 11px; border-radius: 3px; margin-left: 6px; }
+    .badge.top { background: #c41e3a; color: #fff; }
+    .badge.rapha { background: #ff9800; color: #fff; }
+    .badge.feature { background: #1a73e8; color: #fff; }
+    .badge.issue { background: #9c27b0; color: #fff; }
+    
+    .selected-section { margin-bottom: 16px; }
+    .selected-section h4 { margin-bottom: 12px; font-size: 14px; color: #333; }
+    
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; }
+    .modal-overlay.show { display: flex; justify-content: center; align-items: flex-start; padding: 40px 20px; }
+    .modal { background: #fff; border-radius: 8px; width: 100%; max-width: 700px; margin: auto; }
+    .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { font-size: 18px; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 12px; }
+    
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; color: #333; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .form-group textarea { min-height: 150px; resize: vertical; font-family: inherit; }
+    .form-group small { display: block; margin-top: 4px; color: #999; font-size: 12px; }
+    .form-row { display: flex; gap: 16px; }
+    .form-row .form-group { flex: 1; }
+    
+    .checkbox-group { display: flex; gap: 20px; flex-wrap: wrap; }
+    .checkbox-item { display: flex; align-items: center; gap: 6px; }
+    .checkbox-item input { width: auto; }
+    
+    .btn { padding: 10px 20px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+    .btn-primary { background: #1a73e8; color: #fff; }
+    .btn-primary:hover { background: #1557b0; }
+    .btn-secondary { background: #f5f5f5; color: #333; border: 1px solid #ddd; }
+    .btn-secondary:hover { background: #eee; }
+    
+    @media (max-width: 768px) {
+      .stats { grid-template-columns: repeat(3, 1fr); }
+      .article-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .article-actions { width: 100%; }
+      .form-row { flex-direction: column; gap: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-wrap" id="loginWrap">
+  <h1>관리자 로그인</h1>
+  <input type="password" id="passwordInput" placeholder="비밀번호 입력" onkeypress="if(event.key==='Enter')login()" />
+  <button onclick="login()">로그인</button>
+</div>
+
+<div class="admin-wrap" id="adminWrap">
+  <div class="admin-header">
+    <h1>중독뉴스 관리자</h1>
+    <div class="admin-header-buttons">
+      <button class="primary" onclick="openWriteModal()">새 기사 작성</button>
+      <button onclick="logout()">로그아웃</button>
+    </div>
+  </div>
+  
+  <div class="stats" id="statsArea">
+    <div class="stat-card"><div class="num" id="statTotal">-</div><div class="label">전체 기사</div></div>
+    <div class="stat-card"><div class="num" id="statToday">-</div><div class="label">오늘 수집</div></div>
+    <div class="stat-card"><div class="num" id="statTop">-</div><div class="label">TOP 뉴스</div></div>
+    <div class="stat-card"><div class="num" id="statRapha">-</div><div class="label">라파뉴스</div></div>
+    <div class="stat-card"><div class="num" id="statFeature">-</div><div class="label">기획기사</div></div>
+    <div class="stat-card"><div class="num" id="statIssue">-</div><div class="label">중독이슈</div></div>
+  </div>
+  
+  <div class="section">
+    <div class="section-header">TOP 뉴스 / 라파뉴스 / 기획기사 / 중독이슈</div>
+    <div class="section-body">
+      <div id="selectedArticles"></div>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="section-header">기사 목록</div>
+    <div class="section-body">
+      <div class="filters">
+        <select id="categoryFilter" onchange="loadArticles()">
+          <option value="">전체 카테고리</option>
+          <option value="중독정책">중독정책</option>
+          <option value="알코올·약물중독">알코올·약물중독</option>
+          <option value="도박중독">도박중독</option>
+          <option value="게임·디지털중독">게임·디지털중독</option>
+          <option value="중독사회와 회복">중독사회와 회복</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="제목 검색..." onkeypress="if(event.key==='Enter')loadArticles()" />
+        <button onclick="loadArticles()" style="padding:8px 16px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer;">검색</button>
+      </div>
+      <div class="article-list" id="articleList"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="writeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">새 기사 작성</h2>
+      <button class="modal-close" onclick="closeWriteModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editArticleId" value="" />
+      
+      <div class="form-group">
+        <label>제목 *</label>
+        <input type="text" id="formTitle" placeholder="기사 제목을 입력하세요" />
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label>카테고리 *</label>
+          <select id="formCategory">
+            <option value="중독정책">중독정책</option>
+            <option value="알코올·약물중독">알코올·약물중독</option>
+            <option value="도박중독">도박중독</option>
+            <option value="게임·디지털중독">게임·디지털중독</option>
+            <option value="중독사회와 회복">중독사회와 회복</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>출처 *</label>
+          <input type="text" id="formSource" placeholder="예: 중독뉴스, 조선일보" />
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>요약/본문 *</label>
+        <textarea id="formSummary" placeholder="기사 내용을 입력하세요. 줄바꿈으로 문단을 구분할 수 있습니다."></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label>원문 URL</label>
+        <input type="text" id="formSourceUrl" placeholder="https://..." />
+        <small>외부 기사 링크 (선택사항)</small>
+      </div>
+      
+      <div class="form-group">
+        <label>이미지 URL</label>
+        <input type="text" id="formImageUrl" placeholder="https://..." />
+        <small>썸네일 이미지 주소 (선택사항)</small>
+      </div>
+      
+      <div class="form-group">
+        <label>발행일</label>
+        <input type="date" id="formPublishedAt" />
+      </div>
+      
+      <div class="form-group">
+        <label>표시 설정</label>
+        <div class="checkbox-group">
+          <label class="checkbox-item"><input type="checkbox" id="formIsTop" /> TOP 뉴스</label>
+          <label class="checkbox-item"><input type="checkbox" id="formIsRapha" /> 라파뉴스</label>
+          <label class="checkbox-item"><input type="checkbox" id="formIsFeature" /> 기획기사</label>
+          <label class="checkbox-item"><input type="checkbox" id="formIsIssue" /> 중독이슈</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeWriteModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveArticle()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var API_BASE = 'http://localhost:4000';
+var authToken = '';
+var currentPage = 1;
+
+function login() {
+  var password = document.getElementById('passwordInput').value;
+  authToken = password;
+  
+  fetch(API_BASE + '/admin/stats', {
+    headers: { 'Authorization': 'Bearer ' + authToken }
+  })
+  .then(function(res) {
+    if (!res.ok) throw new Error('Auth failed');
+    return res.json();
+  })
+  .then(function() {
+    localStorage.setItem('adminToken', authToken);
+    showAdmin();
+  })
+  .catch(function() {
+    alert('비밀번호가 틀렸습니다.');
+  });
+}
+
+function logout() {
+  localStorage.removeItem('adminToken');
+  authToken = '';
+  document.getElementById('loginWrap').style.display = 'block';
+  document.getElementById('adminWrap').style.display = 'none';
+}
+
+function showAdmin() {
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('adminWrap').style.display = 'block';
+  loadStats();
+  loadSelectedArticles();
+  loadArticles();
+}
+
+function loadStats() {
+  fetch(API_BASE + '/admin/stats', {
+    headers: { 'Authorization': 'Bearer ' + authToken }
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    document.getElementById('statTotal').textContent = data.total || 0;
+    document.getElementById('statToday').textContent = data.todayCount || 0;
+    document.getElementById('statTop').textContent = data.topNewsCount || 0;
+    document.getElementById('statRapha').textContent = data.raphaCount || 0;
+    document.getElementById('statFeature').textContent = data.featureCount || 0;
+    document.getElementById('statIssue').textContent = data.issueCount || 0;
+  })
+  .catch(function(e) { console.error('Stats error', e); });
+}
+
+function loadSelectedArticles() {
+  Promise.all([
+    fetch(API_BASE + '/admin/top-news', { headers: { 'Authorization': 'Bearer ' + authToken } }),
+    fetch(API_BASE + '/admin/rapha', { headers: { 'Authorization': 'Bearer ' + authToken } }),
+    fetch(API_BASE + '/admin/features', { headers: { 'Authorization': 'Bearer ' + authToken } }),
+    fetch(API_BASE + '/admin/issue', { headers: { 'Authorization': 'Bearer ' + authToken } })
+  ])
+  .then(function(responses) {
+    return Promise.all(responses.map(function(r) { return r.json(); }));
+  })
+  .then(function(results) {
+    var topNews = results[0] || [];
+    var raphaNews = results[1] || [];
+    var features = results[2] || [];
+    var issueNews = results[3] || [];
+    
+    var html = '';
+    
+    html += '<div class="selected-section"><h4>TOP 뉴스 (최대 3개)</h4>';
+    if (topNews.length === 0) {
+      html += '<p style="color:#999;font-size:13px;">설정된 TOP 뉴스가 없습니다.</p>';
+    } else {
+      topNews.forEach(function(a) {
+        html += '<div class="article-item"><div class="article-info"><div class="article-title">' + escapeHtml(a.title) + '</div><div class="article-meta">' + a.category + ' · ' + a.publishedAt + '</div></div><button onclick="setTop(' + a.id + ', false)">해제</button></div>';
+      });
+    }
+    html += '</div>';
+    
+    html += '<div class="selected-section"><h4>라파뉴스 (최대 2개)</h4>';
+    if (raphaNews.length === 0) {
+      html += '<p style="color:#999;font-size:13px;">설정된 라파뉴스가 없습니다.</p>';
+    } else {
+      raphaNews.forEach(function(a) {
+        html += '<div class="article-item"><div class="article-info"><div class="article-title">' + escapeHtml(a.title) + '</div><div class="article-meta">' + a.category + ' · ' + a.publishedAt + '</div></div><button onclick="setRapha(' + a.id + ', false)">해제</button></div>';
+      });
+    }
+    html += '</div>';
+    
+    html += '<div class="selected-section"><h4>기획기사 (최대 3개)</h4>';
+    if (features.length === 0) {
+      html += '<p style="color:#999;font-size:13px;">설정된 기획기사가 없습니다.</p>';
+    } else {
+      features.forEach(function(a) {
+        html += '<div class="article-item"><div class="article-info"><div class="article-title">' + escapeHtml(a.title) + '</div><div class="article-meta">' + a.category + ' · ' + a.publishedAt + '</div></div><button onclick="setFeature(' + a.id + ', false)">해제</button></div>';
+      });
+    }
+    html += '</div>';
+    
+    html += '<div class="selected-section"><h4>중독이슈 (최대 5개)</h4>';
+    if (issueNews.length === 0) {
+      html += '<p style="color:#999;font-size:13px;">설정된 중독이슈가 없습니다. (미설정시 최신기사 표시)</p>';
+    } else {
+      issueNews.forEach(function(a) {
+        html += '<div class="article-item"><div class="article-info"><div class="article-title">' + escapeHtml(a.title) + '</div><div class="article-meta">' + a.category + ' · ' + a.publishedAt + '</div></div><button onclick="setIssue(' + a.id + ', false)">해제</button></div>';
+      });
+    }
+    html += '</div>';
+    
+    document.getElementById('selectedArticles').innerHTML = html;
+  })
+  .catch(function(e) { console.error('Selected articles error', e); });
+}
+
+function loadArticles() {
+  var category = document.getElementById('categoryFilter').value;
+  var search = document.getElementById('searchInput').value;
+  var url = API_BASE + '/admin/articles?page=' + currentPage + '&limit=15';
+  if (category) url += '&category=' + encodeURIComponent(category);
+  if (search) url += '&search=' + encodeURIComponent(search);
+  
+  fetch(url, { headers: { 'Authorization': 'Bearer ' + authToken } })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    var items = data.items || data.articles || [];
+    var html = '';
+    
+    items.forEach(function(a) {
+      html += '<div class="article-item">';
+      html += '<div class="article-info">';
+      html += '<div class="article-title">' + escapeHtml(a.title);
+      if (a.isTop) html += '<span class="badge top">TOP</span>';
+      if (a.isRapha) html += '<span class="badge rapha">라파</span>';
+      if (a.isFeature) html += '<span class="badge feature">기획</span>';
+      if (a.isIssue) html += '<span class="badge issue">이슈</span>';
+      html += '</div>';
+      html += '<div class="article-meta">' + a.source + ' · ' + a.publishedAt + '</div>';
+      html += '</div>';
+      html += '<div class="article-actions">';
+      html += '<select onchange="changeCategory(' + a.id + ', this.value)" style="padding:6px 8px;font-size:12px;border:1px solid #ddd;border-radius:4px;">';
+      html += '<option value="중독정책"' + (a.category === '중독정책' ? ' selected' : '') + '>중독정책</option>';
+      html += '<option value="알코올·약물중독"' + (a.category === '알코올·약물중독' ? ' selected' : '') + '>알코올·약물</option>';
+      html += '<option value="도박중독"' + (a.category === '도박중독' ? ' selected' : '') + '>도박중독</option>';
+      html += '<option value="게임·디지털중독"' + (a.category === '게임·디지털중독' ? ' selected' : '') + '>게임·디지털</option>';
+      html += '<option value="중독사회와 회복"' + (a.category === '중독사회와 회복' ? ' selected' : '') + '>중독사회와 회복</option>';
+      html += '</select>';
+      html += '<button class="' + (a.isTop ? 'active' : '') + '" onclick="setTop(' + a.id + ', ' + !a.isTop + ')">TOP</button>';
+      html += '<button class="' + (a.isRapha ? 'rapha-active' : '') + '" onclick="setRapha(' + a.id + ', ' + !a.isRapha + ')">라파</button>';
+      html += '<button class="' + (a.isFeature ? 'feature-active' : '') + '" onclick="setFeature(' + a.id + ', ' + !a.isFeature + ')">기획</button>';
+      html += '<button class="' + (a.isIssue ? 'issue-active' : '') + '" onclick="setIssue(' + a.id + ', ' + !a.isIssue + ')">이슈</button>';
+      html += '<button onclick="openEditModal(' + a.id + ')">수정</button>';
+      html += '<button class="danger" onclick="deleteArticle(' + a.id + ')">삭제</button>';
+      html += '</div></div>';
+    });
+    
+    document.getElementById('articleList').innerHTML = html || '<p style="color:#999;">기사가 없습니다.</p>';
+    
+    var totalPages = data.totalPages || 1;
+    var pagHtml = '';
+    if (currentPage > 1) pagHtml += '<button onclick="goPage(' + (currentPage - 1) + ')">이전</button>';
+    var start = Math.max(1, currentPage - 2);
+    var end = Math.min(totalPages, currentPage + 2);
+    for (var i = start; i <= end; i++) {
+      pagHtml += '<button class="' + (i === currentPage ? 'active' : '') + '" onclick="goPage(' + i + ')">' + i + '</button>';
+    }
+    if (currentPage < totalPages) pagHtml += '<button onclick="goPage(' + (currentPage + 1) + ')">다음</button>';
+    document.getElementById('pagination').innerHTML = pagHtml;
+  })
+  .catch(function(e) { console.error('Articles error', e); });
+}
+
+function goPage(page) {
+  currentPage = page;
+  loadArticles();
+}
+
+function setTop(id, isTop) {
+  fetch(API_BASE + '/admin/articles/' + id + '/top', {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isTop: isTop })
+  }).then(function() { loadStats(); loadSelectedArticles(); loadArticles(); });
+}
+
+function setRapha(id, isRapha) {
+  fetch(API_BASE + '/admin/articles/' + id + '/rapha', {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isRapha: isRapha })
+  }).then(function() { loadStats(); loadSelectedArticles(); loadArticles(); });
+}
+
+function setFeature(id, isFeature) {
+  fetch(API_BASE + '/admin/articles/' + id + '/feature', {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isFeature: isFeature })
+  }).then(function() { loadStats(); loadSelectedArticles(); loadArticles(); });
+}
+
+function setIssue(id, isIssue) {
+  fetch(API_BASE + '/admin/articles/' + id + '/issue', {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isIssue: isIssue })
+  }).then(function() { loadStats(); loadSelectedArticles(); loadArticles(); });
+}
+
+function changeCategory(id, category) {
+  fetch(API_BASE + '/admin/articles/' + id + '/category', {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category: category })
+  }).then(function() { loadArticles(); });
+}
+
+function deleteArticle(id) {
+  if (!confirm('이 기사를 삭제하시겠습니까?')) return;
+  fetch(API_BASE + '/admin/articles/' + id, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + authToken }
+  }).then(function() { loadStats(); loadSelectedArticles(); loadArticles(); });
+}
+
+function openWriteModal() {
+  document.getElementById('modalTitle').textContent = '새 기사 작성';
+  document.getElementById('editArticleId').value = '';
+  document.getElementById('formTitle').value = '';
+  document.getElementById('formCategory').value = '중독정책';
+  document.getElementById('formSource').value = '중독뉴스';
+  document.getElementById('formSummary').value = '';
+  document.getElementById('formSourceUrl').value = '';
+  document.getElementById('formImageUrl').value = '';
+  document.getElementById('formPublishedAt').value = new Date().toISOString().split('T')[0];
+  document.getElementById('formIsTop').checked = false;
+  document.getElementById('formIsRapha').checked = false;
+  document.getElementById('formIsFeature').checked = false;
+  document.getElementById('formIsIssue').checked = false;
+  document.getElementById('writeModal').classList.add('show');
+}
+
+function openEditModal(id) {
+  fetch(API_BASE + '/admin/articles/' + id, {
+    headers: { 'Authorization': 'Bearer ' + authToken }
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(article) {
+    document.getElementById('modalTitle').textContent = '기사 수정';
+    document.getElementById('editArticleId').value = article.id;
+    document.getElementById('formTitle').value = article.title || '';
+    document.getElementById('formCategory').value = article.category || '중독정책';
+    document.getElementById('formSource').value = article.source || '';
+    document.getElementById('formSummary').value = article.summary || '';
+    document.getElementById('formSourceUrl').value = article.sourceUrl || '';
+    document.getElementById('formImageUrl').value = article.imageUrl || '';
+    document.getElementById('formPublishedAt').value = (article.publishedAt || '').split('T')[0];
+    document.getElementById('formIsTop').checked = article.isTop || false;
+    document.getElementById('formIsRapha').checked = article.isRapha || false;
+    document.getElementById('formIsFeature').checked = article.isFeature || false;
+    document.getElementById('formIsIssue').checked = article.isIssue || false;
+    document.getElementById('writeModal').classList.add('show');
+  })
+  .catch(function(e) { 
+    console.error('Load article error', e); 
+    alert('기사를 불러올 수 없습니다.');
+  });
+}
+
+function closeWriteModal() {
+  document.getElementById('writeModal').classList.remove('show');
+}
+
+function saveArticle() {
+  var id = document.getElementById('editArticleId').value;
+  var title = document.getElementById('formTitle').value.trim();
+  var category = document.getElementById('formCategory').value;
+  var source = document.getElementById('formSource').value.trim();
+  var summary = document.getElementById('formSummary').value.trim();
+  var sourceUrl = document.getElementById('formSourceUrl').value.trim();
+  var imageUrl = document.getElementById('formImageUrl').value.trim();
+  var publishedAt = document.getElementById('formPublishedAt').value;
+  var isTop = document.getElementById('formIsTop').checked;
+  var isRapha = document.getElementById('formIsRapha').checked;
+  var isFeature = document.getElementById('formIsFeature').checked;
+  var isIssue = document.getElementById('formIsIssue').checked;
+  
+  if (!title) { alert('제목을 입력하세요.'); return; }
+  if (!source) { alert('출처를 입력하세요.'); return; }
+  if (!summary) { alert('요약/본문을 입력하세요.'); return; }
+  
+  var data = {
+    title: title,
+    category: category,
+    source: source,
+    summary: summary,
+    teaser: summary.substring(0, 200),
+    sourceUrl: sourceUrl || '#',
+    imageUrl: imageUrl || null,
+    publishedAt: publishedAt || new Date().toISOString().split('T')[0],
+    isTop: isTop,
+    isRapha: isRapha,
+    isFeature: isFeature,
+    isIssue: isIssue
+  };
+  
+  var url, method;
+  if (id) {
+    url = API_BASE + '/admin/articles/' + id;
+    method = 'PUT';
+  } else {
+    url = API_BASE + '/admin/articles';
+    method = 'POST';
+  }
+  
+  fetch(url, {
+    method: method,
+    headers: { 
+      'Authorization': 'Bearer ' + authToken, 
+      'Content-Type': 'application/json' 
+    },
+    body: JSON.stringify(data)
+  })
+  .then(function(res) { 
+    if (!res.ok) throw new Error('Save failed');
+    return res.json(); 
+  })
+  .then(function() {
+    alert(id ? '기사가 수정되었습니다.' : '기사가 등록되었습니다.');
+    closeWriteModal();
+    loadStats();
+    loadSelectedArticles();
+    loadArticles();
+  })
+  .catch(function(e) { 
+    console.error('Save error', e); 
+    alert('저장에 실패했습니다.');
+  });
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+window.onload = function() {
+  var saved = localStorage.getItem('adminToken');
+  if (saved) {
+    authToken = saved;
+    fetch(API_BASE + '/admin/stats', { headers: { 'Authorization': 'Bearer ' + authToken } })
+    .then(function(res) { if (res.ok) showAdmin(); })
+    .catch(function() {});
+  }
+};
+</script>
+
+</body>
+</html>

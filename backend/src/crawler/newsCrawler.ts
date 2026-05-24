@@ -1,4 +1,5 @@
 // backend/src/crawler/newsCrawler.ts
+// v4.0 - 중독 필터 강화, 외국 기사 비율 증가
 import 'dotenv/config';
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
@@ -7,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import OpenAI from 'openai';
 import { Article } from '../articles/article.entity';
-import { SOURCES, SourceConfig } from './sourceConfig';
+import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS } from './sourceConfig';
 
 type RssItem = {
   title?: string;
@@ -18,71 +19,70 @@ type RssItem = {
   content?: string;
   'content:encoded'?: string;
   description?: string;
+  enclosure?: { url?: string; type?: string };
+  'media:content'?: { $?: { url?: string } };
+  'media:thumbnail'?: { $?: { url?: string } };
 };
 
 type Candidate = {
-  title: string;                 // 한국어 표시 제목
-  originalTitle?: string;        // 원문 제목
-  teaser?: string;
-  summary: string;               // 3줄 한국어 요약
+  title: string;
+  originalTitle: string | null;
+  teaser: string | null;
+  summary: string;
   keywords: string[];
-  category: string;
+  category: CategoryName;
   region: string;
   source: string;
   sourceUrl: string;
-  googleUrl?: string;
+  googleUrl: string | null;
+  imageUrl: string | null;
   origin: string;
   isTop: boolean;
   isFeature: boolean;
-  publishedAt: string;           // YYYY-MM-DD
+  publishedAt: string;
   lang: 'ko' | 'en' | 'ja' | 'zh' | 'other';
   isForeign: boolean;
   blocked: boolean;
-  blockedReason?: string;
+  blockedReason: string | null;
 };
 
 const parser = new Parser<RssItem>({
-  customFields: { item: ['source', 'media:content', 'content:encoded', 'description'] },
+  customFields: { 
+    item: ['source', 'media:content', 'media:thumbnail', 'content:encoded', 'description', 'enclosure'] 
+  },
 });
 
-// ---------- OpenAI ----------
+// ---------- 설정값 ----------
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const MAX_FOREIGN_ARTICLES = Number(process.env.MAX_FOREIGN_ARTICLES ?? 100);  // 50→100 증가
+const ENABLE_IMAGE_EXTRACT = process.env.ENABLE_IMAGE_EXTRACT !== 'false';
+const MIN_ADDICTION_SCORE = 2;  // 최소 2개 키워드 매칭 필요
+const SKIP_DAILY_CHECK = process.env.SKIP_DAILY_CHECK === 'true';  // true면 하루 1회 제한 해제
+
 let openai: OpenAI | null = null;
 let isOpenAIAvailable = false;
+let foreignArticleCount = 0;
 
 function initializeOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey.trim() === '') {
-    console.log('⚠️  OPENAI_API_KEY not set. Translation disabled.\n');
-    return false;
-  }
-  if (!apiKey.startsWith('sk-')) {
-    console.log('❌ Invalid OPENAI_API_KEY format.\n');
+  if (!apiKey || apiKey.trim() === '' || !apiKey.startsWith('sk-')) {
+    console.log('⚠️  OpenAI API 비활성화\n');
     return false;
   }
   openai = new OpenAI({ apiKey });
-  console.log(`✅ OpenAI initialized (key: ${apiKey.slice(0, 10)}...${apiKey.slice(-4)})`);
-  console.log('📝 Translation enabled: ALL foreign languages → KO\n');
+  console.log(`✅ OpenAI initialized`);
   return true;
 }
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-
 let apiCallCount = 0;
 let lastResetTime = Date.now();
-const MAX_CALLS_PER_MINUTE = 300;
 
 async function rateLimitedDelay() {
   const now = Date.now();
-  if (now - lastResetTime > 60000) {
-    apiCallCount = 0;
-    lastResetTime = now;
-  }
-  if (apiCallCount >= MAX_CALLS_PER_MINUTE) {
-    const waitTime = 60000 - (now - lastResetTime);
-    console.log(`  ⏳ API throttling: wait ${Math.ceil(waitTime / 1000)}s...`);
-    await new Promise((r) => setTimeout(r, waitTime));
-    apiCallCount = 0;
-    lastResetTime = Date.now();
+  if (now - lastResetTime > 60000) { apiCallCount = 0; lastResetTime = now; }
+  if (apiCallCount >= 300) {
+    await new Promise((r) => setTimeout(r, 60000 - (now - lastResetTime)));
+    apiCallCount = 0; lastResetTime = Date.now();
   }
   apiCallCount++;
 }
@@ -108,14 +108,10 @@ async function hasRunToday(): Promise<boolean> {
     const data = JSON.parse(fs.readFileSync(lockFile, 'utf-8'));
     const lastRun = new Date(data.lastRun);
     const today = new Date();
-    return (
-      lastRun.getFullYear() === today.getFullYear() &&
-      lastRun.getMonth() === today.getMonth() &&
-      lastRun.getDate() === today.getDate()
-    );
-  } catch {
-    return false;
-  }
+    return lastRun.getFullYear() === today.getFullYear() &&
+           lastRun.getMonth() === today.getMonth() &&
+           lastRun.getDate() === today.getDate();
+  } catch { return false; }
 }
 
 async function markRunToday(): Promise<void> {
@@ -123,69 +119,225 @@ async function markRunToday(): Promise<void> {
   const lockFile = path.join(__dirname, '../../logs/last_crawl.json');
   if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
   const runTime = new Date();
-  fs.writeFileSync(
-    lockFile,
-    JSON.stringify(
-      { lastRun: runTime.toISOString(), timestamp: Date.now(), date: runTime.toLocaleDateString('ko-KR'), time: runTime.toLocaleTimeString('ko-KR') },
-      null,
-      2,
-    ),
-  );
+  fs.writeFileSync(lockFile, JSON.stringify({
+    lastRun: runTime.toISOString(), timestamp: Date.now(),
+    date: runTime.toLocaleDateString('ko-KR'), time: runTime.toLocaleTimeString('ko-KR')
+  }, null, 2));
   console.log(`✅ Run log saved: ${runTime.toLocaleString('ko-KR')}\n`);
 }
 
 // ---------- Spam block ----------
-const BLOCKED_DOMAINS = new Set<string>([
-  'termokonteiner.ru',
-  // 필요하면 여기에 계속 추가
-]);
+const BLOCKED_DOMAINS = new Set<string>(['termokonteiner.ru']);
 
 function getHostname(url?: string): string {
   if (!url) return '';
-  try {
-    return new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
-  } catch {
-    return '';
+  try { return new URL(url).hostname.replace(/^www\./i, '').toLowerCase(); }
+  catch { return ''; }
+}
+
+function shouldBlockByDomain(sourceUrl: string, googleUrl?: string): boolean {
+  const host = getHostname(sourceUrl) || getHostname(googleUrl);
+  return host ? BLOCKED_DOMAINS.has(host) : false;
+}
+
+// ---------- 이미지 URL 검증 ----------
+const BLOCKED_IMAGE_PATTERNS = [
+  'google.com/images', 'gstatic.com', 'googleusercontent.com/proxy',
+  'news.google.com', 'google-news', 'googlenews',
+  'doubleclick', 'adsystem', 'adserver', 'tracking', 'pixel', 'beacon',
+  'analytics', 'advertisement', 'banner', 'sponsor',
+  'facebook.com/tr', 'twitter.com/favicon', 'linkedin.com/favicon',
+  'favicon', 'logo', 'icon', 'placeholder', 'default', 'noimage', 'no-image',
+  'blank.gif', 'spacer.gif', '1x1', 'transparent',
+  'width=1', 'height=1', 'w=1', 'h=1',
+];
+
+function isValidImageUrl(url: string | null): boolean {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  for (const pattern of BLOCKED_IMAGE_PATTERNS) {
+    if (lowerUrl.includes(pattern)) return false;
   }
+  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+  const validImageServices = ['cloudinary', 'imgix', 'amazonaws.com', 'wp-content/uploads'];
+  const hasValidExtension = validExtensions.some(ext => lowerUrl.includes(ext));
+  const isImageService = validImageServices.some(svc => lowerUrl.includes(svc));
+  if (url.length < 30) return false;
+  return hasValidExtension || isImageService || lowerUrl.includes('/image') || lowerUrl.includes('/photo');
 }
 
-function shouldBlockByDomain(sourceUrl: string, googleUrl?: string): { blocked: boolean; reason?: string } {
-  const h1 = getHostname(sourceUrl);
-  const h2 = getHostname(googleUrl);
-  const host = h1 || h2;
-  if (host && BLOCKED_DOMAINS.has(host)) return { blocked: true, reason: `blocked_domain:${host}` };
-  return { blocked: false };
-}
+// ---------- v4.0: 강화된 중독 키워드 시스템 ----------
+const VALID_CATEGORIES: CategoryName[] = [
+  '중독정책',
+  '알코올·약물중독',
+  '도박중독',
+  '게임·디지털중독',
+  '중독사회와 회복',
+];
 
-// ---------- Addiction filter ----------
-function isAddictionRelated(title: string, content: string): boolean {
+// 핵심 중독 키워드 (가중치 2점)
+const CORE_ADDICTION_KEYWORDS = [
+  // 한국어 핵심
+  '중독', '의존증', '과몰입', '재활', '단주', '단도박', '회복',
+  // 영어 핵심
+  'addiction', 'addicted', 'addictive', 'dependency', 'disorder', 'rehab', 'recovery', 'withdrawal',
+  // 일본어 핵심
+  '依存症', '依存', 'アディクション',
+  // 중국어 핵심
+  '成瘾', '戒断', '康复',
+];
+
+// 카테고리별 키워드 (가중치 1점) — '중독사회와 회복'은 일반 의료(병원·클리닉 등) 제거, 사회·회복 키워드 중심
+const CATEGORY_KEYWORDS: Record<CategoryName, string[]> = {
+  '중독정책': [
+    '정책', '규제', '법안', '대책', '예방', '교육', '법률', '정부', '위원회', '입법',
+    'legislation', 'regulation', 'policy', 'law', 'government',
+    '政策', '規制', '法案',
+  ],
+  '알코올·약물중독': [
+    '알코올', '마약', '오피오이드', '펜타닐', '필로폰', '음주', '약물', '대마', '단주', '금주',
+    '헤로인', '코카인', '메스암페타민', '처방약',
+    'opioid', 'fentanyl', 'alcohol', 'drug', 'substance', 'overdose',
+    'アルコール', '薬物', 'オピオイド',
+    '酒精', '毒品',
+  ],
+  '도박중독': [
+    '도박', '베팅', '카지노', '토토', '스포츠베팅', '복권', '사행', '불법도박', '온라인도박', '단도박',
+    'gambling', 'betting', 'casino', 'lottery',
+    'ギャンブル', 'パチンコ', 'カジノ',
+    '赌博', '博彩',
+  ],
+  '게임·디지털중독': [
+    '게임', '스마트폰', 'SNS', '인터넷', '디지털', 'AI중독', '과몰입', '유튜브', '틱톡', '온라인',
+    'AI', '인공지능', '알고리즘', '화면', '스크린',
+    'gaming', 'game', 'smartphone', 'screen time', 'internet', 'digital',
+    'ゲーム', 'スマホ', 'SNS',
+    '游戏', '手机', '网络',
+  ],
+  '중독사회와 회복': [
+    '공동체', '회복', '상담', '라파', '자조모임', '단주', '단도박',
+    '고립', '외로움', '양극화', '사회적 자본', '사회구조', '은둔',
+    '불평등', '주민자치', '재활', '가족 지원',
+  ],
+};
+
+function isPromotionalAd(title: string, content: string): boolean {
   const text = (title + ' ' + content).toLowerCase();
-  const kws = [
-    '중독','도박','베팅','카지노','토토','불법도박','도박중독',
-    '알코올','음주','알코올중독','약물','마약','오피오이드','약물중독',
-    '게임','디지털','과몰입','게임중독',
-    '치료','재활','상담','예방','회복','의존',
-    'addiction','gambling','betting','casino','alcohol','drug','opioid','rehab','recovery','therapy',
-    '依存症','ギャンブル依存','成瘾','赌博',
-  ];
-  return kws.some((k) => text.includes(k));
+  if (AD_PENALTY_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()))) return true;
+  const specialChars = text.match(/[!@#$%^&*()_+={}\[\]|\\:;"'<>,.?\/~`]/g) || [];
+  return specialChars.length > 50;
 }
 
-// ---------- Lang detect (ratio-based) ----------
+function hasCoreAddictionKeyword(title: string, content: string): boolean {
+  const text = (title + ' ' + content).toLowerCase();
+  return CORE_ADDICTION_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()));
+}
+
+/** 카테고리별 적합도: 회복 카테고리는 핵심 중독 키워드 없으면 0(일반 의료·사회면사 배제) */
+function categoryFitScore(title: string, content: string, category: CategoryName): number {
+  if (isPromotionalAd(title, content)) return -100;
+  const text = (title + ' ' + content).toLowerCase();
+  const t = title.toLowerCase();
+  const hasCore = hasCoreAddictionKeyword(title, content);
+  if (category === '중독사회와 회복' && !hasCore) return 0;
+
+  let score = 0;
+  for (const kw of CORE_ADDICTION_KEYWORDS) {
+    const k = kw.toLowerCase();
+    if (text.includes(k)) {
+      score += 2;
+      if (t.includes(k)) score += 1;
+    }
+  }
+  for (const kw of CATEGORY_KEYWORDS[category]) {
+    const k = kw.toLowerCase();
+    if (text.includes(k)) score += 1;
+  }
+  return score;
+}
+
+// v4.0: 중독 관련성 점수 (저장 게이트) — 광고 차단 + 핵심 중독 키워드 필수
+function calculateAddictionScore(title: string, content: string): number {
+  if (isPromotionalAd(title, content)) return -100;
+  const text = (title + ' ' + content).toLowerCase();
+  if (!hasCoreAddictionKeyword(title, content)) return 0;
+
+  let score = 0;
+  for (const kw of CORE_ADDICTION_KEYWORDS) {
+    const k = kw.toLowerCase();
+    if (text.includes(k)) {
+      score += 2;
+      if (title.toLowerCase().includes(k)) score += 1;
+    }
+  }
+  for (const cat of VALID_CATEGORIES) {
+    for (const kw of CATEGORY_KEYWORDS[cat]) {
+      if (text.includes(kw.toLowerCase())) score += 1;
+    }
+  }
+  return score;
+}
+
+// v4.0: 개선된 중독 관련성 필터
+function isAddictionRelated(title: string, content: string): boolean {
+  const score = calculateAddictionScore(title, content);
+  return score >= MIN_ADDICTION_SCORE;
+}
+
+// 카테고리 분류
+function normalizeCategory(category: string): CategoryName {
+  if (category === 'AI중독') return '게임·디지털중독';
+  if (category === '공동체' || category === '종교') return '중독사회와 회복';
+  if (VALID_CATEGORIES.includes(category as CategoryName)) return category as CategoryName;
+  return '중독사회와 회복';
+}
+
+function classifyCategory(title: string, content: string, defaultCategory: CategoryName): CategoryName {
+  const def = normalizeCategory(defaultCategory);
+  const scores: Record<CategoryName, number> = {
+    '중독정책': 0, '알코올·약물중독': 0, '도박중독': 0, '게임·디지털중독': 0, '중독사회와 회복': 0,
+  };
+  for (const cat of VALID_CATEGORIES) {
+    scores[cat] = categoryFitScore(title, content, cat);
+  }
+  let maxScore = -Infinity;
+  let bestCategory: CategoryName = def;
+  for (const cat of VALID_CATEGORIES) {
+    const s = scores[cat];
+    if (s > maxScore) {
+      maxScore = s;
+      bestCategory = cat;
+    } else if (s === maxScore && cat === def) {
+      bestCategory = def;
+    }
+  }
+  if (maxScore < MIN_ADDICTION_SCORE) return def;
+  return bestCategory;
+}
+
+function isValidCategory(category: string): category is CategoryName {
+  return VALID_CATEGORIES.includes(category as CategoryName);
+}
+
+/** Google 검색·전문 기관 직접 RSS는 통과 점수 1, 그 외는 MIN_ADDICTION_SCORE */
+function minAddictionPassScore(conf: SourceConfig): number {
+  if (conf.id.includes('google') || conf.isSpecialized) return 1;
+  return MIN_ADDICTION_SCORE;
+}
+
+// ---------- Lang detect ----------
 type DetectedLang = 'ko' | 'en' | 'ja' | 'zh' | 'other';
 
 function detectLanguage(text: string): DetectedLang {
   const s = (text || '').slice(0, 900);
   let ko = 0, ja = 0, zh = 0, latin = 0;
-
   for (const ch of s) {
     const code = ch.charCodeAt(0);
-    if ((code >= 0xac00 && code <= 0xd7af) || (code >= 0x1100 && code <= 0x11ff) || (code >= 0x3130 && code <= 0x318f)) { ko++; continue; }
-    if ((code >= 0x3040 && code <= 0x309f) || (code >= 0x30a0 && code <= 0x30ff)) { ja++; continue; }
-    if (code >= 0x4e00 && code <= 0x9fff) { zh++; continue; }
-    if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) { latin++; continue; }
+    if ((code >= 0xac00 && code <= 0xd7af) || (code >= 0x1100 && code <= 0x11ff) || (code >= 0x3130 && code <= 0x318f)) { ko++; }
+    else if ((code >= 0x3040 && code <= 0x309f) || (code >= 0x30a0 && code <= 0x30ff)) { ja++; }
+    else if (code >= 0x4e00 && code <= 0x9fff) { zh++; }
+    else if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a)) { latin++; }
   }
-
   const max = Math.max(ko, ja, zh, latin);
   if (max < 8) return 'other';
   if (max === ko) return 'ko';
@@ -195,18 +347,11 @@ function detectLanguage(text: string): DetectedLang {
   return 'other';
 }
 
-// ---------- Clean / Content ----------
+// ---------- Text utils ----------
 function normalizeText(s: string): string {
-  return (s || '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (s || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim();
 }
 
 function extractContent(item: RssItem): string {
@@ -220,65 +365,104 @@ function extractContent(item: RssItem): string {
   return '';
 }
 
-function makeTeaser(item: RssItem): string | undefined {
-  const c = extractContent(item);
-  if (!c) return undefined;
-  return c.length > 480 ? c.slice(0, 480) : c;
-}
-
 function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function parsePublishedAt(item: RssItem): string {
   const raw = item.isoDate || item.pubDate;
   if (!raw) return toYmd(new Date());
   const dt = new Date(raw);
-  if (Number.isNaN(dt.getTime())) return toYmd(new Date());
-  return toYmd(dt);
+  return Number.isNaN(dt.getTime()) ? toYmd(new Date()) : toYmd(dt);
 }
 
-// ---------- 3-line enforce ----------
+// ---------- 이미지 추출 ----------
+function extractImageFromRss(item: RssItem): string | null {
+  if (!ENABLE_IMAGE_EXTRACT) return null;
+  
+  if (item.enclosure?.url && item.enclosure.type?.startsWith('image/')) {
+    if (isValidImageUrl(item.enclosure.url)) return item.enclosure.url;
+  }
+  
+  const mediaContent = item['media:content'] as any;
+  if (mediaContent?.$?.url && isValidImageUrl(mediaContent.$.url)) return mediaContent.$.url;
+  if (Array.isArray(mediaContent) && mediaContent[0]?.$?.url && isValidImageUrl(mediaContent[0].$.url)) {
+    return mediaContent[0].$.url;
+  }
+  
+  const mediaThumbnail = item['media:thumbnail'] as any;
+  if (mediaThumbnail?.$?.url && isValidImageUrl(mediaThumbnail.$.url)) return mediaThumbnail.$.url;
+  if (Array.isArray(mediaThumbnail) && mediaThumbnail[0]?.$?.url && isValidImageUrl(mediaThumbnail[0].$.url)) {
+    return mediaThumbnail[0].$.url;
+  }
+  
+  const contentSources = [item['content:encoded'], item.content, item.description];
+  for (const src of contentSources) {
+    if (src) {
+      const imgMatch = src.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch?.[1] && isValidImageUrl(imgMatch[1])) {
+        return imgMatch[1];
+      }
+    }
+  }
+  return null;
+}
+
+async function extractOgImage(url: string): Promise<string | null> {
+  if (!ENABLE_IMAGE_EXTRACT) return null;
+  
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    
+    const html = await res.text();
+    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+                    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    if (ogMatch?.[1]) {
+      let imgUrl = ogMatch[1];
+      if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+      else if (imgUrl.startsWith('/')) imgUrl = new URL(url).origin + imgUrl;
+      if (isValidImageUrl(imgUrl)) return imgUrl;
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function getArticleImage(item: RssItem, sourceUrl: string): Promise<string | null> {
+  const rssImage = extractImageFromRss(item);
+  if (rssImage) return rssImage;
+  const ogImage = await extractOgImage(sourceUrl);
+  if (ogImage) return ogImage;
+  return null;
+}
+
+// ---------- Summary ----------
 function stripTitleEcho(lines: string[], title: string): string[] {
   const t = (title || '').trim();
   if (!t) return lines;
   return lines.filter((ln) => {
     const s = (ln || '').trim();
-    if (!s) return false;
-    if (s === t) return false;
-    if (/^(제목|title|タイトル|标题)\s*[:：]/i.test(s)) return false;
-    return true;
+    return s && s !== t && !/^(제목|title)\s*[:：]/i.test(s);
   });
 }
 
 function enforceThreeLines(raw: string, title: string): string {
   const cleaned = (raw || '').replace(/\r/g, '').trim();
-  let lines = cleaned.split('\n').map((s) => s.trim()).filter((s) => s.length > 0);
-  lines = stripTitleEcho(lines, title);
-
+  let lines = stripTitleEcho(cleaned.split('\n').map(s => s.trim()).filter(s => s.length > 0), title);
   if (lines.length < 3) {
-    const fallback = cleaned
-      .replace(/\s+/g, ' ')
-      .split(/(?<=[.!?。！？])\s+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    lines = stripTitleEcho(fallback, title);
+    lines = stripTitleEcho(cleaned.replace(/\s+/g, ' ').split(/(?<=[.!?。！？])\s+/).map(s => s.trim()).filter(s => s.length > 0), title);
   }
-
   const out: string[] = [];
-  for (const ln of lines) {
-    if (out.length >= 3) break;
-    out.push(ln);
-  }
+  for (const ln of lines) { if (out.length >= 3) break; out.push(ln); }
   while (out.length < 3) out.push('기사의 핵심 쟁점과 중독 관련 함의를 추가 확인할 필요가 있습니다.');
-  return out.map((s) => (/[.!?。！？]$/.test(s) ? s : s + '.')).join('\n');
+  return out.map(s => /[.!?。！？]$/.test(s) ? s : s + '.').join('\n');
 }
 
 // ---------- OpenAI pack ----------
-type AiPack = { titleKo: string; summary: string; keywords: string[] };
+type AiPack = { titleKo: string; teaser: string; summary: string; keywords: string[]; suggestedCategory?: CategoryName };
 
 function safeJsonParse<T>(text: string): T | null {
   try { return JSON.parse(text) as T; } catch { return null; }
@@ -286,63 +470,57 @@ function safeJsonParse<T>(text: string): T | null {
 
 function compactKeywords(keywords: unknown): string[] {
   if (!Array.isArray(keywords)) return [];
-  return keywords.map((k) => String(k || '').trim()).filter((k) => k.length > 0).slice(0, 12);
+  return keywords.map(k => String(k || '').trim()).filter(k => k.length > 0).slice(0, 12);
 }
 
-async function generateKoreanPack(originalTitle: string, content: string, lang: DetectedLang): Promise<AiPack> {
+async function generateKoreanPack(originalTitle: string, content: string, lang: DetectedLang, defaultCategory: CategoryName): Promise<AiPack> {
   const isForeign = lang !== 'ko';
 
-  // 외국어인데 OpenAI 비활성 => 저장 스킵을 유도(빈 값)
+  if (!isForeign) {
+    const summary = enforceThreeLines(content.slice(0, 400), originalTitle);
+    const teaser = summary.split('\n').slice(0, 2).join(' ');
+    return { titleKo: originalTitle, teaser, summary, keywords: [] };
+  }
+
   if (!isOpenAIAvailable || !openai) {
-    if (isForeign) return { titleKo: '', summary: '', keywords: [] };
-    return { titleKo: originalTitle, summary: enforceThreeLines(content.slice(0, 400), originalTitle), keywords: [] };
+    return { titleKo: '', teaser: '', summary: '', keywords: [] };
   }
 
   try {
     await rateLimitedDelay();
-
-    const rule = `JSON만 출력(코드블록/추가 텍스트 금지).
-{
- "titleKo":"...",                 // 한국어 제목(원문을 자연스럽게 번역)
- "lines":["...","...","..."],     // 정확히 3개, 각 1문장, 한국어
- "keywords":["...","..."]         // 한국어 키워드 6~12개
-}
-규칙: lines는 불릿/번호 금지, 제목 반복 금지`;
-
-    const prompt =
-      isForeign
-        ? `외국어 기사를 한국어로 이해한 뒤, 제목+3문장요약+키워드만 JSON으로 출력.\n[원문제목] ${originalTitle}\n[원문본문] ${content}\n[규칙] ${rule}`
-        : `한국어 기사에서 3문장 요약+키워드 생성.\n[제목] ${originalTitle}\n[본문] ${content}\n[규칙] ${rule}`;
+    const categoryList = VALID_CATEGORIES.join(', ');
+    const rule = `JSON만 출력. {"titleKo":"...","teaser":"...","lines":["...","...","..."],"keywords":["..."],"category":"..."}`;
+    const prompt = `외국어 기사를 한국어로 번역/요약. [원문제목] ${originalTitle} [본문] ${content.slice(0, 800)} [규칙] ${rule} [카테고리] ${categoryList}`;
 
     const res = await openai.chat.completions.create({
       model: OPENAI_MODEL,
       messages: [
-        { role: 'system', content: '당신은 중독 관련 뉴스의 전문 번역/요약가다. 결과는 JSON만 출력한다.' },
+        { role: 'system', content: '중독 뉴스 전문 번역가. JSON만 출력. 한국어로 작성.' },
         { role: 'user', content: prompt },
       ],
       temperature: 0.2,
-      max_tokens: 420,
+      max_tokens: 500,
     });
 
     const raw = res.choices[0]?.message?.content?.trim();
-    if (!raw) return isForeign ? { titleKo: '', summary: '', keywords: [] } : { titleKo: originalTitle, summary: enforceThreeLines(content.slice(0, 400), originalTitle), keywords: [] };
+    if (!raw) return { titleKo: '', teaser: '', summary: '', keywords: [] };
 
-    const parsed = safeJsonParse<{ titleKo?: unknown; lines?: unknown; keywords?: unknown }>(raw);
+    const parsed = safeJsonParse<{ titleKo?: unknown; teaser?: unknown; lines?: unknown; keywords?: unknown; category?: unknown }>(raw);
     if (parsed && typeof parsed.titleKo === 'string' && Array.isArray(parsed.lines)) {
       const titleKo = String(parsed.titleKo || '').trim();
-      const lines = stripTitleEcho(parsed.lines.map((x) => String(x || '').trim()).filter((s) => s.length > 0), originalTitle);
+      const teaser = String(parsed.teaser || '').trim();
+      const lines = stripTitleEcho(parsed.lines.map(x => String(x || '').trim()).filter(s => s.length > 0), originalTitle);
       const summary = enforceThreeLines(lines.join('\n'), originalTitle);
       const keywords = compactKeywords(parsed.keywords);
-      return { titleKo, summary, keywords };
+      const rawCategory = typeof parsed.category === 'string' ? parsed.category.trim() : '';
+      const suggestedCategory = isValidCategory(rawCategory) ? rawCategory : normalizeCategory(rawCategory);
+      return { titleKo, teaser: teaser || summary.split('\n').slice(0, 2).join(' '), summary, keywords, suggestedCategory };
     }
 
-    // 일탈 => 외국어는 스킵, 한국어는 강제
-    if (isForeign) return { titleKo: '', summary: '', keywords: [] };
-    return { titleKo: originalTitle, summary: enforceThreeLines(raw, originalTitle), keywords: [] };
+    return { titleKo: '', teaser: '', summary: '', keywords: [] };
   } catch (e: any) {
-    console.error('  ⚠️ OpenAI failed:', e?.status, e?.message || e);
-    if (isForeign) return { titleKo: '', summary: '', keywords: [] };
-    return { titleKo: originalTitle, summary: enforceThreeLines(content.slice(0, 400), originalTitle), keywords: [] };
+    console.error('  ⚠️ OpenAI failed:', e?.message || e);
+    return { titleKo: '', teaser: '', summary: '', keywords: [] };
   }
 }
 
@@ -350,26 +528,69 @@ async function generateKoreanPack(originalTitle: string, content: string, lang: 
 async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const res = await fetch(maybeGoogleUrl, {
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(maybeGoogleUrl, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
     clearTimeout(timeout);
     const finalUrl = res.url || maybeGoogleUrl;
-
     if (finalUrl.includes('news.google.com')) {
       const html = await res.text();
       const m = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
       if (m?.[1]) return m[1];
     }
-
     return finalUrl;
+  } catch { return maybeGoogleUrl; }
+}
+
+// ---------- 중복 체크 ----------
+function normalizeForDuplicateCheck(title: string): string {
+  return (title || '').toLowerCase().replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function extractCoreKeywords(title: string): Set<string> {
+  const stopWords = new Set(['에서', '으로', '이다', '하는', '있는', '되는', '위한', '대한', '통해', '관련', '오늘', '내일', '어제']);
+  const normalized = normalizeForDuplicateCheck(title);
+  const words = normalized.split(' ').filter(w => w.length >= 2 && !stopWords.has(w));
+  return new Set(words);
+}
+
+function calculateTitleSimilarity(title1: string, title2: string): number {
+  const kw1 = extractCoreKeywords(title1);
+  const kw2 = extractCoreKeywords(title2);
+  if (kw1.size === 0 || kw2.size === 0) return 0;
+  let intersection = 0;
+  for (const kw of kw1) { if (kw2.has(kw)) intersection++; }
+  const union = kw1.size + kw2.size - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+
+const seenTitles: Map<string, string> = new Map();
+
+function isDuplicateInSession(title: string): boolean {
+  const normalized = normalizeForDuplicateCheck(title);
+  if (seenTitles.has(normalized)) return true;
+  for (const [seenNorm, seenOrig] of seenTitles.entries()) {
+    const similarity = calculateTitleSimilarity(title, seenOrig);
+    if (similarity >= 0.5) {
+      console.log(`  │   ⚠️ 유사 기사 스킵 (${Math.round(similarity * 100)}%): ${title.slice(0, 30)}...`);
+      return true;
+    }
+  }
+  seenTitles.set(normalized, title);
+  return false;
+}
+
+/**
+ * rss-parser가 내부적으로 Node `url.parse` + `http(s).get`을 쓰는데,
+ * 쿼리에 한글·일문·따옴표 등이 그대로 있으면 "Request path contains unescaped characters"가 난다.
+ * WHATWG URL로 직렬화하면 퍼센트 인코딩된 href가 되어 동일 피드도 정상 요청된다.
+ */
+function normalizeRssFeedUrl(raw: string): string {
+  const s = raw.trim();
+  if (!s) return s;
+  try {
+    return new URL(s).href;
   } catch {
-    return maybeGoogleUrl;
+    return s;
   }
 }
 
@@ -377,7 +598,7 @@ async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
 async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
   try {
     console.log(`  ├─ [${conf.id}] Parsing RSS...`);
-    const feed = await parser.parseURL(conf.url);
+    const feed = await parser.parseURL(normalizeRssFeedUrl(conf.url));
     const items = (feed.items || []).slice(0, 30);
     console.log(`  ├─ [${conf.id}] Found ${items.length} items`);
 
@@ -386,68 +607,62 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
     for (const it of items) {
       const rawTitle = normalizeText(it.title || '');
       if (!rawTitle) continue;
+      if (isDuplicateInSession(rawTitle)) continue;
 
       const publishedAt = parsePublishedAt(it);
-      const teaser = makeTeaser(it);
       const rawContent = extractContent(it) || rawTitle;
-
-      const googleUrl = it.link ? String(it.link) : undefined;
+      const googleUrl = it.link ? String(it.link) : null;
       const baseUrl = googleUrl || conf.url;
-
       const sourceUrl = baseUrl.includes('news.google.com') ? await resolveFinalUrl(baseUrl) : baseUrl;
 
-      // 0) 도메인 차단
-      const b = shouldBlockByDomain(sourceUrl, googleUrl);
-      if (b.blocked) continue;
+      if (shouldBlockByDomain(sourceUrl, googleUrl || undefined)) continue;
 
-      // 1) 언어감지
       const lang = detectLanguage(rawTitle + ' ' + rawContent);
       const isForeign = lang !== 'ko';
 
-      // 2) 외국어인데 OpenAI 없으면 저장 스킵
-      if (isForeign && (!isOpenAIAvailable || !openai)) continue;
+      if (isForeign) {
+        if (MAX_FOREIGN_ARTICLES === 0) continue;
+        if (foreignArticleCount >= MAX_FOREIGN_ARTICLES) continue;
+        if (!isOpenAIAvailable || !openai) continue;
+      }
 
-      // 3) 한국어는 선필터
-      if (!isForeign && !isAddictionRelated(rawTitle, rawContent)) continue;
+      // v4.0: 강화된 중독 필터 (점수 기반) — 전문 소스/Google은 임계 완화
+      const minScore = minAddictionPassScore(conf);
+      const addictionScore = calculateAddictionScore(rawTitle, rawContent);
+      if (addictionScore < minScore) continue;
 
       const shortTitle = rawTitle.length > 48 ? rawTitle.slice(0, 48) + '...' : rawTitle;
-      const prefix = lang === 'ko' ? '[KO]' : lang === 'en' ? '[EN→KO]' : lang === 'ja' ? '[JA→KO]' : lang === 'zh' ? '[ZH→KO]' : '[OTHER→KO]';
-      console.log(`  │   ${prefix} ${shortTitle}`);
+      const prefix = lang === 'ko' ? '[KO]' : `[${lang.toUpperCase()}→KO]`;
+      const scoreInfo = `(점수:${addictionScore})`;
+      console.log(`  │   ${prefix} ${scoreInfo} ${shortTitle}`);
 
-      // 4) 번역/요약 팩
-      const pack = await generateKoreanPack(rawTitle, rawContent, lang);
-
-      // 5) 외국어는 title/summary 없으면 스킵(저장 스킵 정책)
+      const pack = await generateKoreanPack(rawTitle, rawContent, lang, normalizeCategory(conf.category));
       if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) continue;
 
+      if (isForeign) foreignArticleCount++;
+
       const titleKo = isForeign ? pack.titleKo.trim() : rawTitle;
+      const teaserKo = pack.teaser || null;
       const summaryKo = isForeign ? pack.summary : enforceThreeLines(pack.summary || rawContent.slice(0, 400), rawTitle);
       const keywordsKo = pack.keywords || [];
 
-      // 6) 외국어 후필터(번역된 결과 기반)
+      // 번역 후 다시 중독 관련성 체크
       if (isForeign) {
-        const basis = `${titleKo}\n${summaryKo}\n${keywordsKo.join(' ')}`;
-        if (!isAddictionRelated(basis, basis)) continue;
+        const translatedScore = calculateAddictionScore(`${titleKo}\n${summaryKo}`, keywordsKo.join(' '));
+        if (translatedScore < minScore) continue;
       }
 
+      let finalCategory: CategoryName = pack.suggestedCategory 
+        ? normalizeCategory(pack.suggestedCategory)
+        : classifyCategory(titleKo, summaryKo + ' ' + keywordsKo.join(' '), normalizeCategory(conf.category));
+
+      const imageUrl = await getArticleImage(it, sourceUrl);
+
       out.push({
-        title: titleKo,
-        originalTitle: rawTitle,
-        teaser,
-        summary: summaryKo,
-        keywords: keywordsKo,
-        category: conf.category,
-        region: conf.region,
-        source: conf.sourceName,
-        sourceUrl,
-        googleUrl,
-        origin: 'crawler',
-        isTop: false,
-        isFeature: false,
-        publishedAt,
-        lang,
-        isForeign,
-        blocked: false,
+        title: titleKo, originalTitle: rawTitle, teaser: teaserKo, summary: summaryKo,
+        keywords: keywordsKo, category: finalCategory, region: conf.region, source: conf.sourceName,
+        sourceUrl, googleUrl, imageUrl, origin: 'crawler', isTop: false, isFeature: false,
+        publishedAt, lang, isForeign, blocked: false, blockedReason: null,
       });
     }
 
@@ -459,90 +674,123 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
   }
 }
 
-// ---------- Duplicate ----------
-async function isDuplicate(repo: any, c: Candidate): Promise<boolean> {
-  const hit1 = await repo.findOne({ where: { sourceUrl: c.sourceUrl } });
-  if (hit1) return true;
-  if (c.googleUrl) {
-    const hit2 = await repo.findOne({ where: { googleUrl: c.googleUrl } });
-    if (hit2) return true;
+// ---------- DB 중복 체크 ----------
+async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
+  if (await repo.findOne({ where: { sourceUrl: c.sourceUrl } })) return true;
+  if (c.googleUrl && await repo.findOne({ where: { googleUrl: c.googleUrl } })) return true;
+  if (await repo.findOne({ where: { title: c.title, publishedAt: c.publishedAt, source: c.source } })) return true;
+  const sameDayArticles = await repo.find({ where: { publishedAt: c.publishedAt } });
+  for (const existing of sameDayArticles) {
+    if (calculateTitleSimilarity(c.title, existing.title) >= 0.5) return true;
   }
-  const hit3 = await repo.findOne({ where: { title: c.title, publishedAt: c.publishedAt, source: c.source } });
-  return !!hit3;
+  return false;
 }
 
 // ---------- Save ----------
 async function saveCandidates(list: Candidate[]) {
   const repo = ds.getRepository(Article);
-  let inserted = 0;
-  let dup = 0;
+  let inserted = 0, dup = 0, withImage = 0;
 
   console.log(`\n💾 Saving to DB (${list.length} candidates)...`);
   for (const c of list) {
-    if (await isDuplicate(repo, c)) {
-      dup++;
-      continue;
+    if (await isDuplicateInDb(repo, c)) { dup++; continue; }
+    
+    let safeKeywords: string[] | null = null;
+    try {
+      if (c.keywords && Array.isArray(c.keywords) && c.keywords.length > 0) {
+        safeKeywords = c.keywords.map(k => String(k).trim()).filter(k => k.length > 0 && k.length < 100);
+        if (safeKeywords.length === 0) safeKeywords = null;
+      }
+    } catch { safeKeywords = null; }
+
+    try {
+      const ent = repo.create({
+        title: c.title, originalTitle: c.originalTitle, teaser: c.teaser, summary: c.summary,
+        category: c.category, region: c.region, source: c.source, sourceUrl: c.sourceUrl,
+        googleUrl: c.googleUrl, imageUrl: c.imageUrl, origin: c.origin, isTop: c.isTop,
+        isFeature: c.isFeature, publishedAt: c.publishedAt, lang: c.lang, isForeign: c.isForeign,
+        keywords: safeKeywords, blocked: c.blocked, blockedReason: c.blockedReason,
+      });
+      await repo.save(ent);
+      inserted++;
+      if (c.imageUrl) withImage++;
+      if (inserted % 20 === 0) console.log(`  ├─ ${inserted} saved...`);
+    } catch (e: any) {
+      try {
+        const ent = repo.create({
+          title: c.title, originalTitle: c.originalTitle, teaser: c.teaser, summary: c.summary,
+          category: c.category, region: c.region, source: c.source, sourceUrl: c.sourceUrl,
+          googleUrl: c.googleUrl, imageUrl: c.imageUrl, origin: c.origin, isTop: c.isTop,
+          isFeature: c.isFeature, publishedAt: c.publishedAt, lang: c.lang, isForeign: c.isForeign,
+          keywords: null, blocked: c.blocked, blockedReason: c.blockedReason,
+        });
+        await repo.save(ent);
+        inserted++;
+        if (c.imageUrl) withImage++;
+      } catch {}
     }
-    const ent = repo.create({
-      title: c.title,                         // 한국어 제목
-      originalTitle: c.originalTitle ?? null, // 원문 제목
-      teaser: c.teaser ?? null,
-      summary: c.summary,
-      category: c.category,
-      region: c.region,
-      source: c.source,
-      sourceUrl: c.sourceUrl,
-      googleUrl: c.googleUrl ?? null,
-      origin: c.origin,
-      isTop: c.isTop,
-      isFeature: c.isFeature,
-      publishedAt: c.publishedAt,
-      lang: c.lang,
-      isForeign: c.isForeign,
-      keywords: c.keywords?.length ? c.keywords : null,
-      blocked: c.blocked,
-      blockedReason: c.blockedReason ?? null,
-    });
-    await repo.save(ent);
-    inserted++;
-    if (inserted % 20 === 0) console.log(`  ├─ ${inserted} saved...`);
   }
-  console.log(`  └─ Save complete! inserted=${inserted}, duplicates=${dup}\n`);
-  return { inserted, dup };
+  console.log(`  └─ Save complete! inserted=${inserted}, duplicates=${dup}, withImage=${withImage}\n`);
+  return { inserted, dup, withImage };
 }
 
 // ---------- Main ----------
 async function main() {
+  const startTime = Date.now();
+  
   console.log('\n========================================');
-  console.log('🚀 Addicted News Crawler v3.2 START');
+  console.log('🚀 Addicted News Crawler v4.0 START');
+  console.log('   - 중독 전문 소스 중심');
+  console.log('   - 강화된 중독 필터 (점수제)');
+  console.log('   - 외국 기사 비율 증가');
+  console.log('   - 하루 1회 제한: ' + (SKIP_DAILY_CHECK ? '해제' : '적용'));
   console.log('========================================\n');
 
-  // 테스트를 위해 "오늘 실행됨" 락이 걸리면, 아래를 임시로 주석 처리해도 됩니다.
-  if (await hasRunToday()) {
+  // 하루 1회 제한 체크 (SKIP_DAILY_CHECK=true면 스킵)
+  if (!SKIP_DAILY_CHECK && await hasRunToday()) {
     console.log('⏭️  Already ran today. (logs/last_crawl.json)');
-    console.log('   테스트하려면 logs/last_crawl.json 삭제 후 재실행하세요.\n');
+    console.log('   제한 해제: set SKIP_DAILY_CHECK=true');
+    console.log('   또는: del logs\\last_crawl.json 후 재실행\n');
     return;
   }
 
   isOpenAIAvailable = initializeOpenAI();
-
   await ds.initialize();
   console.log('✅ Database connected\n');
 
+  const crawlSources = [...SOURCES].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
   const all: Candidate[] = [];
-  console.log(`📡 Crawling ${SOURCES.length} sources...\n`);
+  console.log(`📡 Crawling ${crawlSources.length} sources...\n`);
 
-  for (let i = 0; i < SOURCES.length; i++) {
-    const conf = SOURCES[i];
-    console.log(`[${i + 1}/${SOURCES.length}] ${conf.sourceName} (${conf.category} / ${conf.region})`);
+  for (let i = 0; i < crawlSources.length; i++) {
+    const conf = crawlSources[i];
+    console.log(`[${i + 1}/${crawlSources.length}] ${conf.sourceName} (${conf.category})`);
     const got = await crawlOneSource(conf);
     all.push(...got);
   }
 
-  await saveCandidates(all);
+  const result = await saveCandidates(all);
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+  // 통계 출력
+  const koreanCount = all.filter(a => !a.isForeign).length;
+  const foreignCount = all.filter(a => a.isForeign).length;
+  const categoryStats: Record<string, number> = {};
+  for (const a of all) {
+    categoryStats[a.category] = (categoryStats[a.category] || 0) + 1;
+  }
 
   console.log('========================================');
-  console.log(`✅ END. Collected=${all.length}, AI Calls=${apiCallCount}`);
+  console.log(`✅ END in ${Math.floor(elapsed/60)}분 ${elapsed%60}초`);
+  console.log(`   수집: ${all.length}개 (한국 ${koreanCount}, 외국 ${foreignCount})`);
+  const krRatioPct = all.length > 0 ? (koreanCount / all.length) * 100 : 0;
+  console.log(`   한국 콘텐츠 비중: ${krRatioPct.toFixed(1)}% (목표 참고 30%)`);
+  console.log(`   저장: ${result.inserted}개, 이미지: ${result.withImage}개`);
+  console.log(`   API 호출: ${apiCallCount}회`);
+  console.log('\n   카테고리별:');
+  for (const [cat, count] of Object.entries(categoryStats)) {
+    console.log(`     - ${cat}: ${count}개`);
+  }
   console.log('========================================\n');
 
   await markRunToday();

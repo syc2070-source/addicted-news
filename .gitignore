@@ -5,3 +5,7 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.dump
+*.log
+backend/logs/
+crawl-last-run.log
