@@ -2,6 +2,8 @@
 // v2.5 - API 경로 수정 완료
 
 var API_BASE = 'http://localhost:4000';
+// N-3 배포 시 중독사회 운영 URL 주입. 빈값이면 보고서 deep link 비활성.
+var ADDICTION_SOCIETY_URL = '';
 var ARTICLES_PER_CATEGORY = 5;
 
 // 카테고리 API는 영문 슬러그만 사용 (한글·중점·공백 URL 경로 오류 방지, backend CATEGORY_MAP과 동일)
@@ -90,29 +92,72 @@ function loadRaphaNews() {
     });
 }
 
+// Statory ReportCard → 기획 슬롯 표시 객체
+function reportToSlotItem(report) {
+  var base = (typeof ADDICTION_SOCIETY_URL === 'string' ? ADDICTION_SOCIETY_URL : '').replace(/\/+$/, '');
+  var link = null;
+  if (base && report && report.id) {
+    link = base + '/reports/' + report.id;
+  }
+  var summary = report.summary_ko || '';
+  return {
+    title: report.title_ko || '',
+    summary: summary,
+    teaser: summary.substring(0, 100),
+    source: 'Statory 보고서',
+    publishedAt: report.published_at || '',
+    sourceUrl: link,
+    category: report.domain || '',
+    id: report.id || '',
+    isReport: true,
+  };
+}
+
+function parseArticlesResponse(data) {
+  return Array.isArray(data) ? data : (data ? [data] : []);
+}
+
+function fetchReportSlotItems(limit) {
+  return fetch(API_BASE + '/reports?limit=' + limit)
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var items = data && Array.isArray(data.items) ? data.items : [];
+      return items.map(reportToSlotItem);
+    })
+    .catch(function(e) {
+      console.warn('기획 보고서(reports) 로드 실패:', e);
+      return [];
+    });
+}
+
 // 기획기사 로드
 function loadFeatureNews() {
   var container = document.getElementById('feature-news');
   if (!container) return;
-  
-  fetch(API_BASE + '/articles/featured')
+
+  var featuredPromise = fetch(API_BASE + '/articles/featured')
     .then(function(res) { return res.json(); })
-    .then(function(data) {
-      var articles = Array.isArray(data) ? data : (data ? [data] : []);
-      
-      if (articles.length === 0) {
+    .then(parseArticlesResponse)
+    .catch(function(e) {
+      console.error('기획기사(featured) 로드 실패:', e);
+      return [];
+    });
+
+  Promise.all([featuredPromise, fetchReportSlotItems(3)])
+    .then(function(results) {
+      var articles = results[0].slice(0, 3);
+      var reports = results[1];
+      var combined = articles.concat(reports);
+
+      if (combined.length === 0) {
         container.innerHTML = '<p class="no-articles-small">등록된 기사가 없습니다.</p>';
         return;
       }
-      
+
       container.innerHTML = '';
-      articles.slice(0, 3).forEach(function(article, index) {
-        container.innerHTML += createSidebarItem(article, index + 1);
+      combined.forEach(function(item, index) {
+        container.innerHTML += createSidebarItem(item, index + 1);
       });
-    })
-    .catch(function(e) {
-      console.error('기획기사 로드 실패:', e);
-      container.innerHTML = '<p class="no-articles-small">불러올 수 없습니다.</p>';
     });
 }
 
@@ -278,26 +323,32 @@ function initRaphaPage() {
 
 // 기획기사 페이지
 function initFeaturePage() {
-  fetch(API_BASE + '/articles/featured?limit=20')
+  var featuredPromise = fetch(API_BASE + '/articles/featured?limit=20')
     .then(function(res) { return res.json(); })
-    .then(function(data) {
+    .then(parseArticlesResponse)
+    .catch(function(e) {
+      console.error('기획기사(featured) 페이지 로드 실패:', e);
+      return [];
+    });
+
+  Promise.all([featuredPromise, fetchReportSlotItems(20)])
+    .then(function(results) {
       var container = document.getElementById('feature-articles');
       if (!container) return;
-      
-      var articles = Array.isArray(data) ? data : (data ? [data] : []);
-      
-      if (articles.length === 0) {
+
+      var combined = results[0].concat(results[1]);
+
+      if (combined.length === 0) {
         container.innerHTML = '<p class="no-articles">기획기사가 없습니다.</p>';
         return;
       }
-      
+
       container.innerHTML = '';
-      articles.forEach(function(article) {
-        container.innerHTML += createFullArticleCard(article);
+      combined.forEach(function(item) {
+        container.innerHTML += createFullArticleCard(item);
       });
       addArticleEventListeners(container);
-    })
-    .catch(function(e) { console.error('기획기사 페이지 로드 실패:', e); });
+    });
 }
 
 // 카테고리 페이지
@@ -342,10 +393,13 @@ function initCategoryPage() {
 
 // 사이드바 아이템
 function createSidebarItem(article, rank) {
+  var titleHtml = article.sourceUrl
+    ? '<a href="' + article.sourceUrl + '" target="_blank" class="sidebar-item-title">' + escapeHtml(article.title) + '</a>'
+    : '<span class="sidebar-item-title">' + escapeHtml(article.title) + '</span>';
   return '<div class="sidebar-item">' +
     '<span class="sidebar-rank">' + rank + '</span>' +
     '<div class="sidebar-item-content">' +
-      '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="sidebar-item-title">' + escapeHtml(article.title) + '</a>' +
+      titleHtml +
       '<p class="sidebar-item-meta">' + (article.source || '') + ' · ' + formatDate(article.publishedAt) + '</p>' +
     '</div>' +
   '</div>';
@@ -405,18 +459,24 @@ function createFullArticleCard(article) {
   
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);
+  var titleHtml = article.sourceUrl
+    ? '<a href="' + article.sourceUrl + '" target="_blank" class="full-article-title">' + escapeHtml(article.title) + '</a>'
+    : '<span class="full-article-title">' + escapeHtml(article.title) + '</span>';
+  var sourceBtnHtml = article.sourceUrl
+    ? '<a href="' + article.sourceUrl + '" target="_blank" class="btn-source">' + (article.isReport ? '보고서 보기' : '원문 보기') + '</a>'
+    : (article.isReport ? '<span class="btn-source">보고서 준비 중</span>' : '<a href="#" class="btn-source">원문 보기</a>');
   
-  return '<div class="full-article-card" data-id="' + article.id + '">' +
+  return '<div class="full-article-card" data-id="' + (article.id || '') + '">' +
     imageHtml +
     '<div class="full-article-body">' +
-      '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="full-article-title">' + escapeHtml(article.title) + '</a>' +
+      titleHtml +
       '<p class="full-article-meta">' + formatDate(article.publishedAt) + ' · ' + (article.source || '') + ' · ' + (article.category || '') + '</p>' +
       '<div class="full-article-summary" data-full="' + escapeHtml(summary) + '" data-teaser="' + escapeHtml(teaser) + '" data-collapsed="true">' +
         '<p>' + escapeHtml(teaser) + '</p>' +
       '</div>' +
       '<div class="article-actions">' +
         '<button class="btn-toggle">요약 보기</button>' +
-        '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="btn-source">원문 보기</a>' +
+        sourceBtnHtml +
       '</div>' +
     '</div>' +
   '</div>';
