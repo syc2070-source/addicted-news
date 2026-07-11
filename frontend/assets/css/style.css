@@ -698,3 +698,34 @@ a {
   border-bottom-style: solid;
   background: rgba(138, 109, 59, 0.08);
 }
+
+/* 중독백과 한/영 토글 */
+.enc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.enc-lang {
+  display: inline-flex;
+  gap: 4px;
+  font-size: 13px;
+}
+.enc-lang a {
+  padding: 4px 10px;
+  border: 1px solid #ccc;
+  border-radius: 14px;
+  text-decoration: none;
+  color: #555;
+  background: #fff;
+}
+.enc-lang a.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.enc-lang a:hover {
+  border-color: #111;
+}
