@@ -5,6 +5,7 @@ import { Article } from './articles/article.entity';
 import { ArticlesModule } from './articles/articles.module';
 import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
+import { EncyclopediaModule } from './encyclopedia/encyclopedia.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ReportsModule } from './reports/reports.module';
     ArticlesModule,
     AdminModule,
     ReportsModule,
+    EncyclopediaModule,
   ],
 })
 export class AppModule {}

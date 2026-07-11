@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>중독백과 · 중독뉴스</title>
+  <style>
+    .enc-wrap{max-width:1000px;margin:0 auto;padding:24px;font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif}
+    .enc-filters{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+    .enc-chip{padding:6px 14px;border-radius:16px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:14px}
+    .enc-chip.active{background:#111;color:#fff;border-color:#111}
+    .enc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+    .enc-card{border:1px solid #e5e5e5;border-radius:12px;padding:16px;cursor:pointer;background:#fff}
+    .enc-card h3{margin:0 0 4px;font-size:18px}
+    .enc-card .en{color:#888;font-size:13px}
+    .enc-card p{font-size:14px;color:#444;margin:8px 0 0;line-height:1.5}
+    .enc-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:#eef;color:#335;margin-left:6px}
+    .enc-detail h1{font-size:32px;margin:0}
+    .enc-detail .en{color:#888;margin:4px 0 16px}
+    .enc-detail video{width:100%;border-radius:12px;margin:12px 0}
+    .enc-detail p{line-height:1.7;font-size:16px;color:#222}
+    .enc-example{background:#f7f7f7;border-left:4px solid #999;padding:12px 16px;border-radius:6px;margin:14px 0;color:#333}
+    .enc-related a{display:inline-block;margin:4px 8px 4px 0;padding:6px 12px;background:#f0f0f0;border-radius:14px;font-size:13px;text-decoration:none;color:#222}
+    .enc-help{margin-top:20px;padding:12px 16px;background:#fff7e6;border:1px solid #ffe0a3;border-radius:8px;font-size:13px;color:#664}
+    .enc-back{display:inline-block;margin-bottom:16px;color:#555;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="enc-wrap" id="enc-root">로딩 중…</div>
+  <script src="assets/js/encyclopedia.js"></script>
+</body>
+</html>
