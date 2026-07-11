@@ -1,10 +1,14 @@
 // backend/src/admin/admin.controller.ts
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, Headers, UnauthorizedException } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { EncyclopediaService } from '../encyclopedia/encyclopedia.service';
 
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly encyclopediaService: EncyclopediaService,
+  ) {}
 
   // 간단한 비밀번호 인증
   private checkAuth(authHeader: string) {
@@ -174,5 +178,16 @@ export class AdminController {
   async getStats(@Headers('authorization') auth: string) {
     this.checkAuth(auth);
     return this.adminService.getStats();
+  }
+
+  // 중독백과 항목 수정 (definition/example/body/advanced)
+  @Put('encyclopedia/:id')
+  async updateEncyclopedia(
+    @Headers('authorization') auth: string,
+    @Param('id') id: string,
+    @Body() data: any,
+  ) {
+    this.checkAuth(auth);
+    return this.encyclopediaService.update(id, data);
   }
 }

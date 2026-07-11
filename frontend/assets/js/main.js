@@ -32,6 +32,87 @@ function categoryDisplayName(displayOrSlug) {
   return displayOrSlug;
 }
 
+// ============================================================
+// 중독백과 용어 자동 링크 (main.js 에 추가)
+// - escapeHtml 된 HTML 문자열에서 각 용어 "첫 등장만" 백과 링크로 감싼다.
+// - 긴 별칭 우선 매칭, <a> 중첩/태그 내부 침범 없음(테스트 완료).
+// - 링크: encyclopedia.html?id=<id>
+// ============================================================
+
+var ENC_LINK_MAP = null; // { 별칭: id } 캐시
+
+async function loadEncLinkMap() {
+  if (ENC_LINK_MAP) return ENC_LINK_MAP;
+  try {
+    var res = await fetch(API_BASE + '/encyclopedia/link-map');
+    if (!res.ok) throw new Error('link-map fetch failed');
+    ENC_LINK_MAP = await res.json();
+  } catch (e) {
+    console.warn('용어 링크맵 로드 실패, 자동 링크 비활성:', e);
+    ENC_LINK_MAP = {};
+  }
+  return ENC_LINK_MAP;
+}
+
+/**
+ * safeHtml: 이미 escapeHtml() 된 문자열
+ * map: { 별칭: id }  (없으면 ENC_LINK_MAP 사용)
+ * 반환: 용어 첫 등장이 <a>로 감싸진 HTML
+ */
+function linkifyTerms(safeHtml, map) {
+  map = map || ENC_LINK_MAP;
+  if (!safeHtml || !map) return safeHtml;
+  var aliases = Object.keys(map).sort(function(a, b) { return b.length - a.length; });
+  if (aliases.length === 0) return safeHtml;
+
+  var linked = {};            // 이미 링크한 별칭(첫 등장만)
+  var parts = safeHtml.split(/(<[^>]+>)/g); // 홀수 인덱스=태그
+  var insideAnchor = false;
+
+  for (var i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      if (/^<a\b/i.test(parts[i])) insideAnchor = true;
+      else if (/^<\/a>/i.test(parts[i])) insideAnchor = false;
+      continue;
+    }
+    if (insideAnchor || !parts[i]) continue;
+
+    var remaining = parts[i];
+    var rebuilt = '';
+    var progress = true;
+    while (progress) {
+      progress = false;
+      var best = null;
+      for (var ai = 0; ai < aliases.length; ai++) {
+        var alias = aliases[ai];
+        if (linked[alias]) continue;
+        var idx = remaining.indexOf(alias);
+        if (idx < 0) continue;
+        if (
+          best === null ||
+          idx < best.idx ||
+          (idx === best.idx && alias.length > best.alias.length)
+        ) {
+          best = { idx: idx, alias: alias };
+        }
+      }
+      if (best) {
+        var id = map[best.alias];
+        var hit = best.alias;
+        rebuilt += remaining.slice(0, best.idx);
+        rebuilt +=
+          '<a class="enc-term-link" href="encyclopedia.html?id=' + encodeURIComponent(id) + '" ' +
+          'title="중독백과: ' + hit + '">' + hit + '</a>';
+        remaining = remaining.slice(best.idx + hit.length);
+        linked[best.alias] = true;
+        progress = true;
+      }
+    }
+    parts[i] = rebuilt + remaining;
+  }
+  return parts.join('');
+}
+
 // 초기화
 document.addEventListener('DOMContentLoaded', function() {
   var path = window.location.pathname;
@@ -48,9 +129,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 메인 페이지 - 순차 로드 (안정성 우선)
-function initMainPage() {
+async function initMainPage() {
   console.log('메인 페이지 초기화 시작...');
-  
+  await loadEncLinkMap();
+
   // 약간의 지연 후 로드 (DOM 완전 로드 보장)
   setTimeout(function() {
     loadTopNews();
@@ -62,6 +144,7 @@ function initMainPage() {
     loadCategoryArticles('도박중독', 'cat-gambling');
     loadCategoryArticles('게임·디지털중독', 'cat-digital');
     loadCategoryArticles('중독사회와 회복', 'cat-issue');
+    loadEncWidget();
     console.log('메인 페이지 로드 요청 완료');
   }, 100);
 }
@@ -298,7 +381,8 @@ function renderSidebarNews(container, data) {
 }
 
 // 라파뉴스 페이지
-function initRaphaPage() {
+async function initRaphaPage() {
+  await loadEncLinkMap();
   fetch(API_BASE + '/articles/rapha?limit=20')
     .then(function(res) { return res.json(); })
     .then(function(data) {
@@ -322,7 +406,8 @@ function initRaphaPage() {
 }
 
 // 기획기사 페이지
-function initFeaturePage() {
+async function initFeaturePage() {
+  await loadEncLinkMap();
   var featuredPromise = fetch(API_BASE + '/articles/featured?limit=20')
     .then(function(res) { return res.json(); })
     .then(parseArticlesResponse)
@@ -352,7 +437,8 @@ function initFeaturePage() {
 }
 
 // 카테고리 페이지
-function initCategoryPage() {
+async function initCategoryPage() {
+  await loadEncLinkMap();
   var urlParams = new URLSearchParams(window.location.search);
   var raw = urlParams.get('cat') || 'policy';
   var displayCategory = categoryDisplayName(raw);
@@ -434,6 +520,8 @@ function createArticleCard(article) {
   
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);
+  // 본문(요약 전문) 표시 영역만 용어 링크. data-* 는 평문 유지.
+  var teaserHtml = linkifyTerms(escapeHtml(teaser));
   
   return '<div class="article-card" data-id="' + article.id + '">' +
     imageHtml +
@@ -441,7 +529,7 @@ function createArticleCard(article) {
       '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="article-title">' + escapeHtml(article.title) + '</a>' +
       '<p class="article-meta">' + formatDate(article.publishedAt) + ' · ' + (article.source || '') + '</p>' +
       '<div class="article-summary" data-full="' + escapeHtml(summary) + '" data-teaser="' + escapeHtml(teaser) + '" data-collapsed="true">' +
-        '<p>' + escapeHtml(teaser) + '</p>' +
+        '<p>' + teaserHtml + '</p>' +
       '</div>' +
       '<div class="article-actions">' +
         '<button class="btn-toggle">요약 보기</button>' +
@@ -465,6 +553,7 @@ function createFullArticleCard(article) {
   var sourceBtnHtml = article.sourceUrl
     ? '<a href="' + article.sourceUrl + '" target="_blank" class="btn-source">' + (article.isReport ? '보고서 보기' : '원문 보기') + '</a>'
     : (article.isReport ? '<span class="btn-source">보고서 준비 중</span>' : '<a href="#" class="btn-source">원문 보기</a>');
+  var teaserHtml = linkifyTerms(escapeHtml(teaser));
   
   return '<div class="full-article-card" data-id="' + (article.id || '') + '">' +
     imageHtml +
@@ -472,7 +561,7 @@ function createFullArticleCard(article) {
       titleHtml +
       '<p class="full-article-meta">' + formatDate(article.publishedAt) + ' · ' + (article.source || '') + ' · ' + (article.category || '') + '</p>' +
       '<div class="full-article-summary" data-full="' + escapeHtml(summary) + '" data-teaser="' + escapeHtml(teaser) + '" data-collapsed="true">' +
-        '<p>' + escapeHtml(teaser) + '</p>' +
+        '<p>' + teaserHtml + '</p>' +
       '</div>' +
       '<div class="article-actions">' +
         '<button class="btn-toggle">요약 보기</button>' +
@@ -496,12 +585,12 @@ function addArticleEventListeners(container) {
       
       if (isCollapsed) {
         var fullSummary = summaryDiv.dataset.full;
-        summaryDiv.innerHTML = '<p>' + escapeHtml(fullSummary) + '</p>';
+        summaryDiv.innerHTML = '<p>' + linkifyTerms(escapeHtml(fullSummary)) + '</p>';
         summaryDiv.dataset.collapsed = 'false';
         this.textContent = '요약 닫기';
       } else {
         var teaser = summaryDiv.dataset.teaser;
-        summaryDiv.innerHTML = '<p>' + escapeHtml(teaser) + '</p>';
+        summaryDiv.innerHTML = '<p>' + linkifyTerms(escapeHtml(teaser)) + '</p>';
         summaryDiv.dataset.collapsed = 'true';
         this.textContent = '요약 보기';
       }
@@ -523,4 +612,29 @@ function escapeHtml(text) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   return dateStr.split('T')[0];
+}
+
+// 오늘의 중독백과 위젯 (메인 우측)
+async function loadEncWidget() {
+  const el = document.getElementById('enc-widget');
+  if (!el) return;
+  try {
+    const res = await fetch(API_BASE + '/encyclopedia');
+    const items = await res.json();
+    if (!items || !items.length) return;
+    // 최근 조류(trend) 항목 우선, 없으면 전체에서 무작위
+    const pool = items.filter(function(x) { return x.trend; });
+    const list = pool.length ? pool : items;
+    const t = list[Math.floor(Math.random() * list.length)];
+    el.innerHTML =
+      '<a href="encyclopedia.html?id=' + encodeURIComponent(t.id) + '" style="text-decoration:none;color:inherit;display:block">' +
+        '<div style="font-weight:700;font-size:16px;margin-bottom:4px">' + escapeHtml(t.termKo) + '</div>' +
+        '<div style="font-size:12px;color:#888;margin-bottom:6px">' + escapeHtml(t.termEn) + '</div>' +
+        '<div style="font-size:13px;color:#444;line-height:1.5">' + escapeHtml((t.definition || '').slice(0, 70)) + '…</div>' +
+        '<div style="margin-top:8px;font-size:12px;color:#c0392b">중독백과에서 더 보기 →</div>' +
+      '</a>';
+  } catch (e) {
+    console.error('Enc widget error', e);
+    el.textContent = '불러오기 실패';
+  }
 }

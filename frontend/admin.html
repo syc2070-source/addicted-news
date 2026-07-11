@@ -91,6 +91,12 @@
     .btn-primary:hover { background: #1557b0; }
     .btn-secondary { background: #f5f5f5; color: #333; border: 1px solid #ddd; }
     .btn-secondary:hover { background: #eee; }
+
+    .enc-pair { border: 1px solid #eee; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
+    .enc-pair-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+    .enc-msg { margin-top: 10px; font-size: 13px; }
+    .enc-msg.ok { color: #0a7; }
+    .enc-msg.err { color: #c41e3a; }
     
     @media (max-width: 768px) {
       .stats { grid-template-columns: repeat(3, 1fr); }
@@ -150,6 +156,40 @@
       </div>
       <div class="article-list" id="articleList"></div>
       <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">중독백과 편집</div>
+    <div class="section-body">
+      <div class="filters">
+        <input type="text" id="encSearch" placeholder="표제어 검색..." oninput="filterEncList()" style="width:220px;" />
+        <select id="encSelect" onchange="loadEncItem()" style="min-width:280px;">
+          <option value="">항목 선택…</option>
+        </select>
+      </div>
+      <div id="encEditor" style="display:none;">
+        <div class="form-group">
+          <label>요약 (definition)</label>
+          <textarea id="encDefinition"></textarea>
+        </div>
+        <div class="form-group">
+          <label>사례 (example)</label>
+          <textarea id="encExample" style="min-height:90px;"></textarea>
+        </div>
+        <div class="form-group">
+          <label>본문 (body)</label>
+          <div id="encBodyPairs"></div>
+          <button type="button" class="btn btn-secondary" onclick="addEncPair('encBodyPairs')">+ 본문 문단 추가</button>
+        </div>
+        <div class="form-group">
+          <label>심화 (advanced)</label>
+          <div id="encAdvancedPairs"></div>
+          <button type="button" class="btn btn-secondary" onclick="addEncPair('encAdvancedPairs')">+ 심화 문단 추가</button>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="saveEncItem()">백과 저장</button>
+        <div id="encMsg" class="enc-msg"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -262,6 +302,7 @@ function showAdmin() {
   loadStats();
   loadSelectedArticles();
   loadArticles();
+  loadEncList();
 }
 
 function loadStats() {
@@ -573,6 +614,119 @@ function escapeHtml(text) {
   var div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+var encAllItems = [];
+
+function loadEncList() {
+  fetch(API_BASE + '/encyclopedia')
+    .then(function(res) { return res.json(); })
+    .then(function(items) {
+      encAllItems = items || [];
+      filterEncList();
+    })
+    .catch(function(e) { console.error('Enc list error', e); });
+}
+
+function filterEncList() {
+  var q = (document.getElementById('encSearch').value || '').trim().toLowerCase();
+  var sel = document.getElementById('encSelect');
+  var prev = sel.value;
+  var html = '<option value="">항목 선택…</option>';
+  encAllItems.forEach(function(t) {
+    var label = (t.termKo || '') + ' (' + (t.termEn || '') + ')';
+    if (q && label.toLowerCase().indexOf(q) === -1 && (t.id || '').indexOf(q) === -1) return;
+    html += '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(label) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (prev) sel.value = prev;
+}
+
+function addEncPair(containerId, h, p) {
+  var box = document.getElementById(containerId);
+  var row = document.createElement('div');
+  row.className = 'enc-pair';
+  row.innerHTML =
+    '<div class="form-group" style="margin-bottom:8px;"><label>소제목 (h)</label>' +
+    '<input type="text" class="enc-h" value="' + escapeHtml(h || '') + '" /></div>' +
+    '<div class="form-group" style="margin-bottom:0;"><label>문단 (p)</label>' +
+    '<textarea class="enc-p" style="min-height:80px;">' + escapeHtml(p || '') + '</textarea></div>' +
+    '<div class="enc-pair-actions"><button type="button" class="btn btn-secondary" onclick="this.closest(\'.enc-pair\').remove()">삭제</button></div>';
+  box.appendChild(row);
+}
+
+function renderEncPairs(containerId, arr) {
+  var box = document.getElementById(containerId);
+  box.innerHTML = '';
+  (arr || []).forEach(function(s) { addEncPair(containerId, s.h, s.p); });
+}
+
+function collectEncPairs(containerId) {
+  var rows = document.getElementById(containerId).querySelectorAll('.enc-pair');
+  var out = [];
+  rows.forEach(function(row) {
+    var h = (row.querySelector('.enc-h').value || '').trim();
+    var p = (row.querySelector('.enc-p').value || '').trim();
+    if (h || p) out.push({ h: h, p: p });
+  });
+  return out;
+}
+
+function loadEncItem() {
+  var id = document.getElementById('encSelect').value;
+  var editor = document.getElementById('encEditor');
+  var msg = document.getElementById('encMsg');
+  msg.textContent = '';
+  msg.className = 'enc-msg';
+  if (!id) { editor.style.display = 'none'; return; }
+  fetch(API_BASE + '/encyclopedia/' + encodeURIComponent(id))
+    .then(function(res) { return res.json(); })
+    .then(function(t) {
+      if (!t || !t.id) { alert('항목을 불러오지 못했습니다.'); return; }
+      document.getElementById('encDefinition').value = t.definition || '';
+      document.getElementById('encExample').value = t.example || '';
+      renderEncPairs('encBodyPairs', t.body || []);
+      renderEncPairs('encAdvancedPairs', t.advanced || []);
+      editor.style.display = 'block';
+    })
+    .catch(function(e) {
+      console.error(e);
+      alert('항목 로드 실패');
+    });
+}
+
+function saveEncItem() {
+  var id = document.getElementById('encSelect').value;
+  var msg = document.getElementById('encMsg');
+  if (!id) return;
+  var payload = {
+    definition: document.getElementById('encDefinition').value,
+    example: document.getElementById('encExample').value,
+    body: collectEncPairs('encBodyPairs'),
+    advanced: collectEncPairs('encAdvancedPairs')
+  };
+  fetch(API_BASE + '/admin/encyclopedia/' + encodeURIComponent(id), {
+    method: 'PUT',
+    headers: {
+      'Authorization': 'Bearer ' + authToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(function(res) {
+    return res.json().then(function(data) {
+      if (!res.ok) throw new Error((data && (data.message || data.error)) || ('HTTP ' + res.status));
+      return data;
+    });
+  })
+  .then(function() {
+    msg.textContent = '저장되었습니다.';
+    msg.className = 'enc-msg ok';
+  })
+  .catch(function(e) {
+    msg.textContent = '저장 실패: ' + (e.message || e);
+    msg.className = 'enc-msg err';
+  });
 }
 
 window.onload = function() {
