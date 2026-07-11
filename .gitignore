@@ -9,3 +9,5 @@ yarn-error.log*
 *.log
 backend/logs/
 crawl-last-run.log
+
+backend/tmp_*

@@ -1,0 +1,2415 @@
+{
+  "meta": {
+    "title": "중독백과 (Addiction Encyclopedia)",
+    "version": "4.0",
+    "purpose": "중독뉴스·스테토리랩·중독사회가 공통 참조하는 단일 용어 사전이자, 영상 대본 자동 생성의 원천 데이터. 물질·약물군·기전·진단·심리·치료·정책·프로그램·인물을 아우르는 완전판을 지향한다.",
+    "style": "설명은 한국 한정이 아니라 세계 표준(DSM-5-TR·ICD-11, 국제 연구 통용) 수준. 각 항목은 정의(개념·기전·양상)와 사례(illustrative example)를 함께 담는다.",
+    "source_structure": "표제어 골격은 Hollen, K. H. (2009). Encyclopedia of Addictions (Greenwood)를 참조하되 정의문은 전부 재작성·현행화하고 심리·정신분석 개념과 최근 조류를 추가함. 사례는 개념 이해를 돕는 가상의 예시이며 특정 실존 인물과 무관하다.",
+    "fields": {
+      "id": "안정적 slug (플랫폼 공통 식별자)",
+      "term_ko": "한국어 표제어",
+      "term_en": "영어 표제어",
+      "category": "mechanism|substance|behavioral|diagnosis|psychology|recovery|society",
+      "definition": "개념·기전·임상 양상을 담은 상세 서술",
+      "example": "개념을 구체화하는 사례(가상 예시)",
+      "see_also": "상호참조 id",
+      "trend": "최근 조류로 추가된 항목이면 true"
+    }
+  },
+  "entries": [
+    {
+      "id": "addiction",
+      "term_ko": "중독",
+      "term_en": "Addiction",
+      "category": "mechanism",
+      "definition": "해로운 결과를 알면서도 특정 물질 사용이나 행동을 통제하지 못하고 강박적으로 반복하는 만성·재발성 뇌 상태다. 갈망, 내성, 금단, 재발 경향을 핵심 특징으로 하며, 반복된 자극이 보상·동기·판단을 담당하는 뇌 회로를 변형시키는 신경적응이 기저 기제로 지목된다. 초기에는 쾌락 추구로 시작하지만 점차 금단 회피와 강박적 습관이 행동을 지배하게 되고, 이 과정에서 스스로 멈추려는 의지만으로는 통제가 어려워진다. 현대 진단체계는 중독을 도덕적 결함이 아니라 예방·치료가 가능한 질환으로 규정한다.",
+      "example": "예: 처음에는 스트레스를 풀려고 주말에만 술을 마시던 사람이, 몇 년 뒤에는 마시지 않으면 손이 떨리고 일상에 집중하지 못해 아침부터 술을 찾게 되는 경우.",
+      "see_also": [
+        "substance-addiction",
+        "behavioral-addiction",
+        "disease-model",
+        "craving",
+        "tolerance",
+        "withdrawal"
+      ],
+      "trend": false
+    },
+    {
+      "id": "craving",
+      "term_ko": "갈망",
+      "term_en": "Craving",
+      "category": "mechanism",
+      "definition": "물질이나 행동을 강렬하게 원하는 주관적 충동으로, 중독의 가장 특징적인 경험이자 재발의 핵심 예측 요인이다. 특정 장소·사람·시간·감정 같은 단서가 학습된 연합을 통해 갈망을 촉발하며, 보상을 예측하는 도파민 신호의 급등과 밀접하게 연결된다. 갈망은 파도처럼 밀려왔다가 시간이 지나면 잦아드는 경향이 있어, 이 파도를 견디는 대처 기술이 회복의 중요한 부분이 된다. 스트레스, 부정적 정서, 소량의 재노출 모두 갈망을 강하게 유발할 수 있다.",
+      "example": "예: 금연 중인 사람이 식후 커피 한 잔을 들자 예전 흡연 습관과 연결된 강한 담배 생각이 밀려오는 순간.",
+      "see_also": [
+        "addiction",
+        "conditioning",
+        "mesolimbic-dopamine",
+        "withdrawal",
+        "emotion-regulation"
+      ],
+      "trend": false
+    },
+    {
+      "id": "tolerance",
+      "term_ko": "내성",
+      "term_en": "Tolerance",
+      "category": "mechanism",
+      "definition": "같은 효과를 얻기 위해 점점 더 많은 양이나 강한 자극이 필요해지는 적응 현상이다. 신경계가 반복 노출에 대응해 반응성을 낮추면서 발생하며, 그 결과 사용량과 위험이 함께 증가하는 악순환의 출발점이 된다. 물질뿐 아니라 도박의 판돈, 게임 시간처럼 행동중독에서도 유사하게 나타난다. 내성이 형성된 뒤 갑자기 예전 용량으로 돌아가면 과용 위험이 커지는 점도 임상적으로 중요하다.",
+      "example": "예: 진통 목적으로 아편류를 복용하던 사람이 같은 통증에 점점 더 높은 용량을 필요로 하게 되는 경우.",
+      "see_also": [
+        "addiction",
+        "neuroadaptation",
+        "withdrawal",
+        "cross-tolerance"
+      ],
+      "trend": false
+    },
+    {
+      "id": "cross-tolerance",
+      "term_ko": "교차내성",
+      "term_en": "Cross-Tolerance",
+      "category": "mechanism",
+      "definition": "한 물질에 생긴 내성이 약리적으로 유사한 다른 물질에도 확장되어 나타나는 현상이다. 같은 수용체나 신경경로에 작용하는 물질들 사이에서 흔히 관찰되며, 대체 사용이나 치료 약물 선택에 영향을 준다. 이 원리는 금단 관리에 활용되기도 하지만, 여러 억제제를 함께 쓸 때의 위험을 이해하는 데도 중요하다.",
+      "example": "예: 알코올에 내성이 생긴 사람이 같은 계열로 작용하는 진정제에도 예상보다 둔감하게 반응하는 경우.",
+      "see_also": [
+        "tolerance",
+        "neuroadaptation"
+      ],
+      "trend": false
+    },
+    {
+      "id": "withdrawal",
+      "term_ko": "금단",
+      "term_en": "Withdrawal",
+      "category": "mechanism",
+      "definition": "중독 대상의 사용을 줄이거나 중단할 때 나타나는 신체·심리 증상군이다. 물질별로 양상이 크게 다르며, 알코올·벤조디아제핀 금단처럼 경련·섬망을 동반해 의학적 응급이 될 수 있는 경우도 있다. 뇌가 물질에 맞춰 적응해 있던 균형이 무너지면서 나타나는 반동 현상으로, 금단의 고통을 피하려는 동기가 사용을 지속시키는 강력한 힘이 된다. 도박·게임 등 행동중독에서도 초조·불안·과민 같은 금단 유사 반응이 보고된다.",
+      "example": "예: 매일 커피를 마시던 사람이 갑자기 끊었을 때 이틀간 두통·짜증·집중력 저하를 겪는 비교적 가벼운 금단 사례.",
+      "see_also": [
+        "addiction",
+        "tolerance",
+        "neuroadaptation",
+        "craving"
+      ],
+      "trend": false
+    },
+    {
+      "id": "neuroadaptation",
+      "term_ko": "신경적응",
+      "term_en": "Neuroadaptation",
+      "category": "mechanism",
+      "definition": "반복적 자극에 대해 뇌가 항상성을 유지하려고 구조와 기능을 변화시키는 과정이다. 수용체 수와 민감도의 조정, 신경회로 연결의 재편 등을 포함하며, 내성과 금단의 생물학적 토대가 된다. 이런 변화가 상당 부분 지속되기 때문에 오랜 단약 후에도 단서에 취약한 상태가 남아, 중독을 만성 질환으로 이해하는 근거가 된다.",
+      "example": "예: 오래 자극제를 사용한 사람의 뇌가 도파민 신호에 둔감해져, 끊은 뒤에도 한동안 평범한 일에서 즐거움을 느끼기 어려운 경우.",
+      "see_also": [
+        "tolerance",
+        "withdrawal",
+        "brain-addiction",
+        "mesolimbic-dopamine",
+        "disease-model"
+      ],
+      "trend": false
+    },
+    {
+      "id": "mesolimbic-dopamine",
+      "term_ko": "중뇌변연계 도파민 경로",
+      "term_en": "Mesolimbic Dopamine System",
+      "category": "mechanism",
+      "definition": "복측피개영역(VTA)에서 측좌핵으로 이어지는 뇌의 핵심 보상회로로, 쾌감보다는 동기·현저성·강화학습에 관여한다. 거의 모든 중독 물질과 강박적 행동이 직간접적으로 이 경로의 도파민 신호를 증폭시켜, 관련 단서에 강한 '원함'을 학습시킨다. '보상회로'라는 대중적 표현의 과학적 실체가 바로 이 경로이며, 좋아함(liking)과 원함(wanting)이 분리될 수 있다는 점이 중독 이해의 핵심이다.",
+      "example": "예: 도박에서 돈을 딸 때보다 '딸지도 모른다'는 불확실한 기대 순간에 도파민이 더 크게 반응해 베팅을 반복하게 되는 경우.",
+      "see_also": [
+        "brain-addiction",
+        "neuroadaptation",
+        "reward-deficiency",
+        "craving"
+      ],
+      "trend": false
+    },
+    {
+      "id": "brain-addiction",
+      "term_ko": "뇌와 중독",
+      "term_en": "Brain and Addiction",
+      "category": "mechanism",
+      "definition": "중독이 보상(측좌핵), 동기, 판단·억제(전전두피질), 기억·습관(해마·선조체), 정서(편도체) 등 여러 뇌 영역의 기능을 어떻게 바꾸는지를 다루는 영역이다. 특히 전전두피질의 억제 조절 기능이 약화되면서 '멈춰야 한다'는 판단이 충동을 이기지 못하게 되는 것이 통제 상실의 신경학적 설명이다. 보상 상승, 억제 저하, 스트레스 반응 항진이 맞물리며 중독 회로가 굳어진다.",
+      "example": "예: 재발 위험을 머리로는 분명히 아는데도 단서 앞에서 충동을 억제하지 못하는 상황을, 전전두피질의 억제 기능 저하로 설명하는 경우.",
+      "see_also": [
+        "mesolimbic-dopamine",
+        "neuroadaptation",
+        "disease-model",
+        "reward-deficiency"
+      ],
+      "trend": false
+    },
+    {
+      "id": "reward-deficiency",
+      "term_ko": "보상결핍증후군",
+      "term_en": "Reward Deficiency Syndrome",
+      "category": "mechanism",
+      "definition": "보상회로의 기능이 저하되어 평상시 자극에서 충분한 만족을 얻지 못하고, 그 결핍을 메우려 더 강한 자극(중독 물질·행동)을 추구하게 된다는 가설이다. 도파민 관련 유전적 취약성과 중독 성향을 잇는 이론적 틀로 제안되었으며, 왜 어떤 사람이 더 쉽게 중독되는지를 설명하는 소재로 쓰인다. 다만 단일 유전자 결정론으로 단순화해선 안 된다는 비판도 있다.",
+      "example": "예: 일상적인 즐거움에서 좀처럼 흥이 나지 않던 사람이 강렬한 자극을 주는 활동에만 몰두하게 되는 경향.",
+      "see_also": [
+        "mesolimbic-dopamine",
+        "genetics-addiction",
+        "anhedonia",
+        "addictive-personality"
+      ],
+      "trend": false
+    },
+    {
+      "id": "anhedonia",
+      "term_ko": "무쾌감증",
+      "term_en": "Anhedonia",
+      "category": "mechanism",
+      "definition": "평소 즐겁던 활동에서 흥미나 쾌감을 느끼지 못하는 상태다. 우울증의 핵심 증상이자, 중독의 금단·회복 초기에 흔히 나타나 강한 자극 추구와 재발의 배경이 된다. 보상회로의 일시적 둔감화와 관련되며, 회복 초기에 '아무것도 재미없다'는 경험으로 나타나 이 시기를 견디는 것이 중요하다.",
+      "example": "예: 단약 몇 주 차에 접어든 사람이 예전에 좋아하던 취미에도 무감각해져 '이렇게 사는 게 무슨 의미가 있나' 느끼는 회복 초기의 고비.",
+      "see_also": [
+        "reward-deficiency",
+        "withdrawal",
+        "mental-disorders",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "conditioning",
+      "term_ko": "고전적 조건화",
+      "term_en": "Classical Conditioning",
+      "category": "mechanism",
+      "definition": "본래 중립적이던 단서가 중독 대상과 반복적으로 짝지어지면서, 그 단서만으로 갈망과 생리 반응을 일으키게 되는 학습 과정이다. 파블로프의 조건반사 원리가 중독에 적용된 것으로, 재발이 왜 특정 장소·사람·기분에서 촉발되는지를 설명한다. 단서노출치료는 이 연합을 약화시키려는 접근이다.",
+      "example": "예: 늘 특정 골목의 술집에서 마시던 사람이 그 골목을 지나가기만 해도 심장이 뛰고 술 생각이 나는 경우.",
+      "see_also": [
+        "craving",
+        "operant-conditioning",
+        "behavioral-sensitization"
+      ],
+      "trend": false
+    },
+    {
+      "id": "operant-conditioning",
+      "term_ko": "조작적 조건화",
+      "term_en": "Operant Conditioning",
+      "category": "psychology",
+      "definition": "행동의 결과(보상 또는 처벌)가 그 행동의 반복 가능성을 높이거나 낮춘다는 스키너의 학습 원리다. 중독에서는 물질·행동이 즉각적 쾌감이나 불편 완화라는 보상을 제공해 행동이 강화된다. 특히 보상이 예측 불가능하게 주어지는 '변동비율 강화'는 소거가 가장 어려운 강력한 패턴으로, 도박이 왜 그토록 끊기 힘든지를 설명한다.",
+      "example": "예: 슬롯머신이 언제 당첨될지 모르게 간헐적으로 보상을 주기 때문에, 잃으면서도 '다음엔' 하며 레버를 계속 당기게 되는 경우.",
+      "see_also": [
+        "conditioning",
+        "reinforcement",
+        "pathological-gambling",
+        "social-learning"
+      ],
+      "trend": false
+    },
+    {
+      "id": "reinforcement",
+      "term_ko": "강화(정적·부적)",
+      "term_en": "Positive & Negative Reinforcement",
+      "category": "psychology",
+      "definition": "행동 뒤에 따라오는 결과가 그 행동을 더 자주 하게 만드는 과정이다. 정적 강화는 쾌감·흥분 같은 좋은 것을 더해 행동을 늘리고, 부적 강화는 불안·금단·고통 같은 불쾌한 것을 없애 행동을 늘린다. 중독은 흔히 정적 강화(쾌락 추구)로 시작해 부적 강화(고통 회피)로 옮겨가며, 이 전환이 초기 사용과 후기 강박 사용의 차이를 만든다.",
+      "example": "예: 처음에는 즐거워서 마시다가(정적), 나중에는 마시지 않으면 오는 불안과 금단을 없애려고 마시게 되는(부적) 변화.",
+      "see_also": [
+        "operant-conditioning",
+        "withdrawal",
+        "self-medication",
+        "compulsion-impulse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "behavioral-sensitization",
+      "term_ko": "행동 민감화",
+      "term_en": "Behavioral Sensitization",
+      "category": "mechanism",
+      "definition": "반복 노출로 특정 자극에 대한 반응이 오히려 증폭되는 현상으로, 반응이 줄어드는 내성과 반대 방향이다. 특히 '원함' 시스템이 민감해져 갈망이 강화되고, 오랜 단약 후에도 단서에 취약한 상태가 남는 이유를 설명한다. 인센티브 현저성 이론의 핵심 개념이다.",
+      "example": "예: 몇 년간 끊었던 사람이 우연한 재노출 한 번에 예전보다 더 강한 갈망에 휩싸여 급격히 재발하는 경우.",
+      "see_also": [
+        "tolerance",
+        "conditioning",
+        "craving",
+        "neuroadaptation"
+      ],
+      "trend": false
+    },
+    {
+      "id": "genetics-addiction",
+      "term_ko": "중독의 유전",
+      "term_en": "Genetics of Addiction",
+      "category": "mechanism",
+      "definition": "중독 취약성에 유전적 요인이 상당 부분 기여한다는 연구 영역이다. 쌍둥이·가족·입양 연구는 유전율을 대략 40~60%로 추정하지만, 유전은 확정이 아니라 소인일 뿐 환경·경험과 상호작용해 발현된다. 여러 유전자가 조금씩 관여하는 다유전자적 특성이며, 유전-환경 상호작용이 실제 발병을 좌우한다.",
+      "example": "예: 부모가 알코올사용장애를 겪은 사람이 더 높은 취약성을 갖지만, 안정적 환경과 대처 자원 속에서 문제없이 살아가는 경우도 많은 것.",
+      "see_also": [
+        "addictive-personality",
+        "reward-deficiency",
+        "disease-model",
+        "trauma-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "self-medication",
+      "term_ko": "자가치료 가설",
+      "term_en": "Self-Medication Hypothesis",
+      "category": "psychology",
+      "definition": "중독을 단순한 쾌락 추구가 아니라, 감당하기 힘든 정서적 고통을 스스로 다스리려는 시도로 보는 정신역동적 관점이다. 칸치안이 정교화한 이 가설은 사람마다 특정 물질을 택하는 이유가 그 물질이 완화해 주는 정서(불안, 우울, 분노, 공허)와 맞아떨어지기 때문이라고 본다. 문제 행동의 이면에 있는 고통을 이해해야 근본적 회복이 가능하다는 치료적 함의를 준다.",
+      "example": "예: 만성 불안을 겪는 사람이 긴장을 눌러 주는 진정제나 알코올에, 무기력한 사람이 각성을 주는 자극제에 끌리는 식으로 물질 선택이 갈리는 경우.",
+      "see_also": [
+        "reinforcement",
+        "dual-diagnosis",
+        "emotion-regulation",
+        "trauma-addiction",
+        "anxiety-disorders"
+      ],
+      "trend": false
+    },
+    {
+      "id": "attachment-addiction",
+      "term_ko": "애착이론과 중독",
+      "term_en": "Attachment Theory and Addiction",
+      "category": "psychology",
+      "definition": "생애 초기 양육자와의 관계에서 형성된 애착 유형이 정서 조절과 대인관계의 틀을 만들고, 불안정 애착이 중독 취약성과 연결된다고 보는 관점이다. 안정적 관계에서 위안을 얻는 능력이 부족할 때, 사람이 아닌 물질·행동에서 예측 가능한 위안을 구하게 된다는 설명이다. 이 관점은 회복에서 신뢰할 수 있는 관계와 공동체의 역할을 강조한다.",
+      "example": "예: 가까운 사람에게 기대는 것이 늘 불안했던 사람이, 사람 대신 언제나 같은 방식으로 반응해 주는 술이나 게임에서 안정감을 찾게 되는 경우.",
+      "see_also": [
+        "self-medication",
+        "codependency",
+        "recovery",
+        "trauma-addiction",
+        "object-relations"
+      ],
+      "trend": false
+    },
+    {
+      "id": "trauma-addiction",
+      "term_ko": "유년기 부정적 경험·트라우마",
+      "term_en": "Adverse Childhood Experiences & Trauma",
+      "category": "psychology",
+      "definition": "학대·방임·가정폭력 같은 유년기 부정적 경험(ACE)이 성인기 중독 위험을 크게 높인다는 것을 보여 주는 영역이다. 대규모 연구에서 ACE 점수가 높을수록 물질사용장애 위험이 뚜렷이 증가했으며, 트라우마가 정서 조절과 스트레스 반응을 변형시켜 자가치료적 사용으로 이어진다고 설명한다. '무엇이 잘못됐나'보다 '무슨 일을 겪었나'를 묻는 트라우마 기반 접근의 근거가 된다.",
+      "example": "예: 어린 시절 반복된 정서적 방임을 겪은 사람이 성인이 되어 극심한 스트레스 상황마다 물질에 의존하게 되는 경로.",
+      "see_also": [
+        "self-medication",
+        "attachment-addiction",
+        "dual-diagnosis",
+        "emotion-regulation"
+      ],
+      "trend": false
+    },
+    {
+      "id": "defense-mechanisms",
+      "term_ko": "방어기제",
+      "term_en": "Defense Mechanisms",
+      "category": "psychology",
+      "definition": "불안이나 견디기 힘든 감정으로부터 자아를 보호하기 위해 무의식적으로 작동하는 심리 전략이다. 중독에서는 부정(문제 없음), 합리화(그럴 만한 이유가 있었다), 최소화(그 정도는 괜찮다), 투사(남 탓) 등이 두드러지며, 이들이 문제 인식과 치료 진입을 가로막는다. 방어를 무너뜨리기보다 그 아래의 고통을 다루는 것이 치료의 관건이다.",
+      "example": "예: 매일 마시면서도 '나는 마음만 먹으면 언제든 끊을 수 있다'고 스스로 믿으며 문제를 축소하는 경우(부정·최소화).",
+      "see_also": [
+        "denial",
+        "self-medication",
+        "intervention",
+        "object-relations"
+      ],
+      "trend": false
+    },
+    {
+      "id": "denial",
+      "term_ko": "부정",
+      "term_en": "Denial",
+      "category": "psychology",
+      "definition": "자신의 중독 문제를 인정하지 않거나 심각성을 축소하는 심리 방어다. 정신분석적 방어기제의 하나이자, 중독에서 도움 요청과 치료 진입을 가로막는 가장 흔하고 강력한 장벽으로 꼽힌다. 의식적 거짓말이라기보다 견디기 힘든 현실로부터 자아를 보호하려는 무의식적 과정인 경우가 많아, 비난보다 그 아래의 두려움을 다루는 접근이 효과적이다.",
+      "example": "예: 명백한 손실과 관계 파탄에도 '나는 문제가 없다, 마음만 먹으면 언제든 끊는다'고 스스로 믿으며 도움을 거부하는 경우.",
+      "see_also": [
+        "defense-mechanisms",
+        "intervention",
+        "motivational-interviewing",
+        "stages-of-change",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "repetition-compulsion",
+      "term_ko": "강박적 반복",
+      "term_en": "Repetition Compulsion",
+      "category": "psychology",
+      "definition": "고통스럽거나 해로운 경험을 무의식적으로 반복하려는 경향을 가리키는 정신분석 개념이다. 프로이트가 제안한 이 개념은, 사람이 해결되지 않은 갈등이나 트라우마를 되풀이하며 무의식적으로 통제·해소를 시도한다고 본다. 중독의 자기파괴적 반복성—해로운 줄 알면서도 같은 패턴으로 돌아가는 것—을 이해하는 틀을 제공한다.",
+      "example": "예: 재발할 때마다 큰 대가를 치르면서도 위기 상황이 오면 같은 방식으로 물질을 찾는 패턴이 반복되는 경우.",
+      "see_also": [
+        "pleasure-principle",
+        "trauma-addiction",
+        "defense-mechanisms",
+        "relapse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "pleasure-principle",
+      "term_ko": "쾌락원칙과 현실원칙",
+      "term_en": "Pleasure Principle & Reality Principle",
+      "category": "psychology",
+      "definition": "정신분석에서 마음이 즉각적 쾌락과 긴장 해소를 추구하는 경향을 쾌락원칙, 그것을 현실의 제약에 맞춰 지연·조절하는 성숙한 기능을 현실원칙이라 한다. 중독은 즉각적 만족을 좇는 쾌락원칙이 장기적 결과를 고려하는 현실원칙을 압도하는 상태로 이해할 수 있다. 이는 만족 지연 능력의 약화라는 현대 심리학의 충동성 개념과도 맞닿는다.",
+      "example": "예: 내일의 중요한 일정을 알면서도 지금 당장의 쾌감을 위해 그것을 포기해 버리는 선택이 반복되는 경우.",
+      "see_also": [
+        "repetition-compulsion",
+        "compulsion-impulse",
+        "delay-discounting",
+        "operant-conditioning"
+      ],
+      "trend": false
+    },
+    {
+      "id": "delay-discounting",
+      "term_ko": "지연 할인(만족 지연의 실패)",
+      "term_en": "Delay Discounting",
+      "category": "psychology",
+      "definition": "미래의 보상 가치를 시간이 멀수록 크게 깎아 평가하는 경향으로, 충동성의 핵심 지표다. 중독을 가진 사람은 흔히 지연 할인이 가팔라, 나중의 큰 이득보다 지금의 작은 즉각 보상을 택하는 경향이 강하다. 이는 의사결정 실험으로 측정 가능하며, 회복 과정에서 완화되기도 한다.",
+      "example": "예: '한 달 뒤 큰 보상'보다 '지금 당장의 작은 보상'을 반복해서 고르는 선택 패턴.",
+      "see_also": [
+        "pleasure-principle",
+        "compulsion-impulse",
+        "impulse-control-disorder",
+        "reward-deficiency"
+      ],
+      "trend": false
+    },
+    {
+      "id": "social-learning",
+      "term_ko": "사회학습이론",
+      "term_en": "Social Learning Theory",
+      "category": "psychology",
+      "definition": "사람은 타인의 행동과 그 결과를 관찰·모방하며 학습한다는 반두라의 이론이다. 중독에서는 또래·가족·미디어에서 물질 사용이나 도박을 관찰하고, 그것이 보상받는 것처럼 보일 때 사용 행동과 그에 대한 기대가 학습된다. 예방 교육과 또래 개입, 미디어 규제의 이론적 근거가 된다.",
+      "example": "예: 친구들이 술자리에서 즐겁게 어울리는 모습을 반복해서 보며 '술=사회적 즐거움'이라는 기대를 학습하는 청소년.",
+      "see_also": [
+        "operant-conditioning",
+        "expectancy",
+        "self-efficacy",
+        "gateway-drugs"
+      ],
+      "trend": false
+    },
+    {
+      "id": "expectancy",
+      "term_ko": "결과기대",
+      "term_en": "Outcome Expectancies",
+      "category": "psychology",
+      "definition": "특정 물질이나 행동이 어떤 결과를 가져다줄 것이라는 개인의 신념으로, 실제 약리 효과만큼이나 사용을 강하게 좌우한다. '술을 마시면 긴장이 풀린다', '게임을 하면 스트레스가 사라진다' 같은 긍정적 기대가 사용을 촉진하고, 이런 기대는 직접 경험과 사회학습을 통해 형성된다. 기대를 수정하는 것이 인지행동치료의 한 축이다.",
+      "example": "예: 실제로는 수면을 방해하는데도 '한 잔 마셔야 잠이 온다'는 굳은 기대 때문에 음주를 지속하는 경우.",
+      "see_also": [
+        "social-learning",
+        "cognitive-behavioral",
+        "self-efficacy"
+      ],
+      "trend": false
+    },
+    {
+      "id": "self-efficacy",
+      "term_ko": "자기효능감",
+      "term_en": "Self-Efficacy",
+      "category": "psychology",
+      "definition": "특정 상황을 스스로 다룰 수 있다는 자신의 능력에 대한 믿음으로, 반두라가 제시했다. 중독 회복에서는 '유혹 상황에서 사용하지 않을 수 있다'는 효능감이 재발을 예측하는 강력한 요인이다. 작은 성공 경험의 누적, 대리 경험, 지지적 격려가 효능감을 키우며, 이는 동기강화상담과 재발예방의 핵심 표적이다.",
+      "example": "예: 위기 상황을 한 번 잘 넘긴 경험이 '나도 견딜 수 있다'는 믿음으로 이어져 다음 유혹에도 대처력이 커지는 경우.",
+      "see_also": [
+        "stages-of-change",
+        "relapse",
+        "cognitive-behavioral",
+        "recovery-capital"
+      ],
+      "trend": false
+    },
+    {
+      "id": "learned-helplessness",
+      "term_ko": "학습된 무기력",
+      "term_en": "Learned Helplessness",
+      "category": "psychology",
+      "definition": "통제 불가능한 부정적 경험이 반복되면 '무엇을 해도 소용없다'는 무력감을 학습해 이후 벗어날 수 있는 상황에서도 시도조차 하지 않게 되는 현상이다. 셀리그먼이 제시한 이 개념은 중독에서 반복된 재발과 실패가 어떻게 회복 시도 자체를 포기하게 만드는지를 설명한다. 무력감을 통제감으로 되돌리는 경험이 회복의 전환점이 된다.",
+      "example": "예: 여러 번 끊으려다 실패한 사람이 '나는 어차피 안 된다'며 더는 도움을 구하지 않게 되는 경우.",
+      "see_also": [
+        "self-efficacy",
+        "denial",
+        "anhedonia",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "emotion-regulation",
+      "term_ko": "감정조절",
+      "term_en": "Emotion Regulation",
+      "category": "psychology",
+      "definition": "정서의 강도·지속·표현을 조절하는 능력으로, 중독의 발생과 유지에 핵심적인 심리 기능이다. 감정조절이 어려운 사람은 부정적 정서를 견디지 못해 물질·행동으로 급히 완화하려 하며, 이것이 자가치료적 사용의 심리적 통로가 된다. 건강한 조절 기술을 익히는 것이 중독 치료의 중요한 목표다.",
+      "example": "예: 분노나 외로움이 밀려올 때 그 감정을 다룰 방법이 없어 즉시 물질로 눌러 버리는 대처 패턴.",
+      "see_also": [
+        "self-medication",
+        "coping",
+        "craving"
+      ],
+      "trend": false
+    },
+    {
+      "id": "coping",
+      "term_ko": "대처",
+      "term_en": "Coping",
+      "category": "psychology",
+      "definition": "스트레스와 부정적 상황에 대응하는 인지·행동적 노력으로, 문제 자체를 다루는 문제중심 대처와 정서를 다루는 정서중심 대처로 나뉜다. 중독은 흔히 회피적·정서중심 대처에 물질·행동을 동원하는 형태로 나타나며, 건강한 대처 레퍼토리의 부족이 취약성을 키운다. 대안적 대처 기술을 늘리는 것이 재발예방의 핵심이다.",
+      "example": "예: 갈등이 생기면 대화로 풀기보다 술로 잊으려는 사람이, 회복 과정에서 운동·기록·상담 같은 대안 대처를 익혀 가는 경우.",
+      "see_also": [
+        "emotion-regulation",
+        "self-efficacy",
+        "cognitive-behavioral",
+        "relapse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "cognitive-behavioral",
+      "term_ko": "인지행동 모델",
+      "term_en": "Cognitive-Behavioral Model",
+      "category": "psychology",
+      "definition": "생각(인지), 감정, 행동이 서로 영향을 주고받으며, 중독이 왜곡된 신념과 학습된 행동 패턴으로 유지된다고 보는 관점이다. 갈망을 촉발하는 자동적 사고와 결과기대를 찾아 수정하고, 고위험 상황에 대처하는 기술을 훈련하는 인지행동치료(CBT)의 이론적 토대다. 재발을 유발하는 사고-상황-행동의 연쇄를 끊는 데 초점을 둔다.",
+      "example": "예: '오늘 하루쯤은 괜찮아'라는 자동적 사고가 재발로 이어지는 연결고리를 알아차리고 그 생각에 반박하는 훈련.",
+      "see_also": [
+        "expectancy",
+        "coping",
+        "relapse",
+        "stages-of-change"
+      ],
+      "trend": false
+    },
+    {
+      "id": "stages-of-change",
+      "term_ko": "변화단계 모델",
+      "term_en": "Transtheoretical Model (Stages of Change)",
+      "category": "psychology",
+      "definition": "행동 변화가 단번에 일어나지 않고 여러 단계를 거친다고 보는 프로차스카·디클레멘테의 모델이다. 전숙고(문제 인식 전)–숙고–준비–실행–유지의 단계로 나뉘며, 재발은 실패가 아니라 이 순환의 일부로 이해된다. 사람이 지금 어느 단계에 있는지에 맞춰 개입을 조율해야 효과적이라는 점을 강조한다.",
+      "example": "예: 아직 문제를 인정하지 않는 전숙고 단계의 사람에게 실행 계획을 강요하기보다, 먼저 양가감정을 다루며 다음 단계로 이끄는 접근.",
+      "see_also": [
+        "motivational-interviewing",
+        "self-efficacy",
+        "denial",
+        "cognitive-behavioral"
+      ],
+      "trend": false
+    },
+    {
+      "id": "addictive-personality",
+      "term_ko": "중독성 성격",
+      "term_en": "Addictive Personality",
+      "category": "psychology",
+      "definition": "특정 성격 유형이 중독에 특히 취약하다는 대중적 개념이다. 그러나 모든 중독자에게 공통된 단일한 '중독 성격'의 존재는 과학적으로 논쟁적이며, 대신 높은 충동성·감각추구·부정적 정서성·낮은 성실성 같은 여러 특성이 부분적으로 위험을 높인다는 것이 현재의 견해다. 개인을 낙인찍는 도구로 오용되기 쉬워 신중한 사용이 필요하다.",
+      "example": "예: 새로운 자극을 강하게 추구하고 충동을 잘 참지 못하는 기질이 여러 위험 행동과 함께 나타나는 경향.",
+      "see_also": [
+        "genetics-addiction",
+        "reward-deficiency",
+        "compulsion-impulse",
+        "delay-discounting"
+      ],
+      "trend": false
+    },
+    {
+      "id": "compulsion-impulse",
+      "term_ko": "강박과 충동",
+      "term_en": "Compulsions and Impulses",
+      "category": "mechanism",
+      "definition": "충동은 즉각적 쾌를 좇는 자발적 충동이고, 강박은 불안·불편을 줄이려는 반복 행동이다. 중독은 초기의 충동 주도(쾌락 추구)에서 후기의 강박 주도(고통 회피·습관)로 옮겨간다는 이중과정 모델로 설명된다. 이 전환은 뇌의 통제 회로 약화와 습관 회로 강화로 뒷받침된다.",
+      "example": "예: 처음에는 재미로 시작한 게임이 나중에는 하지 않으면 불안해 어쩔 수 없이 켜게 되는 강박적 사용으로 바뀌는 경우.",
+      "see_also": [
+        "impulse-control-disorder",
+        "obsessive-compulsive",
+        "addiction",
+        "reinforcement"
+      ],
+      "trend": false
+    },
+    {
+      "id": "object-relations",
+      "term_ko": "대상관계·자기심리학",
+      "term_en": "Object Relations & Self Psychology",
+      "category": "psychology",
+      "definition": "초기 관계 경험이 내면화되어 자기와 타인에 대한 심상을 형성하고, 그 구조의 결핍이 중독 취약성과 연결된다고 보는 정신분석 계열 관점이다. 특히 코헛의 자기심리학은 건강한 자기감과 자기위안 능력의 결손을 물질·행동으로 메우려 한다고 설명한다. 중독을 관계·자기 구조의 문제로 이해해 치료 관계 자체를 회복의 도구로 삼는다.",
+      "example": "예: 스스로를 달래고 지탱하는 내적 자원이 약한 사람이, 그 공백을 물질이 주는 일시적 충만감으로 채우려는 경우.",
+      "see_also": [
+        "attachment-addiction",
+        "self-medication",
+        "defense-mechanisms",
+        "codependency"
+      ],
+      "trend": false
+    },
+    {
+      "id": "substance-addiction",
+      "term_ko": "물질중독",
+      "term_en": "Substance Addiction",
+      "category": "substance",
+      "definition": "알코올, 니코틴, 아편류, 자극제, 진정제 등 정신활성물질의 반복 사용으로 뇌의 보상·동기 회로가 변형되어 사용 통제력을 잃는 상태다. DSM-5-TR은 이를 물질사용장애로 통합하고, 통제력 상실·사회적 손상·위험한 사용·약리적 지표(내성·금단) 등 증상 개수에 따라 경도·중등도·고도로 심각도를 나눈다. 물질마다 작용 기전과 위험 양상이 다르지만, 통제 상실이라는 공통 핵심을 공유한다.",
+      "example": "예: 니코틴, 알코올, 아편류처럼 서로 다른 물질이라도 '끊으려 해도 반복하게 되고, 그로 인해 삶이 무너진다'는 동일한 장애 구조를 보이는 것.",
+      "see_also": [
+        "addiction",
+        "behavioral-addiction",
+        "tolerance",
+        "withdrawal",
+        "dual-diagnosis"
+      ],
+      "trend": false
+    },
+    {
+      "id": "fentanyl-synthetic-opioids",
+      "term_ko": "펜타닐·합성 아편류",
+      "term_en": "Fentanyl & Synthetic Opioids",
+      "category": "substance",
+      "definition": "펜타닐은 모르핀보다 수십 배에서 백 배가량 강력한 합성 아편류로, 북미를 중심으로 약물 과용 사망의 주요 원인이 되었다. 극소량으로 치사에 이를 수 있고 다른 약물에 몰래 섞이는 경우가 많아 사용자가 인지하지 못한 채 노출되는 위험이 크다. 최근에는 진정제 자일라진 등과의 혼합('트랭크')이 새로운 위협으로 부상했으며, 전 세계 확산이 공중보건의 핵심 현안이다.",
+      "example": "예: 각성제인 줄 알고 복용한 약에 펜타닐이 섞여 있어 예기치 못한 과용에 이르는 사례.",
+      "see_also": [
+        "substance-addiction",
+        "harm-reduction",
+        "withdrawal"
+      ],
+      "trend": true
+    },
+    {
+      "id": "vaping-ecigarettes",
+      "term_ko": "전자담배·베이핑",
+      "term_en": "Vaping & E-Cigarettes",
+      "category": "substance",
+      "definition": "니코틴 등을 액체에서 증기 형태로 만들어 흡입하는 기기 및 그 사용을 가리킨다. 성인 흡연자의 금연을 돕는 피해감소 수단이라는 주장과, 청소년에게 니코틴 중독의 관문이 된다는 우려가 정면으로 충돌한다. 고농도 니코틴 제품(팟형)과 니코틴 파우치의 빠른 확산, 특정 첨가물로 인한 폐손상 사례 등이 규제 논쟁을 키우고 있다.",
+      "example": "예: 담배를 끊으려 전자담배로 옮겼다가 오히려 더 자주, 더 많은 니코틴에 노출되며 의존이 이어지는 경우.",
+      "see_also": [
+        "substance-addiction",
+        "harm-reduction",
+        "gateway-drugs"
+      ],
+      "trend": true
+    },
+    {
+      "id": "cannabis",
+      "term_ko": "대마와 합법화 흐름",
+      "term_en": "Cannabis & Legalization Trends",
+      "category": "substance",
+      "definition": "대마초와 그 주성분(THC·CBD)에 관한 항목으로, 여러 국가·지역의 의료용·기호용 합법화가 세계적 흐름을 이루고 있다. 동시에 재배·추출 기술 발달로 제품의 THC 농도가 과거보다 크게 높아지면서 대마사용장애, 청소년기 뇌 발달 영향, 정신증 위험에 대한 우려도 커지고 있다. 합법화의 사회·보건 효과를 둘러싼 정책 논쟁이 활발하다.",
+      "example": "예: 합법화된 지역에서 고농도 제품에 일찍 노출된 청소년이 사용 조절에 어려움을 겪는 사례.",
+      "see_also": [
+        "substance-addiction",
+        "gateway-drugs"
+      ],
+      "trend": true
+    },
+    {
+      "id": "ketamine",
+      "term_ko": "케타민",
+      "term_en": "Ketamine",
+      "category": "substance",
+      "definition": "해리성 마취제로, 오락적 오남용의 대상인 동시에 난치성 우울증 치료제(에스케타민 비강 스프레이 등)로 승인·활용되는 이중적 성격을 지닌다. 저용량에서 해리·환각 효과를 내며 반복 사용 시 방광 손상 등 신체 피해와 심리적 의존이 보고된다. 치료적 가능성과 남용 위험 사이의 균형이 최근 논의의 핵심이다.",
+      "example": "예: 우울증 클리닉에서 관리된 케타민 치료를 받는 환자가 있는 한편, 클럽 등에서 오락 목적으로 오남용해 방광 손상을 겪는 사람이 공존하는 상황.",
+      "see_also": [
+        "substance-addiction",
+        "psychedelic-therapy"
+      ],
+      "trend": true
+    },
+    {
+      "id": "kratom",
+      "term_ko": "크라톰",
+      "term_en": "Kratom",
+      "category": "substance",
+      "definition": "동남아시아 원산 식물로, 저용량에서는 자극제, 고용량에서는 아편류 유사 효과를 낸다. 통증 완화나 아편류 금단 자가치료 목적으로 쓰이기도 하지만 의존 가능성과 안전성 논란이 있으며, 규제 공백 속에서 국가별로 합법성이 크게 엇갈린다. 성분 표준화가 어려워 위험 평가가 까다로운 물질이다.",
+      "example": "예: 아편류를 끊으려고 크라톰을 자가 복용하다가 크라톰 자체에 의존하게 되는 경우.",
+      "see_also": [
+        "substance-addiction",
+        "harm-reduction",
+        "withdrawal"
+      ],
+      "trend": true
+    },
+    {
+      "id": "behavioral-addiction",
+      "term_ko": "행동중독",
+      "term_en": "Behavioral Addiction",
+      "category": "behavioral",
+      "definition": "물질 섭취 없이 특정 행동(도박, 게임, 쇼핑, 성, 인터넷 사용 등)을 강박적으로 반복하며 통제력을 잃는 상태다. 물질중독과 유사한 갈망·내성·금단·재발 양상과 보상회로 관여가 보고되어, 중독 개념이 물질을 넘어 확장되는 근거가 되었다. 다만 어디까지를 중독으로 볼지에 대한 논쟁이 있어, 현재 공식 진단으로 인정된 것은 도박장애와 게임장애뿐이다.",
+      "example": "예: 도박을 하지 않으면 안절부절못하고, 점점 큰 판돈이 필요하며, 끊으려 해도 반복하게 되는 등 물질중독과 똑같은 구조를 보이는 것.",
+      "see_also": [
+        "pathological-gambling",
+        "gaming-disorder",
+        "compulsive-shopping",
+        "social-media-addiction",
+        "impulse-control-disorder"
+      ],
+      "trend": false
+    },
+    {
+      "id": "pathological-gambling",
+      "term_ko": "도박장애",
+      "term_en": "Gambling Disorder",
+      "category": "behavioral",
+      "definition": "지속적·반복적 도박으로 개인·가족·직업 기능이 심각하게 손상되는 장애다. DSM-5부터 물질관련 및 중독장애 범주로 이동해 최초로 공식 인정된 비물질 중독이며, ICD-11도 중독행동에 의한 장애로 분류한다. 잃은 돈을 만회하려는 추격매수, 점점 커지는 판돈(내성), 중단 시 초조(금단), 도박 자금 마련을 위한 거짓말과 관계 손상이 특징적 지표다.",
+      "example": "예: 손실을 메우려 더 큰 돈을 걸다가 빚이 쌓이고, 이를 숨기려 거짓말을 반복하며 가정과 직장을 잃어 가는 전형적 진행 경로.",
+      "see_also": [
+        "behavioral-addiction",
+        "impulse-control-disorder",
+        "online-gambling",
+        "operant-conditioning",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "gaming-disorder",
+      "term_ko": "게임이용장애",
+      "term_en": "Gaming Disorder",
+      "category": "behavioral",
+      "definition": "게임 사용에 대한 통제력 상실, 다른 활동보다 게임을 우선시함, 부정적 결과에도 지속·심화되는 양상이 통상 12개월 이상 이어질 때 진단되는 장애다. ICD-11에 공식 등재되었으며, DSM-5-TR은 '인터넷게임장애'를 추가 연구가 필요한 상태로 부록에 두어 진단적 지위에 국제적 차이가 있다. 대부분의 게임 이용자는 장애에 해당하지 않으며, 기능 손상 여부가 핵심 판단 기준이다.",
+      "example": "예: 학업·직장·수면·식사를 모두 미룬 채 게임에 몰두하고, 줄이려 해도 실패하며 관계까지 무너지는 수준에 이른 경우.",
+      "see_also": [
+        "behavioral-addiction",
+        "compulsive-computer-use",
+        "loot-boxes",
+        "impulse-control-disorder"
+      ],
+      "trend": false
+    },
+    {
+      "id": "compulsive-computer-use",
+      "term_ko": "강박적 컴퓨터·인터넷 사용",
+      "term_en": "Compulsive Computer/Internet Use",
+      "category": "behavioral",
+      "definition": "인터넷·컴퓨터 사용을 통제하지 못해 일상 기능이 손상되는 상태의 포괄 개념이다. 초기에는 '인터넷 중독'이라는 단일 범주로 논의됐으나, 현재는 게임·소셜미디어·포르노·쇼핑 등 인터넷을 통해 이뤄지는 특정 활동별 장애로 세분화하는 접근이 우세하다. 인터넷 자체가 아니라 그 위에서 무엇을 하느냐가 문제의 본질이라는 관점이다.",
+      "example": "예: '인터넷을 너무 많이 한다'기보다, 실제로는 그 안의 게임이나 소셜미디어 특정 활동에 통제력을 잃고 있는 경우.",
+      "see_also": [
+        "gaming-disorder",
+        "social-media-addiction",
+        "cybersex-addiction",
+        "smartphone-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "social-media-addiction",
+      "term_ko": "소셜미디어 중독",
+      "term_en": "Social Media Addiction",
+      "category": "behavioral",
+      "definition": "소셜미디어 사용을 통제하지 못해 강박적으로 확인·이용하며 일상과 정신건강에 해를 끼치는 상태다. 공식 진단은 아니지만, 알림·무한 스크롤·좋아요·간헐적 보상 등 '관심경제'의 설계가 뇌의 보상회로를 겨냥한다는 점에서 광범위하게 연구된다. 사회적 비교, 놓침에 대한 두려움(FOMO), 청소년 정신건강과의 연관이 핵심 쟁점이다.",
+      "example": "예: 잠들기 직전과 눈뜨자마자 무의식적으로 앱을 열어 끝없이 스크롤하고, 그로 인해 수면과 집중이 무너지는 경우.",
+      "see_also": [
+        "compulsive-computer-use",
+        "smartphone-addiction",
+        "short-form-video",
+        "behavioral-addiction"
+      ],
+      "trend": true
+    },
+    {
+      "id": "short-form-video",
+      "term_ko": "숏폼·도파민 문화",
+      "term_en": "Short-Form Video & Dopamine Culture",
+      "category": "behavioral",
+      "definition": "짧은 영상의 끝없는 자동재생과 알고리즘 추천이 즉각적 보상을 반복 제공해 강박적 시청을 유도하는 현상이다. '도파민'은 이 보상 루프를 가리키는 대중적 표현으로 널리 쓰이며, 그 반작용으로 '도파민 단식' 같은 담론도 등장했으나 과학적 근거는 느슨하다. 임상 진단이라기보다 주의력·시간 사용에 영향을 주는 문화·행동 현상으로 이해하는 것이 정확하다.",
+      "example": "예: '10분만 보려던' 숏폼을 알고리즘이 이어 주는 대로 두 시간 넘게 보고 나서 허탈함과 집중력 저하를 느끼는 경우.",
+      "see_also": [
+        "social-media-addiction",
+        "smartphone-addiction",
+        "mesolimbic-dopamine"
+      ],
+      "trend": true
+    },
+    {
+      "id": "smartphone-addiction",
+      "term_ko": "스마트폰 과의존",
+      "term_en": "Smartphone Addiction / Problematic Use",
+      "category": "behavioral",
+      "definition": "스마트폰 사용을 통제하지 못해 일상·수면·관계·안전이 손상되는 상태다. 기기 자체보다 그 안의 게임·소셜미디어·영상 등 특정 활동이 문제의 핵심이라는 견해가 우세하며, 기기와 떨어질 때 불안을 느끼는 노모포비아가 동반되기도 한다. 청소년·성인 모두에서 널리 연구되는 현대적 과의존 양상이다.",
+      "example": "예: 운전이나 대화 중에도 반복해서 폰을 확인하고, 배터리가 떨어지면 심한 불안을 느끼는 경우.",
+      "see_also": [
+        "compulsive-computer-use",
+        "social-media-addiction",
+        "gaming-disorder"
+      ],
+      "trend": true
+    },
+    {
+      "id": "online-gambling",
+      "term_ko": "온라인·모바일 도박",
+      "term_en": "Online / Mobile Gambling",
+      "category": "behavioral",
+      "definition": "인터넷·앱을 통한 도박으로, 24시간 접근성과 실시간 인플레이 베팅, 스포츠 베팅의 급성장이 특징이다. 물리적 장벽이 사라지고 손안에서 즉시 반복 베팅이 가능해 위험 도박으로의 전환이 빠르며, 손실이 화면 속 숫자로만 보여 실감이 둔해진다는 점이 위험을 키운다. 각국이 광고·접근 규제를 강화하는 추세다.",
+      "example": "예: 스포츠 경기를 보며 앱으로 실시간 베팅을 반복하다가, 오프라인 도박보다 훨씬 빠르게 통제력을 잃는 경우.",
+      "see_also": [
+        "pathological-gambling",
+        "loot-boxes",
+        "crypto-trading-addiction"
+      ],
+      "trend": true
+    },
+    {
+      "id": "loot-boxes",
+      "term_ko": "확률형 아이템·루트박스",
+      "term_en": "Loot Boxes",
+      "category": "behavioral",
+      "definition": "게임 안에서 무작위 보상을 얻기 위해 결제하는 상품으로, 결과의 불확실성과 보상 구조가 도박과 매우 유사하다. 게임과 도박의 경계를 흐린다는 점에서 특히 청소년 노출 우려가 크며, 일부 국가는 이를 규제하거나 사실상 도박으로 분류했다. 변동비율 강화라는 도박의 핵심 원리를 그대로 담고 있다는 지적을 받는다.",
+      "example": "예: 원하는 캐릭터를 얻으려 확률형 아이템을 반복 구매하다가 예상보다 훨씬 큰 금액을 지출하게 되는 청소년.",
+      "see_also": [
+        "gaming-disorder",
+        "online-gambling",
+        "pathological-gambling",
+        "operant-conditioning"
+      ],
+      "trend": true
+    },
+    {
+      "id": "crypto-trading-addiction",
+      "term_ko": "암호화폐·투자 중독",
+      "term_en": "Cryptocurrency & Trading Addiction",
+      "category": "behavioral",
+      "definition": "암호화폐·주식 등의 고빈도 거래를 도박과 유사한 방식으로 강박적으로 반복하는 행동 패턴이다. 24시간 열린 시장, 극심한 변동성, 거래를 게임처럼 만드는 앱 설계가 위험을 키우며, 흔히 도박장애의 틀로 이해된다. 투자라는 사회적으로 용인된 외피 때문에 문제 인식이 늦어지는 경향이 있다.",
+      "example": "예: 밤새 시세 창을 확인하며 충동적으로 사고팔기를 반복하고, 손실을 만회하려 더 큰 위험을 감수하는 경우.",
+      "see_also": [
+        "online-gambling",
+        "pathological-gambling",
+        "impulse-control-disorder",
+        "delay-discounting"
+      ],
+      "trend": true
+    },
+    {
+      "id": "compulsive-shopping",
+      "term_ko": "강박적 쇼핑",
+      "term_en": "Compulsive Buying",
+      "category": "behavioral",
+      "definition": "구매 충동을 통제하지 못해 필요 이상으로 반복 소비하고 그 결과 재정·정서적 고통을 겪는 행동 패턴이다. 공식 진단범주로 확립되진 않았으나 충동조절·중독 스펙트럼에서 논의되며, 구매 전 긴장과 구매 순간의 안도·쾌감이라는 순환을 보인다. 모바일·라이브 커머스의 확산으로 접근성과 위험이 크게 높아졌다.",
+      "example": "예: 기분이 가라앉을 때마다 필요 없는 물건을 충동적으로 사들이고, 잠시 기분이 풀렸다가 곧 후회와 빚이 쌓이는 경우.",
+      "see_also": [
+        "behavioral-addiction",
+        "impulse-control-disorder",
+        "compulsion-impulse",
+        "emotion-regulation"
+      ],
+      "trend": false
+    },
+    {
+      "id": "sexual-addiction",
+      "term_ko": "성중독",
+      "term_en": "Sexual Addiction",
+      "category": "behavioral",
+      "definition": "성적 사고·충동·행동을 통제하지 못해 반복하며 개인 기능과 관계에 해를 끼치는 상태다. ICD-11은 이를 '강박적 성행동장애'로서 충동조절장애로 분류하며, 이를 중독으로 볼지에 대해선 학계 견해가 갈린다. 도덕적 판단과 병리를 구분해 신중히 접근해야 하는 영역이다.",
+      "example": "예: 반복되는 성적 행동이 관계와 직업에 분명한 해를 끼치는데도 스스로 멈추지 못해 고통받는 경우.",
+      "see_also": [
+        "behavioral-addiction",
+        "hypersexuality",
+        "cybersex-addiction",
+        "compulsion-impulse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "cybersex-addiction",
+      "term_ko": "사이버섹스·포르노 중독",
+      "term_en": "Cybersex / Pornography Addiction",
+      "category": "behavioral",
+      "definition": "온라인 성적 콘텐츠나 활동을 강박적으로 소비·이용해 통제력을 잃는 상태다. 무제한·즉시·익명 접근성이 특징이며, 잦은 사용이 기대와 반응을 변화시킨다는 논의가 있다. 진단적 지위는 강박적 성행동장애 틀 안에서 다뤄지며 근거는 축적 중이다.",
+      "example": "예: 계획한 것보다 훨씬 많은 시간을 온라인 성적 콘텐츠에 쓰고, 줄이려 해도 반복하며 일상에 지장을 겪는 경우.",
+      "see_also": [
+        "sexual-addiction",
+        "hypersexuality",
+        "compulsive-computer-use"
+      ],
+      "trend": false
+    },
+    {
+      "id": "hypersexuality",
+      "term_ko": "과잉성욕",
+      "term_en": "Hypersexuality",
+      "category": "behavioral",
+      "definition": "성적 충동·활동이 과도하게 항진되어 일상과 관계를 지배하는 상태다. 강박적 성행동장애의 핵심 특징이며, 일부 신경질환이나 특정 약물(예: 도파민 작용제)의 부작용으로도 나타날 수 있어 원인 감별이 중요하다.",
+      "example": "예: 파킨슨병 치료로 도파민 작용제를 복용하던 사람에게서 예상치 못한 과잉성욕이 부작용으로 나타나는 경우.",
+      "see_also": [
+        "sexual-addiction",
+        "cybersex-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "work-addiction",
+      "term_ko": "일중독",
+      "term_en": "Work Addiction (Workaholism)",
+      "category": "behavioral",
+      "definition": "휴식·건강·관계를 희생하면서까지 강박적으로 일에 몰두하고, 일에서 벗어날 때 불안·죄책감을 느끼는 상태다. 공식 진단은 아니나 번아웃·중독 연구에서 다뤄지며, 사회적으로 칭찬받기 쉬워 문제로 인식되기 어렵다는 특징이 있다. 성취가 아니라 강박적 통제 상실이 병리의 핵심이다.",
+      "example": "예: 쉬는 날에도 일을 놓지 못해 불안해하고, 건강과 가족 관계가 무너지는데도 일하는 시간을 줄이지 못하는 경우.",
+      "see_also": [
+        "behavioral-addiction",
+        "compulsion-impulse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "food-addiction",
+      "term_ko": "음식중독",
+      "term_en": "Food Addiction",
+      "category": "behavioral",
+      "definition": "고당·고지방 등 특정 음식에 대한 갈망과 통제 상실적 섭취가 반복되는 상태다. 물질중독과 유사한 보상회로 관여가 보고되나 독립 진단범주로 확립되진 않았고, 폭식장애 등 섭식장애와 개념적으로 겹친다. 고도로 가공된 식품의 설계가 이 현상을 부추긴다는 논의가 있다.",
+      "example": "예: 배가 고프지 않은데도 특정 초가공식품을 통제 못 하고 계속 먹게 되고, 그 뒤 죄책감을 느끼는 경우.",
+      "see_also": [
+        "eating-disorders",
+        "behavioral-addiction",
+        "craving",
+        "glp1-and-craving"
+      ],
+      "trend": false
+    },
+    {
+      "id": "exercise-addiction",
+      "term_ko": "운동중독",
+      "term_en": "Exercise Addiction",
+      "category": "behavioral",
+      "definition": "부상·피로·일상 지장에도 강박적으로 운동을 지속하고 중단 시 금단 유사 증상(불안·초조)을 겪는 상태다. 건강행동이 병리로 전환되는 대표 사례로, 흔히 섭식장애나 신체상 문제와 함께 나타난다. 헌신적 운동과 강박적 운동을 가르는 기준은 통제력과 기능 손상이다.",
+      "example": "예: 다쳐서 쉬어야 한다는 진단을 받고도 불안 때문에 운동을 멈추지 못해 부상을 악화시키는 경우.",
+      "see_also": [
+        "behavioral-addiction",
+        "compulsion-impulse",
+        "eating-disorders"
+      ],
+      "trend": false
+    },
+    {
+      "id": "eating-disorders",
+      "term_ko": "섭식장애",
+      "term_en": "Eating Disorders",
+      "category": "diagnosis",
+      "definition": "섭식 행동과 체중·체형에 대한 왜곡된 인지가 심각한 신체·심리 손상을 일으키는 정신질환군이다. 신경성 식욕부진증, 신경성 폭식증, 폭식장애 등이 포함되며, 사망률이 높은 정신질환에 속해 전문적 치료가 필수적이다. 중독과 겹치는 보상·강박 기제가 있으나 독립된 진단이다.",
+      "example": "예: 체형에 대한 극심한 두려움 때문에 섭식을 심하게 제한하거나 폭식과 보상행동을 반복하며 건강이 위협받는 상태(구체적 방법 서술은 위험하므로 다루지 않는다).",
+      "see_also": [
+        "food-addiction",
+        "compulsion-impulse",
+        "mental-disorders"
+      ],
+      "trend": false
+    },
+    {
+      "id": "impulse-control-disorder",
+      "term_ko": "충동조절장애",
+      "term_en": "Impulse Control Disorders",
+      "category": "diagnosis",
+      "definition": "자신이나 타인에게 해가 되는 충동을 억제하지 못하는 장애군이다. 병적 방화(방화벽), 병적 도벽(도벽증), 간헐폭발성장애 등이 포함되며, 행동중독과 개념적으로 겹치는 부분이 많다. 충동 전 긴장 고조와 행동 후 안도·쾌감이라는 공통 순환을 보인다.",
+      "example": "예: 특정 상황에서 치미는 충동을 억누르지 못하고 해로운 행동을 저지른 뒤 후회와 안도를 반복하는 경우.",
+      "see_also": [
+        "compulsion-impulse",
+        "pathological-gambling",
+        "kleptomania",
+        "delay-discounting"
+      ],
+      "trend": false
+    },
+    {
+      "id": "kleptomania",
+      "term_ko": "병적 도벽",
+      "term_en": "Kleptomania",
+      "category": "diagnosis",
+      "definition": "필요하지도, 금전적 가치가 크지도 않은 물건을 훔치려는 충동을 반복적으로 억제하지 못하는 충동조절장애다. 절도 전의 긴장과 절도 순간·직후의 안도·쾌감이 특징적 순환을 이루며, 이득을 노린 일반 절도와 구별된다. 흔히 수치심 때문에 감춰져 진단이 늦어진다.",
+      "example": "예: 살 돈이 충분한데도 사소한 물건을 훔치려는 충동을 참지 못하고, 그 뒤 깊은 죄책감에 시달리는 경우.",
+      "see_also": [
+        "impulse-control-disorder",
+        "compulsion-impulse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "obsessive-compulsive",
+      "term_ko": "강박장애",
+      "term_en": "Obsessive-Compulsive Disorder (OCD)",
+      "category": "diagnosis",
+      "definition": "원치 않는 반복적 사고(강박사고)와 그 불안을 완화하려는 반복 행동(강박행동)으로 일상이 손상되는 장애다. 중독의 강박적 측면과 표면상 닮았지만, 동기가 다르다—중독은 대체로 쾌·보상을 좇는 데서 출발하고 강박장애는 불안을 없애려는 데 초점이 있다. 이 구분이 치료 방향을 가른다.",
+      "example": "예: 오염에 대한 강박사고 때문에 손을 수십 번 씻어야 불안이 잠시 가라앉는 강박장애의 순환.",
+      "see_also": [
+        "compulsion-impulse",
+        "impulse-control-disorder",
+        "mental-disorders",
+        "anxiety-disorders"
+      ],
+      "trend": false
+    },
+    {
+      "id": "dual-diagnosis",
+      "term_ko": "이중진단(공존질환)",
+      "term_en": "Dual Diagnosis / Co-occurring Disorders",
+      "category": "diagnosis",
+      "definition": "중독과 다른 정신질환(우울, 불안, ADHD, PTSD 등)이 함께 존재하는 상태다. 두 문제가 서로를 악화시켜 치료를 복잡하게 하며, 한쪽만 다루면 재발하기 쉬워 통합 치료가 권장된다. 임상에서 공존은 예외가 아니라 오히려 흔한 경우라는 점이 중요하다.",
+      "example": "예: 우울과 불안을 달래려 음주가 늘고, 음주가 다시 우울을 악화시키는 악순환 속에 두 문제가 얽혀 있는 경우.",
+      "see_also": [
+        "mental-disorders",
+        "addiction",
+        "anxiety-disorders",
+        "self-medication",
+        "trauma-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "mental-disorders",
+      "term_ko": "정신질환",
+      "term_en": "Mental Disorders",
+      "category": "diagnosis",
+      "definition": "사고·감정·행동의 임상적으로 유의한 장애로 기능 손상이나 고통을 유발하는 상태의 총칭이다. DSM-5-TR(미국정신의학회)과 ICD-11(WHO)이 국제 표준 분류체계이며, 중독은 이 체계 안의 한 범주로 자리한다. 정신질환에 대한 낙인 완화는 중독 낙인 완화와 맞닿아 있다.",
+      "example": "예: 우울증, 불안장애, 조현병처럼 서로 다른 질환이 하나의 표준 진단체계 안에서 분류·기술되는 것.",
+      "see_also": [
+        "dsm",
+        "dual-diagnosis",
+        "anxiety-disorders",
+        "addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "dsm",
+      "term_ko": "정신질환 진단 및 통계 편람(DSM)",
+      "term_en": "Diagnostic and Statistical Manual (DSM)",
+      "category": "diagnosis",
+      "definition": "미국정신의학회가 발간하는 정신질환 진단 기준서로, 현행판은 DSM-5-TR이다. 세계 연구·임상에서 널리 쓰이며, 도박장애를 물질중독과 같은 범주에 편입하고 '남용/의존' 구분을 '물질사용장애'로 통합한 것이 중독 분야의 대표적 변화다. 국제 공중보건 통계에는 WHO의 ICD가 병행 사용되며, 두 체계는 일부 차이를 보인다.",
+      "example": "예: 게임장애가 ICD-11에는 정식 진단으로 있지만 DSM-5-TR에는 '추가 연구 필요' 부록에 있는 것처럼, 두 체계의 판단이 갈리는 경우.",
+      "see_also": [
+        "mental-disorders",
+        "disease-model",
+        "substance-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "anxiety-disorders",
+      "term_ko": "불안장애",
+      "term_en": "Anxiety Disorders",
+      "category": "diagnosis",
+      "definition": "과도하고 지속적인 불안·공포로 일상이 손상되는 장애군이다. 중독과 매우 흔히 공존하며, 불안을 달래기 위한 자가치료적 물질·행동 사용이 중독으로 이어지는 통로가 되기도 한다. 두 문제가 얽힐 때 통합적 접근이 필요하다.",
+      "example": "예: 사회불안 때문에 모임 전마다 술로 긴장을 눌러 오다가, 점차 술 없이는 대인 상황을 견디지 못하게 되는 경우.",
+      "see_also": [
+        "dual-diagnosis",
+        "mental-disorders",
+        "craving",
+        "self-medication"
+      ],
+      "trend": false
+    },
+    {
+      "id": "disease-model",
+      "term_ko": "질병모델",
+      "term_en": "Disease Model of Addiction",
+      "category": "diagnosis",
+      "definition": "중독을 의지박약이 아니라 뇌의 만성·재발성 질환으로 보는 관점이다. 치료·회복 접근의 토대가 되고 낙인을 줄이는 데 기여하지만, 개인의 책임과 사회·환경 요인을 과소평가한다는 비판도 있어 학문적 논쟁이 이어진다. 순수한 질병모델과 선택·학습 모델 사이의 절충적 관점들이 오늘날 널리 받아들여진다.",
+      "example": "예: '중독은 뇌의 병'이라는 설명이 자책을 덜어 치료로 이끄는 한편, 그것이 자기책임을 지운다는 우려도 함께 제기되는 논쟁.",
+      "see_also": [
+        "neuroadaptation",
+        "brain-addiction",
+        "addiction",
+        "recovery",
+        "harm-reduction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "recovery",
+      "term_ko": "회복",
+      "term_en": "Recovery",
+      "category": "recovery",
+      "definition": "중독에서 벗어나 건강과 삶의 기능을 되찾아가는 지속적 과정이다. 단순한 사용 중단을 넘어 관계·의미·자기효능감의 회복을 포함하며, 재발을 실패가 아니라 과정의 일부로 이해하는 관점이 국제적으로 확산되고 있다. 완치라는 종착점보다 지속적 관리와 성장의 여정으로 보는 시각이 우세하다.",
+      "example": "예: 단약 자체뿐 아니라 끊어진 관계를 회복하고 새로운 일상과 삶의 의미를 세워 가며 몇 년에 걸쳐 자기를 재건하는 과정.",
+      "see_also": [
+        "treatment",
+        "twelve-step",
+        "harm-reduction",
+        "recovery-capital",
+        "relapse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "relapse",
+      "term_ko": "재발",
+      "term_en": "Relapse",
+      "category": "recovery",
+      "definition": "회복 과정에서 중단했던 물질 사용이나 행동으로 되돌아가는 것을 말한다. 만성질환에서 흔한 현상으로 이해되며, 도덕적 실패가 아니라 치료·전략을 재조정하라는 신호로 다루는 것이 회복에 유리하다. 고위험 상황, 부정적 정서, 단서 노출이 주요 유발 요인이며, 재발예방은 이를 다루는 기술 훈련이다.",
+      "example": "예: 몇 달 잘 유지하던 사람이 큰 스트레스 상황에서 한 번 무너진 뒤, 이를 실패로 낙인찍기보다 원인을 분석해 계획을 보강하는 경우.",
+      "see_also": [
+        "recovery",
+        "craving",
+        "cognitive-behavioral",
+        "self-efficacy",
+        "stages-of-change"
+      ],
+      "trend": false
+    },
+    {
+      "id": "twelve-step",
+      "term_ko": "12단계 프로그램",
+      "term_en": "Twelve-Step Programs",
+      "category": "recovery",
+      "definition": "익명의 알코올중독자(AA)에서 시작해 여러 중독으로 확장된 상호원조 기반 회복 프로그램이다. 무력함의 인정, 자기 성찰, 보상, 동료 지지, 봉사를 축으로 하며, 후원자(스폰서)와 모임 공동체가 회복을 떠받친다. 세계적으로 널리 활용되며, 신앙 기반 회복공동체와도 접점을 갖는다.",
+      "example": "예: 정기 모임에서 자신의 이야기를 나누고 후원자의 도움을 받으며 단계를 밟아 회복을 이어 가는 참여자.",
+      "see_also": [
+        "recovery",
+        "treatment",
+        "recovery-capital"
+      ],
+      "trend": false
+    },
+    {
+      "id": "motivational-interviewing",
+      "term_ko": "동기강화상담",
+      "term_en": "Motivational Interviewing",
+      "category": "recovery",
+      "definition": "변화에 대한 양가감정을 존중하며 당사자 스스로 변화 동기를 찾도록 돕는 협력적 상담 방식이다. 설득·훈계 대신 공감적 경청과 열린 질문으로 저항을 낮추고, 변화를 향한 말(변화대화)을 이끌어 낸다. 변화단계 모델과 결합해 전숙고·숙고 단계의 사람에게 특히 효과적이다.",
+      "example": "예: '왜 안 끊느냐'고 다그치는 대신, 지금 삶에서 무엇이 걸리는지 스스로 말하게 해 변화 동기를 끌어내는 상담.",
+      "see_also": [
+        "stages-of-change",
+        "self-efficacy",
+        "treatment",
+        "denial"
+      ],
+      "trend": false
+    },
+    {
+      "id": "intervention",
+      "term_ko": "개입",
+      "term_en": "Intervention",
+      "category": "recovery",
+      "definition": "부정·저항하는 당사자가 치료를 받아들이도록 가족·전문가가 구조화된 방식으로 돕는 절차다. 방법과 효과에 대해선 접근별로 견해차가 있으며, 대립적 방식보다 관계와 지지를 중시하는 접근이 근거를 얻고 있다. 가족 자신의 준비와 회복도 함께 다뤄야 한다.",
+      "example": "예: 가족이 전문가의 도움을 받아, 비난이 아니라 걱정과 구체적 도움을 담아 당사자에게 치료를 권하는 자리를 마련하는 경우.",
+      "see_also": [
+        "treatment",
+        "denial",
+        "recovery",
+        "codependency",
+        "motivational-interviewing"
+      ],
+      "trend": false
+    },
+    {
+      "id": "treatment",
+      "term_ko": "치료",
+      "term_en": "Treatment",
+      "category": "recovery",
+      "definition": "중독을 완화·관리하기 위한 의학·심리·사회적 개입의 총칭이다. 해독, 약물치료(예: 아편류 대체요법), 인지행동치료, 동기강화상담, 자조모임, 사회적 지원 등이 개인 맞춤으로 조합되며 지속 관리가 핵심이다. 단일 치료보다 여러 접근의 통합과 충분한 기간이 성과를 좌우한다.",
+      "example": "예: 약물치료로 갈망을 낮추면서 동시에 인지행동치료로 대처 기술을 익히고 자조모임으로 지지를 받는 통합적 치료 계획.",
+      "see_also": [
+        "recovery",
+        "twelve-step",
+        "intervention",
+        "dual-diagnosis",
+        "harm-reduction",
+        "cognitive-behavioral"
+      ],
+      "trend": false
+    },
+    {
+      "id": "harm-reduction",
+      "term_ko": "피해감소",
+      "term_en": "Harm Reduction",
+      "category": "recovery",
+      "definition": "사용의 완전한 중단을 전제하지 않고 중독으로 인한 피해 자체를 줄이는 데 초점을 둔 공중보건 접근이다. 날록손 보급, 주사기 교환, 안전소비시설, 약물 성분 검사 등이 포함되며, 금욕만을 조건으로 삼지 않아 접근성이 높다. 금욕 중심 접근과 상호보완적이면서도 철학적 긴장 관계에 있다.",
+      "example": "예: 당장 끊지 못하는 사람에게도 과용 사망을 막는 날록손과 안전 정보를 제공해 생명을 지키는 개입.",
+      "see_also": [
+        "treatment",
+        "recovery",
+        "fentanyl-synthetic-opioids",
+        "disease-model"
+      ],
+      "trend": true
+    },
+    {
+      "id": "psychedelic-therapy",
+      "term_ko": "사이키델릭 보조치료",
+      "term_en": "Psychedelic-Assisted Therapy",
+      "category": "recovery",
+      "definition": "실로시빈·MDMA 등 환각·유사 물질을 구조화된 심리치료와 결합해 우울·PTSD·중독 등을 치료하려는 접근이다. 여러 임상시험에서 가능성이 보고되며 일부 지역에서 제도화가 진행되고 있으나, 규제 판단과 근거는 아직 진화 중인 연구 단계이고 안전한 세팅이 필수적이라는 점이 강조된다. 오락적 사용과는 구분되는 통제된 치료 맥락이 핵심이다.",
+      "example": "예: 통제된 임상 환경에서 치료자의 동반 아래 진행되는 실로시빈 보조치료 세션(자가 사용과는 전혀 다른 맥락).",
+      "see_also": [
+        "treatment",
+        "ketamine",
+        "recovery"
+      ],
+      "trend": true
+    },
+    {
+      "id": "glp1-and-craving",
+      "term_ko": "GLP-1 약물과 갈망",
+      "term_en": "GLP-1 Drugs & Craving",
+      "category": "recovery",
+      "definition": "세마글루타이드 등 비만·당뇨 치료용 GLP-1 수용체 작용제가 알코올·니코틴 등에 대한 갈망을 줄일 수 있다는 관찰이 이어지며, 중독 치료제로서의 가능성이 활발히 연구되는 신흥 영역이다. 보상회로에 대한 작용이 기전으로 제시되지만 아직 중독에 대한 확립된 적응증은 아니며 연구가 진행 중이다. 음식중독과의 접점에서도 주목받는다.",
+      "example": "예: 체중 감량 목적으로 GLP-1 약물을 쓰던 사람이 술이나 담배에 대한 갈망도 줄었다고 보고하는 사례들이 연구를 촉발한 것.",
+      "see_also": [
+        "craving",
+        "treatment",
+        "mesolimbic-dopamine",
+        "food-addiction"
+      ],
+      "trend": true
+    },
+    {
+      "id": "recovery-capital",
+      "term_ko": "회복자본",
+      "term_en": "Recovery Capital",
+      "category": "recovery",
+      "definition": "회복을 시작하고 유지하는 데 동원할 수 있는 개인적·사회적·공동체적 자원의 총량이다. 관계망, 경제적 안정, 지지 공동체, 자기효능감, 의미와 목적 등을 포함하며, 이 자본이 두터울수록 회복이 지속될 가능성이 높다. 개인의 병리보다 강점과 자원에 주목하는 관점으로, 회복공동체의 역할을 부각한다.",
+      "example": "예: 같은 어려움을 겪어도 지지적 공동체·안정적 일자리·신뢰 관계를 가진 사람이 그렇지 못한 사람보다 회복을 더 잘 유지하는 것.",
+      "see_also": [
+        "recovery",
+        "twelve-step",
+        "attachment-addiction",
+        "self-efficacy"
+      ],
+      "trend": true
+    },
+    {
+      "id": "codependency",
+      "term_ko": "동반의존",
+      "term_en": "Codependency",
+      "category": "society",
+      "definition": "중독자와 밀접한 사람이 그 문제에 과도하게 얽매여 자신을 희생하고, 결과적으로 중독 행동을 지속시키는 관계 패턴이다. 돌봄이 지나쳐 대신 책임을 떠안거나 문제를 감추는 방식으로 나타나며, 이것이 당사자가 결과를 직면할 기회를 없앤다. 가족 전체를 대상으로 한 회복의 필요성을 부각한다.",
+      "example": "예: 가족이 도박 빚을 반복해서 대신 갚아 주어, 당사자가 문제의 결과를 마주하지 못하고 계속하게 되는 경우.",
+      "see_also": [
+        "recovery",
+        "denial",
+        "attachment-addiction",
+        "intervention"
+      ],
+      "trend": false
+    },
+    {
+      "id": "costs-of-addiction",
+      "term_ko": "중독의 사회적 비용",
+      "term_en": "Social Costs of Addiction",
+      "category": "society",
+      "definition": "중독이 유발하는 의료비, 생산성 손실, 범죄, 복지 부담, 가족 붕괴 등 직간접 사회경제적 비용의 총합이다. 각국은 이를 추계해 정책 우선순위와 예방 투자의 근거로 삼는다. 개인의 문제로만 보이는 중독이 실제로는 사회 전체가 부담을 지는 공중보건 사안임을 보여 준다.",
+      "example": "예: 한 사람의 알코올 문제가 본인 치료비를 넘어 결근·사고·가족 돌봄 부담으로 사회 전체에 비용을 전가하는 것.",
+      "see_also": [
+        "prevention",
+        "harm-reduction",
+        "addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "prevention",
+      "term_ko": "예방",
+      "term_en": "Prevention",
+      "category": "society",
+      "definition": "중독의 발생·진행·재발을 막기 위한 개입이다. 전체 인구를 대상으로 하는 보편적 예방, 위험집단을 겨냥한 선택적 예방, 이미 징후가 있는 고위험 개인에 대한 지시적 예방으로 나뉜다. 조기 개입일수록 효과와 비용효율이 높으며, 위험요인을 줄이고 보호요인을 키우는 것이 핵심 전략이다.",
+      "example": "예: 전체 청소년 대상 미디어 이용 교육(보편적)과, 이미 과의존 징후를 보이는 학생에 대한 개별 상담(지시적)을 구분해 설계하는 것.",
+      "see_also": [
+        "costs-of-addiction",
+        "gateway-drugs",
+        "harm-reduction",
+        "social-learning"
+      ],
+      "trend": false
+    },
+    {
+      "id": "gateway-drugs",
+      "term_ko": "관문 약물",
+      "term_en": "Gateway Drugs",
+      "category": "society",
+      "definition": "상대적으로 약한 물질의 사용이 더 강한 물질 사용으로 이어질 수 있다는 가설에서 지목되는 물질이다. 실제로 인과인지, 아니면 공통의 취약성·환경이 두 사용을 함께 설명하는지에 대해 학계 논쟁이 활발하다. 단순한 인과 서사보다 위험요인의 복합적 상호작용으로 이해하는 것이 정확하다.",
+      "example": "예: 이른 나이의 흡연·음주가 이후 다른 약물 사용과 통계적으로 연관되지만, 그 자체가 원인인지 공통 배경 때문인지는 논쟁적인 것.",
+      "see_also": [
+        "prevention",
+        "cannabis",
+        "substance-addiction",
+        "social-learning"
+      ],
+      "trend": false
+    },
+    {
+      "id": "opioids",
+      "term_ko": "아편류(오피오이드)",
+      "term_en": "Opioids",
+      "category": "substance",
+      "definition": "양귀비에서 유래하거나 이를 본떠 합성한 진통·진정 계열 물질군으로, 뇌의 아편류 수용체에 작용해 통증을 줄이고 강한 도취감을 준다. 의존성과 호흡억제로 인한 과용 사망 위험이 커, 세계 약물 위기의 중심에 있다. 천연(모르핀)·반합성(헤로인·옥시코돈)·합성(펜타닐·메타돈)으로 나뉜다.",
+      "example": "예: 수술 후 처방받은 아편류 진통제를 쓰다가 내성과 의존이 생겨 더 강한 아편류를 찾게 되는 경로.",
+      "see_also": [
+        "morphine",
+        "heroin",
+        "fentanyl-synthetic-opioids",
+        "oxycodone",
+        "methadone-med",
+        "naloxone"
+      ],
+      "trend": false
+    },
+    {
+      "id": "stimulants",
+      "term_ko": "자극제",
+      "term_en": "Stimulants",
+      "category": "substance",
+      "definition": "중추신경계를 각성시켜 각성도·에너지·자신감을 높이는 물질군으로, 도파민·노르에피네프린 활동을 증가시킨다. 코카인·암페타민·메스암페타민·카페인·니코틴 등이 포함되며, 과용 시 심혈관 위험과 급성 정신증을 일으킬 수 있다. '고양–붕괴' 주기가 반복 사용을 부른다.",
+      "example": "예: 밤샘 각성을 위해 자극제를 쓰다가 효과가 떨어지면 급격히 무너져(크래시) 다시 찾게 되는 순환.",
+      "see_also": [
+        "cocaine",
+        "methamphetamine",
+        "amphetamines",
+        "caffeine",
+        "mesolimbic-dopamine"
+      ],
+      "trend": false
+    },
+    {
+      "id": "depressants",
+      "term_ko": "억제제(진정제)",
+      "term_en": "Depressants",
+      "category": "substance",
+      "definition": "중추신경계 활동을 늦춰 진정·이완·수면을 유도하는 물질군으로, 주로 GABA 신경전달을 강화한다. 알코올·벤조디아제핀·바르비투르산염 등이 포함되며, 특히 다른 억제제나 아편류와 함께 쓰면 호흡억제로 치명적일 수 있다. 금단이 의학적 응급이 될 수 있는 대표 계열이다.",
+      "example": "예: 불면 때문에 진정제와 술을 함께 복용했다가 호흡억제 위험에 빠지는 경우.",
+      "see_also": [
+        "alcohol",
+        "benzodiazepines",
+        "barbiturates",
+        "withdrawal",
+        "drug-interactions"
+      ],
+      "trend": false
+    },
+    {
+      "id": "hallucinogens",
+      "term_ko": "환각제",
+      "term_en": "Hallucinogens",
+      "category": "substance",
+      "definition": "지각·사고·정서를 크게 변화시켜 환각이나 의식 변형을 일으키는 물질군이다. 세로토닌계에 작용하는 고전적 환각제(LSD·실로시빈·메스칼린)와 해리성(케타민·PCP)으로 나뉜다. 신체적 의존성은 낮은 편이나 심리적 위험과 '배드 트립', 지각장애 지속 등의 부작용이 있다.",
+      "example": "예: 같은 물질이라도 심리 상태와 환경(세트와 세팅)에 따라 경험이 크게 달라지는 것.",
+      "see_also": [
+        "lsd",
+        "psilocybin",
+        "ketamine",
+        "pcp",
+        "set-and-setting",
+        "flashbacks"
+      ],
+      "trend": false
+    },
+    {
+      "id": "benzodiazepines",
+      "term_ko": "벤조디아제핀",
+      "term_en": "Benzodiazepines",
+      "category": "substance",
+      "definition": "불안·불면·경련 치료에 쓰이는 진정제 계열로, GABA 작용을 강화해 빠른 진정 효과를 낸다. 단기적으로 유용하지만 내성·의존이 빠르게 생기고 금단이 위험할 수 있어 장기·고용량 사용에 주의가 필요하다. 아편류와의 병용이 과용 사망의 주요 요인이다.",
+      "example": "예: 불안 완화를 위해 처방받아 쓰다가, 끊으려 하면 반동성 불안과 불면이 심해져 계속 복용하게 되는 경우.",
+      "see_also": [
+        "depressants",
+        "withdrawal",
+        "tolerance",
+        "anxiety-disorders",
+        "prescription-misuse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "barbiturates",
+      "term_ko": "바르비투르산염",
+      "term_en": "Barbiturates",
+      "category": "substance",
+      "definition": "과거 진정·수면·항경련 목적으로 널리 쓰인 억제제로, 안전 용량과 치사 용량의 차이가 좁아 과용 위험이 크다. 벤조디아제핀 등장 이후 사용이 크게 줄었으나 일부 의료 목적으로 남아 있다. 강한 신체적 의존과 위험한 금단이 특징이다.",
+      "example": "예: 치료 범위가 좁아 조금만 많이 복용해도 위험에 이를 수 있어 현대에는 대체된 계열.",
+      "see_also": [
+        "depressants",
+        "withdrawal",
+        "tolerance"
+      ],
+      "trend": false
+    },
+    {
+      "id": "cannabinoids",
+      "term_ko": "칸나비노이드",
+      "term_en": "Cannabinoids",
+      "category": "substance",
+      "definition": "대마 식물의 성분(THC·CBD 등)과 이에 작용하는 물질군으로, 뇌의 내인성 칸나비노이드 수용체에 작용한다. THC는 도취·지각 변화를, CBD는 비도취성 효과를 낸다. 합성 칸나비노이드는 예측 불가능한 강한 독성으로 별도의 위험을 지닌다.",
+      "example": "예: 천연 대마보다 훨씬 강하고 위험한 합성 칸나비노이드가 예상치 못한 급성 중독을 일으키는 경우.",
+      "see_also": [
+        "cannabis",
+        "hallucinogens",
+        "substance-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "inhalants",
+      "term_ko": "흡입제",
+      "term_en": "Inhalants",
+      "category": "substance",
+      "definition": "본드·부탄·에어로졸·용제 등 흡입해 도취를 얻는 휘발성 물질군으로, 값싸고 구하기 쉬워 청소년 남용이 문제된다. 단 한 번의 사용으로도 급성 심정지('돌연 흡입 사망')를 일으킬 수 있고, 반복 시 뇌·신경 손상이 축적된다.",
+      "example": "예: 접근이 쉬운 생활용품을 흡입하다가 첫 사용에서도 치명적 심정지에 이를 수 있는 위험.",
+      "see_also": [
+        "substance-addiction",
+        "overdose",
+        "prevention"
+      ],
+      "trend": false
+    },
+    {
+      "id": "anabolic-steroids",
+      "term_ko": "아나볼릭 스테로이드",
+      "term_en": "Anabolic Steroids",
+      "category": "substance",
+      "definition": "근육 증대를 위해 오남용되는 남성호르몬 유사 물질로, 다른 중독과 달리 즉각적 도취보다 신체상·수행 강박과 얽혀 사용된다. 중단 시 우울·공격성 등 금단 유사 반응이 나타나며, 장기 사용은 심혈관·호르몬계에 해를 끼친다.",
+      "example": "예: 이상적 체형에 대한 강박으로 부작용을 알면서도 스테로이드 사용을 멈추지 못하는 경우.",
+      "see_also": [
+        "substance-addiction",
+        "exercise-addiction",
+        "eating-disorders"
+      ],
+      "trend": false
+    },
+    {
+      "id": "designer-drugs",
+      "term_ko": "신종 합성마약",
+      "term_en": "Designer / Synthetic Drugs",
+      "category": "substance",
+      "definition": "규제를 피하려 기존 약물의 화학 구조를 변형해 만든 신종 물질군(합성 카티논·합성 칸나비노이드 등)이다. 성분과 효력이 일정치 않아 위험 예측이 어렵고, 규제가 뒤따라가는 사이 급성 중독 사례가 발생한다.",
+      "example": "예: '합법'을 표방하며 유통되던 신종 물질이 예측 못한 독성으로 응급 상황을 일으키는 경우.",
+      "see_also": [
+        "substance-addiction",
+        "drug-scheduling",
+        "designer-drugs"
+      ],
+      "trend": true
+    },
+    {
+      "id": "prescription-misuse",
+      "term_ko": "처방약 오남용",
+      "term_en": "Prescription Drug Misuse",
+      "category": "substance",
+      "definition": "의료용 약물(아편류 진통제, 자극제, 진정제)을 처방 목적·용량과 다르게 사용하는 것을 말한다. '의사가 준 약'이라는 인식 때문에 위험이 과소평가되기 쉬우며, 아편류 위기의 한 축을 이뤘다. 가족·지인의 약을 나눠 쓰는 전용도 흔한 경로다.",
+      "example": "예: 집에 남은 진통제를 통증이 아닌 이완 목적으로 쓰다가 의존으로 이어지는 경우.",
+      "see_also": [
+        "opioids",
+        "benzodiazepines",
+        "amphetamines",
+        "gateway-drugs"
+      ],
+      "trend": false
+    },
+    {
+      "id": "alcohol",
+      "term_ko": "알코올",
+      "term_en": "Alcohol",
+      "category": "substance",
+      "definition": "가장 널리 사용되고 합법적인 억제제로, 소량에서도 판단·운동 능력을 떨어뜨리고 반복·과다 사용 시 알코올사용장애로 이어진다. 사회적으로 용인돼 문제 인식이 늦고, 금단이 경련·섬망으로 위험할 수 있다. 세계적으로 질병 부담이 가장 큰 물질 중 하나다.",
+      "example": "예: '누구나 마시는' 술이라 문제를 인정하기 어려워 치료가 늦어지는 전형적 경우.",
+      "see_also": [
+        "depressants",
+        "substance-addiction",
+        "withdrawal",
+        "blackout",
+        "hangover"
+      ],
+      "trend": false
+    },
+    {
+      "id": "nicotine-tobacco",
+      "term_ko": "니코틴·담배",
+      "term_en": "Nicotine & Tobacco",
+      "category": "substance",
+      "definition": "담배의 주된 중독 성분인 니코틴은 강한 의존을 만드는 자극제로, 흡연은 예방 가능한 사망의 주요 원인이다. 의존이 빠르게 형성되고 금단(짜증·갈망·집중곤란)이 재발을 부른다. 전자담배·파우치 등 전달 형태가 다양해지고 있다.",
+      "example": "예: 건강 위험을 잘 알면서도 금단과 갈망 때문에 금연을 여러 번 실패하는 경우.",
+      "see_also": [
+        "stimulants",
+        "vaping-ecigarettes",
+        "withdrawal",
+        "secondhand-smoke"
+      ],
+      "trend": false
+    },
+    {
+      "id": "caffeine",
+      "term_ko": "카페인",
+      "term_en": "Caffeine",
+      "category": "substance",
+      "definition": "세계에서 가장 널리 쓰이는 정신활성물질로, 각성을 높이는 온화한 자극제다. 대개 안전하지만 의존과 내성이 생기며 중단 시 두통·피로 등 금단이 나타난다. DSM은 카페인 금단·중독을 인정하되 '카페인사용장애'는 추가 연구가 필요한 상태로 둔다.",
+      "example": "예: 매일 여러 잔을 마시던 사람이 하루 걸렀을 때 심한 두통과 무기력을 겪는 카페인 금단.",
+      "see_also": [
+        "stimulants",
+        "withdrawal",
+        "tolerance"
+      ],
+      "trend": false
+    },
+    {
+      "id": "heroin",
+      "term_ko": "헤로인",
+      "term_en": "Heroin",
+      "category": "substance",
+      "definition": "모르핀에서 만든 강력한 반합성 아편류로, 빠르고 강한 도취와 함께 높은 의존·과용 위험을 지닌다. 주사 사용은 감염 위험을 더하고, 최근에는 펜타닐 혼입으로 치사 위험이 크게 높아졌다.",
+      "example": "예: 처방 아편류에 의존이 생긴 뒤 더 싸고 강한 헤로인으로 옮겨 가는 경로.",
+      "see_also": [
+        "opioids",
+        "fentanyl-synthetic-opioids",
+        "overdose",
+        "harm-reduction",
+        "naloxone"
+      ],
+      "trend": false
+    },
+    {
+      "id": "cocaine",
+      "term_ko": "코카인·크랙",
+      "term_en": "Cocaine & Crack",
+      "category": "substance",
+      "definition": "코카 잎에서 추출한 강력한 자극제로, 짧고 강렬한 도취 뒤 급격한 붕괴가 반복 사용을 부른다. 흡입형 크랙은 더 빠르고 강한 효과로 의존 위험이 높다. 심혈관 합병증과 급성 정신증 위험이 크다.",
+      "example": "예: 강렬한 고양감이 짧게 끝나고 곧바로 무너지면서, 그 격차를 메우려 반복 사용하게 되는 패턴.",
+      "see_also": [
+        "stimulants",
+        "mesolimbic-dopamine",
+        "overdose"
+      ],
+      "trend": false
+    },
+    {
+      "id": "methamphetamine",
+      "term_ko": "메스암페타민",
+      "term_en": "Methamphetamine",
+      "category": "substance",
+      "definition": "지속시간이 길고 강력한 합성 자극제로, 강한 각성·다행감과 함께 심각한 신경독성을 지닌다. 반복 사용은 정신증·인지 손상·심각한 신체 쇠약을 낳으며, 의존에서 벗어나기 매우 어렵다.",
+      "example": "예: 각성 효과가 오래가는 만큼 며칠씩 잠을 자지 않고 사용을 이어 가다 정신증에 이르는 경우.",
+      "see_also": [
+        "stimulants",
+        "amphetamines",
+        "mesolimbic-dopamine"
+      ],
+      "trend": false
+    },
+    {
+      "id": "amphetamines",
+      "term_ko": "암페타민",
+      "term_en": "Amphetamines",
+      "category": "substance",
+      "definition": "각성·집중을 높이는 자극제 계열로, 일부는 ADHD·기면증 치료제로 처방된다. 치료 용량에서는 유용하지만 오남용 시 의존·불면·심혈관 위험을 낳는다. 학업·수행 향상 목적의 비의료적 사용이 문제된다.",
+      "example": "예: 시험 기간 집중을 위해 처방 자극제를 오남용하다가 의존과 불면에 빠지는 경우.",
+      "see_also": [
+        "stimulants",
+        "methamphetamine",
+        "prescription-misuse",
+        "adhd-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "mdma-ecstasy",
+      "term_ko": "엑스터시(MDMA)",
+      "term_en": "MDMA (Ecstasy)",
+      "category": "substance",
+      "definition": "자극제와 환각제의 성질을 함께 지닌 물질로, 친밀감·에너지·감각 고양을 일으켜 클럽 환경에서 오남용된다. 과열·탈수·세로토닌 관련 위험이 있으며, 순도 불확실성이 위험을 키운다. 한편 통제된 임상에서 PTSD 치료 연구 대상이기도 하다.",
+      "example": "예: 파티에서 오락용으로 쓰일 때의 위험과, 임상시험에서 치료 보조로 연구되는 맥락이 전혀 다른 것.",
+      "see_also": [
+        "hallucinogens",
+        "psychedelic-therapy",
+        "overdose"
+      ],
+      "trend": false
+    },
+    {
+      "id": "lsd",
+      "term_ko": "LSD",
+      "term_en": "LSD",
+      "category": "substance",
+      "definition": "매우 적은 양으로 강한 지각·의식 변형을 일으키는 고전적 환각제다. 신체 의존성은 낮지만 예측 불가능한 심리 반응('배드 트립')과 드물게 지속되는 지각장애(HPPD) 위험이 있다. 경험이 심리 상태와 환경에 크게 좌우된다.",
+      "example": "예: 같은 용량이라도 불안한 상태에서 복용하면 공포스러운 경험으로 이어질 수 있는 것.",
+      "see_also": [
+        "hallucinogens",
+        "flashbacks",
+        "set-and-setting",
+        "psychedelic-therapy"
+      ],
+      "trend": false
+    },
+    {
+      "id": "psilocybin",
+      "term_ko": "실로시빈",
+      "term_en": "Psilocybin",
+      "category": "substance",
+      "definition": "환각버섯의 주성분인 고전적 환각제로, 세로토닌계에 작용해 의식 변형을 일으킨다. 오락적 사용의 위험과 함께, 통제된 임상에서 우울·중독 치료 가능성이 연구되는 대표 물질이다.",
+      "example": "예: 야생 버섯 오남용의 위험과, 표준화된 임상 연구에서의 치료적 활용이 구분되는 것.",
+      "see_also": [
+        "hallucinogens",
+        "psychedelic-therapy",
+        "set-and-setting"
+      ],
+      "trend": false
+    },
+    {
+      "id": "morphine",
+      "term_ko": "모르핀",
+      "term_en": "Morphine",
+      "category": "substance",
+      "definition": "아편에서 추출한 대표적 천연 아편류로, 강력한 진통 효과 때문에 의료에서 필수적으로 쓰인다. 통증 관리에 유용하지만 내성·의존·호흡억제 위험을 함께 지닌다.",
+      "example": "예: 말기 통증 관리에 꼭 필요한 약이면서 동시에 의존 관리가 요구되는 이중성.",
+      "see_also": [
+        "opioids",
+        "tolerance",
+        "withdrawal"
+      ],
+      "trend": false
+    },
+    {
+      "id": "opium",
+      "term_ko": "아편",
+      "term_en": "Opium",
+      "category": "substance",
+      "definition": "양귀비 열매에서 얻는 물질로 모르핀·코데인 등 아편류의 원천이며, 인류가 오래전부터 진통·도취 목적으로 사용해 온 역사적 마약이다. 근대의 아편 무역과 규제는 오늘날 마약 정책의 뿌리를 이룬다.",
+      "example": "예: 아편에서 모르핀·헤로인으로 이어지는 아편류 계보의 출발점.",
+      "see_also": [
+        "opioids",
+        "morphine",
+        "prohibition",
+        "war-on-drugs"
+      ],
+      "trend": false
+    },
+    {
+      "id": "oxycodone",
+      "term_ko": "옥시코돈",
+      "term_en": "Oxycodone",
+      "category": "substance",
+      "definition": "강력한 반합성 아편류 진통제로, 처방 남용과 아편류 위기의 중심에 있었다. 통증 치료에 효과적이지만 도취 목적의 오남용과 의존 위험이 크다.",
+      "example": "예: 통증 치료로 시작한 처방이 오남용과 의존으로 이어지는 대표적 경로.",
+      "see_also": [
+        "opioids",
+        "prescription-misuse",
+        "heroin"
+      ],
+      "trend": false
+    },
+    {
+      "id": "ghb",
+      "term_ko": "GHB",
+      "term_en": "GHB",
+      "category": "substance",
+      "definition": "중추 억제제로 도취·진정을 일으키며, 안전 용량과 위험 용량의 차이가 좁아 의식소실·호흡억제 위험이 크다. 무색·무취 특성 때문에 약물이용범죄와 연관되기도 한다.",
+      "example": "예: 소량 차이로도 위험에 이를 수 있어 오락적 사용이 특히 위험한 물질.",
+      "see_also": [
+        "depressants",
+        "overdose",
+        "predatory-drugs"
+      ],
+      "trend": false
+    },
+    {
+      "id": "pcp",
+      "term_ko": "펜시클리딘(PCP)",
+      "term_en": "Phencyclidine (PCP)",
+      "category": "substance",
+      "definition": "강한 해리성 물질로, 지각 왜곡과 함께 예측 불가능한 흥분·공격성·해리를 일으킬 수 있다. 고용량에서 심각한 정신증과 위험 행동을 유발한다.",
+      "example": "예: 해리 상태에서 통증·위험 인지가 둔해져 예측 못 한 사고로 이어질 수 있는 것.",
+      "see_also": [
+        "hallucinogens",
+        "ketamine"
+      ],
+      "trend": false
+    },
+    {
+      "id": "intoxication",
+      "term_ko": "급성 중독(취함)",
+      "term_en": "Intoxication",
+      "category": "mechanism",
+      "definition": "물질이 체내에 작용해 나타나는 일시적인 정신·행동·신체 변화 상태다. 물질과 용량에 따라 도취·판단력 저하·운동 실조·의식 변화 등으로 나타나며, 심하면 생명을 위협한다. 장기적 '중독(addiction)'과는 구분되는 개념이다.",
+      "example": "예: 한 번의 과음으로 판단력과 균형을 잃는 급성 상태와, 반복으로 형성되는 장기 중독은 다른 것.",
+      "see_also": [
+        "addiction",
+        "overdose",
+        "blackout",
+        "withdrawal"
+      ],
+      "trend": false
+    },
+    {
+      "id": "overdose",
+      "term_ko": "과다복용",
+      "term_en": "Overdose",
+      "category": "mechanism",
+      "definition": "신체가 감당할 수 있는 한계를 넘어 물질을 사용해 생명을 위협하는 급성 상태다. 아편류 과용의 호흡억제가 대표적이며, 내성 감소 후 재사용, 물질 혼합, 순도 불확실성이 위험을 키운다. 날록손 같은 응급 대응이 생명을 구할 수 있다.",
+      "example": "예: 한동안 끊어 내성이 떨어진 사람이 예전 용량으로 재사용했다가 과용에 이르는 경우.",
+      "see_also": [
+        "intoxication",
+        "fentanyl-synthetic-opioids",
+        "naloxone",
+        "harm-reduction",
+        "tolerance"
+      ],
+      "trend": false
+    },
+    {
+      "id": "drug-interactions",
+      "term_ko": "약물 상호작용",
+      "term_en": "Drug Interactions",
+      "category": "mechanism",
+      "definition": "둘 이상의 물질이 함께 작용해 효과나 위험이 달라지는 현상이다. 억제제끼리 또는 억제제와 아편류의 병용은 호흡억제를 가중해 특히 위험하며, 예상치 못한 상호작용이 과용의 흔한 원인이 된다.",
+      "example": "예: 술과 진정제, 아편류를 함께 사용했을 때 각각보다 훨씬 큰 위험이 발생하는 것.",
+      "see_also": [
+        "depressants",
+        "overdose",
+        "polysubstance",
+        "cross-tolerance"
+      ],
+      "trend": false
+    },
+    {
+      "id": "polysubstance",
+      "term_ko": "다중물질 사용",
+      "term_en": "Polysubstance Use",
+      "category": "mechanism",
+      "definition": "여러 물질을 함께 또는 번갈아 사용하는 것으로, 상호작용으로 위험이 커지고 치료가 복잡해진다. 한 물질의 부작용을 다른 물질로 상쇄하려는 사용 패턴이 흔하다.",
+      "example": "예: 자극제로 각성했다가 잠들기 위해 억제제를 쓰는 식으로 여러 물질을 오가는 경우.",
+      "see_also": [
+        "drug-interactions",
+        "overdose",
+        "substance-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "flashbacks",
+      "term_ko": "플래시백",
+      "term_en": "Flashbacks",
+      "category": "mechanism",
+      "definition": "환각제 사용 후 물질 없이도 과거의 지각 경험이 갑자기 되살아나는 현상이다. 지속·반복되면 지각장애(HPPD)로 이어질 수 있으며, 트라우마의 침습적 재경험을 가리킬 때도 쓰인다.",
+      "example": "예: 환각제 경험 이후 한참 뒤에도 시야의 잔상·왜곡이 불쑥 나타나는 경우.",
+      "see_also": [
+        "hallucinogens",
+        "lsd",
+        "trauma-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "hangover",
+      "term_ko": "숙취",
+      "term_en": "Hangover",
+      "category": "mechanism",
+      "definition": "과음 후 나타나는 두통·메스꺼움·피로·인지 저하 등의 후유 상태로, 탈수·수면 방해·대사산물 등이 복합적으로 작용한다. 일종의 가벼운 금단·독성 반응으로 이해된다.",
+      "example": "예: 전날 과음 뒤 다음 날 종일 두통과 무기력으로 기능이 떨어지는 상태.",
+      "see_also": [
+        "alcohol",
+        "withdrawal",
+        "intoxication"
+      ],
+      "trend": false
+    },
+    {
+      "id": "blackout",
+      "term_ko": "블랙아웃(필름 끊김)",
+      "term_en": "Blackout",
+      "category": "mechanism",
+      "definition": "음주 중 의식은 있으나 그 시간의 기억이 형성되지 않는 현상으로, 알코올이 해마의 기억 저장을 방해해 발생한다. 위험 상황을 기억하지 못해 안전 문제로 이어질 수 있다.",
+      "example": "예: 술자리에서 대화·이동은 했지만 다음 날 그 시간을 전혀 기억하지 못하는 경우.",
+      "see_also": [
+        "alcohol",
+        "intoxication",
+        "brain-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "neuroplasticity",
+      "term_ko": "신경가소성",
+      "term_en": "Neuroplasticity",
+      "category": "mechanism",
+      "definition": "경험과 학습에 따라 뇌의 연결과 기능이 변화하는 성질이다. 중독은 이 가소성이 물질·행동을 중심으로 재편된 결과이며, 동시에 회복 역시 새로운 가소적 변화로 가능하다는 희망의 근거가 된다.",
+      "example": "예: 중독이 뇌를 바꾼 것처럼, 회복 과정의 새로운 학습이 뇌를 다시 바꿔 갈 수 있다는 것.",
+      "see_also": [
+        "neuroadaptation",
+        "brain-addiction",
+        "recovery",
+        "conditioning"
+      ],
+      "trend": false
+    },
+    {
+      "id": "incentive-salience",
+      "term_ko": "인센티브 현저성",
+      "term_en": "Incentive Salience",
+      "category": "mechanism",
+      "definition": "보상과 연합된 단서가 강한 '원함(wanting)'을 끌어내도록 뇌가 부여하는 동기적 두드러짐이다. 좋아함(liking)과 분리될 수 있어, 더는 즐겁지 않은데도 강하게 원하게 되는 중독의 역설을 설명한다.",
+      "example": "예: 사용이 더는 즐겁지 않다고 말하면서도 단서 앞에서 강렬히 갈망하는 모순.",
+      "see_also": [
+        "mesolimbic-dopamine",
+        "craving",
+        "behavioral-sensitization"
+      ],
+      "trend": false
+    },
+    {
+      "id": "allostasis",
+      "term_ko": "알로스타시스(중독의 어두운 면)",
+      "term_en": "Allostasis in Addiction",
+      "category": "mechanism",
+      "definition": "반복 사용으로 뇌의 보상·스트레스 균형점 자체가 이동해, 정상적으로 느끼기 위해 물질이 필요해지는 상태를 설명하는 이론이다. 쾌락 추구에서 불쾌 회피로 동기가 옮겨가는 후기 중독의 '어두운 면'을 개념화한다.",
+      "example": "예: 처음엔 기분을 좋게 하려고 쓰다가, 나중엔 무너진 기준선을 겨우 정상으로 되돌리려 쓰게 되는 변화.",
+      "see_also": [
+        "neuroadaptation",
+        "reward-deficiency",
+        "withdrawal",
+        "reinforcement"
+      ],
+      "trend": false
+    },
+    {
+      "id": "set-and-setting",
+      "term_ko": "세트와 세팅",
+      "term_en": "Set and Setting",
+      "category": "mechanism",
+      "definition": "물질 경험이 개인의 심리 상태(set)와 물리·사회적 환경(setting)에 크게 좌우된다는 개념으로, 특히 환각제에서 중요하다. 같은 물질·용량도 맥락에 따라 전혀 다른 경험을 낳는다.",
+      "example": "예: 안전하고 지지적인 환경에서의 경험과 불안한 환경에서의 경험이 완전히 달라지는 것.",
+      "see_also": [
+        "hallucinogens",
+        "psychedelic-therapy",
+        "lsd"
+      ],
+      "trend": false
+    },
+    {
+      "id": "drug-administration",
+      "term_ko": "투여 경로",
+      "term_en": "Routes of Administration",
+      "category": "mechanism",
+      "definition": "물질이 몸에 들어오는 방식(경구·흡입·주사·점막 등)으로, 같은 물질도 경로에 따라 효과의 속도·강도·위험이 크게 달라진다. 빠르게 뇌에 도달하는 경로일수록 도취와 의존 위험이 커진다.",
+      "example": "예: 같은 성분이라도 주사·흡입처럼 빠른 경로가 경구보다 의존 위험을 높이는 것.",
+      "see_also": [
+        "substance-addiction",
+        "overdose",
+        "heroin"
+      ],
+      "trend": false
+    },
+    {
+      "id": "dependence-vs-addiction",
+      "term_ko": "의존과 중독의 구분",
+      "term_en": "Dependence vs. Addiction",
+      "category": "diagnosis",
+      "definition": "신체적 의존(내성·금단)은 약물에 대한 신체 적응이고, 중독은 통제 상실과 강박적 사용을 핵심으로 한다. 둘은 겹치지만 같지 않아, 처방약으로 신체 의존이 생겨도 중독이 아닐 수 있고 그 반대도 가능하다. 이 구분은 통증 환자 낙인 방지에 중요하다.",
+      "example": "예: 통증 치료로 아편류에 신체 의존이 생긴 환자를 곧바로 '중독자'로 낙인찍는 것이 부정확한 이유.",
+      "see_also": [
+        "addiction",
+        "tolerance",
+        "withdrawal",
+        "pseudoaddiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "pseudoaddiction",
+      "term_ko": "가성중독",
+      "term_en": "Pseudoaddiction",
+      "category": "diagnosis",
+      "definition": "통증이 충분히 조절되지 않아 약을 더 요구하는 행동이 중독처럼 보이지만, 실제로는 치료 부족이 원인인 상태를 가리키는 개념이다. 다만 이 개념이 과잉처방을 정당화하는 데 오용됐다는 비판도 있어 신중히 다뤄진다.",
+      "example": "예: 통증이 제대로 관리되면 약 요구 행동이 사라지는 경우, 그것이 중독이 아니었음을 시사하는 것.",
+      "see_also": [
+        "dependence-vs-addiction",
+        "opioids",
+        "prescription-misuse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "adhd-addiction",
+      "term_ko": "ADHD와 중독",
+      "term_en": "ADHD and Addiction",
+      "category": "diagnosis",
+      "definition": "주의력결핍 과잉행동장애는 충동성과 관련되어 물질·행동 중독 위험을 높이는 대표적 공존질환이다. 적절한 치료가 오히려 중독 위험을 낮춘다는 연구가 있어, 진단과 통합 치료가 중요하다.",
+      "example": "예: 치료받지 못한 ADHD 성인이 각성 효과를 얻으려 물질을 자가치료적으로 쓰게 되는 경우.",
+      "see_also": [
+        "dual-diagnosis",
+        "impulse-control-disorder",
+        "self-medication",
+        "amphetamines"
+      ],
+      "trend": false
+    },
+    {
+      "id": "ptsd-addiction",
+      "term_ko": "PTSD와 중독",
+      "term_en": "PTSD and Addiction",
+      "category": "diagnosis",
+      "definition": "외상후스트레스장애는 중독과 매우 흔히 공존하며, 침습·과각성 증상을 달래려는 자가치료적 사용이 두 문제를 얽히게 한다. 트라우마와 중독을 함께 다루는 통합 치료가 권장된다.",
+      "example": "예: 트라우마의 악몽·과각성을 잠재우려 술이나 진정제에 의존하게 되는 경로.",
+      "see_also": [
+        "dual-diagnosis",
+        "trauma-addiction",
+        "self-medication",
+        "flashbacks"
+      ],
+      "trend": false
+    },
+    {
+      "id": "depression-addiction",
+      "term_ko": "우울과 중독",
+      "term_en": "Depression and Addiction",
+      "category": "diagnosis",
+      "definition": "우울증은 중독과 상호 악화하는 흔한 공존질환으로, 무기력·무쾌감을 달래려는 사용이 우울을 다시 심화시키는 악순환을 만든다. 한쪽만 치료하면 재발하기 쉬워 통합 접근이 필요하다.",
+      "example": "예: 우울로 인한 공허를 물질로 메우려다 물질이 다시 우울을 악화시키는 순환.",
+      "see_also": [
+        "dual-diagnosis",
+        "anhedonia",
+        "self-medication",
+        "mental-disorders"
+      ],
+      "trend": false
+    },
+    {
+      "id": "conduct-disorder",
+      "term_ko": "품행장애",
+      "term_en": "Conduct Disorder",
+      "category": "diagnosis",
+      "definition": "아동·청소년기의 반복적 규범 위반·공격 행동 패턴으로, 이후 물질사용장애와 반사회성 발달의 위험 요인이 된다. 조기 개입이 이후 중독 위험을 낮추는 데 중요하다.",
+      "example": "예: 이른 시기의 심한 품행 문제가 청소년기 물질 사용으로 이어지는 발달 경로.",
+      "see_also": [
+        "adhd-addiction",
+        "impulse-control-disorder",
+        "prevention"
+      ],
+      "trend": false
+    },
+    {
+      "id": "personality-disorders",
+      "term_ko": "성격장애와 중독",
+      "term_en": "Personality Disorders and Addiction",
+      "category": "diagnosis",
+      "definition": "경계선·반사회성 성격장애 등은 정서 조절·충동 조절의 어려움을 통해 중독과 흔히 공존한다. 관계·자기 구조의 문제가 얽혀 치료가 복잡하며, 통합적·장기적 접근이 요구된다.",
+      "example": "예: 극심한 정서 기복을 다루기 어려워 충동적으로 물질에 의존하게 되는 경우.",
+      "see_also": [
+        "dual-diagnosis",
+        "emotion-regulation",
+        "object-relations",
+        "impulse-control-disorder"
+      ],
+      "trend": false
+    },
+    {
+      "id": "detoxification",
+      "term_ko": "해독(디톡스)",
+      "term_en": "Detoxification",
+      "category": "recovery",
+      "definition": "체내 물질을 안전하게 제거하며 급성 금단을 의학적으로 관리하는 초기 단계다. 회복의 시작일 뿐 치료 자체는 아니며, 이후 지속적 재활·관리로 이어지지 않으면 재발하기 쉽다. 일부 금단은 반드시 의료 감독이 필요하다.",
+      "example": "예: 해독만 받고 후속 치료를 잇지 않아 곧 재발하는, '치료의 시작을 끝으로 오해'하는 경우.",
+      "see_also": [
+        "withdrawal",
+        "treatment",
+        "medication-assisted-treatment",
+        "relapse"
+      ],
+      "trend": false
+    },
+    {
+      "id": "medication-assisted-treatment",
+      "term_ko": "약물보조치료(MAT)",
+      "term_en": "Medication-Assisted Treatment",
+      "category": "recovery",
+      "definition": "약물치료를 심리·사회적 지원과 결합해 중독을 관리하는 근거 기반 접근이다. 특히 아편류 사용장애에서 메타돈·부프레노르핀·날트렉손 등이 갈망과 과용 위험을 낮춰 효과가 입증됐다. '약으로 약을 바꾼다'는 오해와 낙인이 접근을 가로막기도 한다.",
+      "example": "예: 아편류 의존자가 부프레노르핀으로 갈망과 금단을 안정시키며 일상 회복에 집중할 수 있게 되는 경우.",
+      "see_also": [
+        "treatment",
+        "methadone-med",
+        "buprenorphine",
+        "naltrexone",
+        "harm-reduction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "methadone-med",
+      "term_ko": "메타돈",
+      "term_en": "Methadone",
+      "category": "recovery",
+      "definition": "장시간 작용하는 아편류로, 아편류 사용장애 치료에서 금단과 갈망을 안정시키는 대체요법으로 오래 쓰였다. 통제된 프로그램에서 제공되며 과용·범죄를 줄이는 효과가 있다.",
+      "example": "예: 헤로인 의존자가 관리된 메타돈 프로그램으로 일상 기능을 회복하는 경우.",
+      "see_also": [
+        "opioids",
+        "medication-assisted-treatment",
+        "harm-reduction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "buprenorphine",
+      "term_ko": "부프레노르핀",
+      "term_en": "Buprenorphine",
+      "category": "recovery",
+      "definition": "부분작용 아편류로, 갈망·금단을 조절하면서 과용 위험이 상대적으로 낮아 아편류 치료에 널리 쓰인다. 외래에서 처방 가능해 접근성이 높은 편이다.",
+      "example": "예: 병원 밖 외래에서 부프레노르핀 처방으로 아편류 의존을 관리하는 경우.",
+      "see_also": [
+        "opioids",
+        "medication-assisted-treatment",
+        "methadone-med"
+      ],
+      "trend": false
+    },
+    {
+      "id": "naltrexone",
+      "term_ko": "날트렉손",
+      "term_en": "Naltrexone",
+      "category": "recovery",
+      "definition": "아편류·알코올의 보상 효과를 차단하는 약물로, 사용해도 도취를 느끼기 어렵게 해 재발을 줄인다. 지속형 주사제 형태가 순응도를 높인다.",
+      "example": "예: 음주해도 예전 같은 쾌감이 없어 음주 동기가 약해지도록 돕는 경우.",
+      "see_also": [
+        "medication-assisted-treatment",
+        "alcohol",
+        "opioids"
+      ],
+      "trend": false
+    },
+    {
+      "id": "naloxone",
+      "term_ko": "날록손",
+      "term_en": "Naloxone",
+      "category": "recovery",
+      "definition": "아편류 과용의 호흡억제를 신속히 되돌리는 응급 해독제로, 생명을 구하는 피해감소의 핵심 도구다. 비전문가도 쓸 수 있는 비강 스프레이 보급이 확대되고 있다.",
+      "example": "예: 과용으로 호흡이 멈춘 사람에게 즉시 투여해 생명을 구하는 응급 상황.",
+      "see_also": [
+        "overdose",
+        "fentanyl-synthetic-opioids",
+        "harm-reduction",
+        "opioids"
+      ],
+      "trend": false
+    },
+    {
+      "id": "contingency-management",
+      "term_ko": "유관관리",
+      "term_en": "Contingency Management",
+      "category": "recovery",
+      "definition": "약물 음성 결과 등 바람직한 행동에 즉각적 보상을 주어 회복 행동을 강화하는 근거 기반 치료다. 조작적 조건화 원리를 치료에 적용한 대표 사례로, 특히 자극제 사용장애에서 효과가 크다.",
+      "example": "예: 정해진 기간 물질을 사용하지 않으면 보상을 받도록 설계해 회복 행동을 강화하는 프로그램.",
+      "see_also": [
+        "operant-conditioning",
+        "reinforcement",
+        "treatment"
+      ],
+      "trend": false
+    },
+    {
+      "id": "relapse-prevention",
+      "term_ko": "재발예방",
+      "term_en": "Relapse Prevention",
+      "category": "recovery",
+      "definition": "고위험 상황을 식별하고 대처 기술을 훈련해 재발을 줄이는 인지행동 기반 접근이다. 갈망 대처, 거절 기술, 사고 재구성, 균형 잡힌 생활 등을 다루며, 재발을 학습 기회로 재구성한다.",
+      "example": "예: '어떤 상황에서 위험해지는지'를 미리 파악해 그때의 대처 계획을 세워 두는 훈련.",
+      "see_also": [
+        "relapse",
+        "cognitive-behavioral",
+        "coping",
+        "self-efficacy"
+      ],
+      "trend": false
+    },
+    {
+      "id": "therapeutic-community",
+      "term_ko": "치료공동체",
+      "term_en": "Therapeutic Community",
+      "category": "recovery",
+      "definition": "공동생활 속에서 동료 상호작용과 구조화된 일상을 통해 회복을 돕는 장기 치료 모델이다. 공동체 자체를 변화의 도구로 삼으며, 신앙 기반·생태 기반 회복공동체와도 접점이 있다.",
+      "example": "예: 함께 생활하고 역할을 나누며 서로의 회복을 지지하는 공동체 안에서 재활하는 경우.",
+      "see_also": [
+        "recovery",
+        "recovery-capital",
+        "twelve-step",
+        "attachment-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "smart-recovery",
+      "term_ko": "SMART 리커버리",
+      "term_en": "SMART Recovery",
+      "category": "recovery",
+      "definition": "인지행동·동기강화에 기반한 자조 프로그램으로, 12단계의 영적 틀 대신 자기주도적 도구와 과학적 접근을 강조한다. 12단계와 더불어 선택지를 넓히는 세속적 대안으로 활용된다.",
+      "example": "예: 영적 접근이 맞지 않는 사람이 인지행동 도구 중심의 자조 모임에서 회복을 이어 가는 경우.",
+      "see_also": [
+        "twelve-step",
+        "cognitive-behavioral",
+        "recovery",
+        "self-efficacy"
+      ],
+      "trend": false
+    },
+    {
+      "id": "family-therapy",
+      "term_ko": "가족치료",
+      "term_en": "Family Therapy",
+      "category": "recovery",
+      "definition": "중독을 개인이 아닌 가족 체계의 문제로 보고, 관계 패턴과 의사소통을 다루어 회복을 돕는 접근이다. 동반의존을 완화하고 가족을 회복의 자원으로 전환한다.",
+      "example": "예: 가족 전체가 함께 상담에 참여해 문제를 지속시키던 상호작용을 바꿔 가는 경우.",
+      "see_also": [
+        "codependency",
+        "recovery",
+        "intervention",
+        "attachment-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "sober-living",
+      "term_ko": "회복 주거·공동체",
+      "term_en": "Sober Living / Recovery Community",
+      "category": "recovery",
+      "definition": "회복 초기의 안정적 환경을 제공하는 절주·단약 중심의 공동 주거 및 지역 회복 공동체다. 구조와 또래 지지가 재발 위험이 높은 시기를 넘기는 데 도움을 준다.",
+      "example": "예: 치료 후 곧바로 위험한 환경으로 돌아가는 대신, 회복 주거에서 안정적으로 사회 복귀를 준비하는 경우.",
+      "see_also": [
+        "recovery",
+        "recovery-capital",
+        "therapeutic-community"
+      ],
+      "trend": false
+    },
+    {
+      "id": "controlled-substances-act",
+      "term_ko": "규제물질법(스케줄링)",
+      "term_en": "Controlled Substances Act / Scheduling",
+      "category": "policy",
+      "definition": "물질을 남용 가능성과 의료적 유용성에 따라 등급(스케줄)으로 분류·규제하는 법 체계로, 미국의 CSA가 대표적이다. 분류는 연구·처방·처벌에 영향을 주며, 과학적 근거와 분류가 어긋난다는 비판도 있다.",
+      "example": "예: 의료적 활용 가능성이 논의되는 물질이 엄격한 등급에 묶여 연구가 제약되는 논쟁.",
+      "see_also": [
+        "drug-scheduling",
+        "war-on-drugs",
+        "decriminalization",
+        "cannabis"
+      ],
+      "trend": false
+    },
+    {
+      "id": "drug-scheduling",
+      "term_ko": "마약류 분류",
+      "term_en": "Drug Scheduling",
+      "category": "policy",
+      "definition": "물질의 위험성·의료 가치에 따라 법적 등급을 매기는 제도로, 규제·연구·의료 접근의 틀을 정한다. 국가마다 기준이 달라 같은 물질도 지위가 엇갈린다.",
+      "example": "예: 한 나라에선 엄격히 금지된 물질이 다른 나라에선 의료용으로 허용되는 차이.",
+      "see_also": [
+        "controlled-substances-act",
+        "designer-drugs",
+        "cannabis"
+      ],
+      "trend": false
+    },
+    {
+      "id": "prohibition",
+      "term_ko": "금주법",
+      "term_en": "Prohibition",
+      "category": "policy",
+      "definition": "20세기 초 미국의 주류 제조·판매 금지 정책으로, 음주는 줄었으나 불법 시장과 조직범죄를 키운 대표적 실패 사례로 자주 인용된다. 금지 일변도 정책의 한계를 보여 주는 역사적 준거다.",
+      "example": "예: 전면 금지가 수요를 없애기보다 지하 시장을 키운 역사적 교훈.",
+      "see_also": [
+        "war-on-drugs",
+        "decriminalization",
+        "alcohol"
+      ],
+      "trend": false
+    },
+    {
+      "id": "war-on-drugs",
+      "term_ko": "마약과의 전쟁",
+      "term_en": "War on Drugs",
+      "category": "policy",
+      "definition": "공급 차단과 형사처벌을 앞세운 강경 마약 정책 기조로, 수십 년간 세계 마약 정책을 지배했다. 수감 증가와 사회적 비용에 비해 사용 감소 효과가 제한적이라는 비판 속에서 보건 중심 접근으로의 전환 논의가 이어진다.",
+      "example": "예: 처벌 강화에도 사용이 크게 줄지 않으면서 치료·예방 중심으로의 전환이 논의되는 흐름.",
+      "see_also": [
+        "prohibition",
+        "decriminalization",
+        "harm-reduction",
+        "costs-of-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "decriminalization",
+      "term_ko": "비범죄화",
+      "term_en": "Decriminalization",
+      "category": "policy",
+      "definition": "소량 소지·사용을 형사처벌 대상에서 제외하되 합법화와는 구분되는 정책으로, 처벌 대신 치료·보건으로 연결하려는 접근이다. 일부 지역의 실험이 성과와 논쟁을 함께 낳았다.",
+      "example": "예: 사용자를 감옥이 아니라 치료·상담으로 연결하려는 정책 실험.",
+      "see_also": [
+        "war-on-drugs",
+        "harm-reduction",
+        "drug-policy"
+      ],
+      "trend": false
+    },
+    {
+      "id": "drug-policy",
+      "term_ko": "마약 정책",
+      "term_en": "Drug Policy",
+      "category": "policy",
+      "definition": "물질 사용에 대한 사회의 대응 전체를 아우르는 영역으로, 금지·처벌 중심부터 보건·피해감소 중심까지 스펙트럼을 이룬다. 근거 기반 정책과 정치·도덕적 가치가 충돌하는 대표적 장이다.",
+      "example": "예: 같은 문제를 두고 처벌 강화와 치료 확대라는 상반된 정책 방향이 경쟁하는 것.",
+      "see_also": [
+        "war-on-drugs",
+        "decriminalization",
+        "harm-reduction",
+        "prevention"
+      ],
+      "trend": false
+    },
+    {
+      "id": "drug-testing",
+      "term_ko": "약물검사",
+      "term_en": "Drug Testing",
+      "category": "policy",
+      "definition": "체액 등에서 물질 사용을 확인하는 검사로, 직장·사법·치료 현장에서 쓰인다. 억제 효과가 있는 한편 사생활·정확성·낙인 문제와 오탐 가능성 논란이 따른다.",
+      "example": "예: 직장 약물검사가 사용을 억제하는 동시에 사생활·공정성 논쟁을 낳는 것.",
+      "see_also": [
+        "drug-policy",
+        "stigma",
+        "drugged-driving"
+      ],
+      "trend": false
+    },
+    {
+      "id": "drugged-driving",
+      "term_ko": "약물운전",
+      "term_en": "Drugged Driving",
+      "category": "policy",
+      "definition": "물질의 영향 아래 운전하는 것으로, 음주운전과 함께 중대한 공중 안전 문제다. 물질별로 검출·판정 기준이 달라 단속과 입증이 까다롭다.",
+      "example": "예: 대마·처방약 등의 영향 아래 운전해 판단·반응이 둔해지는 위험.",
+      "see_also": [
+        "intoxication",
+        "alcohol",
+        "drug-testing",
+        "prevention"
+      ],
+      "trend": false
+    },
+    {
+      "id": "secondhand-smoke",
+      "term_ko": "간접흡연",
+      "term_en": "Secondhand Smoke",
+      "category": "policy",
+      "definition": "비흡연자가 타인의 담배 연기에 노출되는 것으로, 명백한 건강 피해가 입증되어 금연 구역·실내 흡연 규제의 근거가 되었다. 개인 행동이 타인에게 미치는 해악의 대표 사례다.",
+      "example": "예: 흡연자의 연기가 주변 비흡연자의 건강까지 해쳐 공공장소 규제로 이어진 것.",
+      "see_also": [
+        "nicotine-tobacco",
+        "prevention",
+        "costs-of-addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "stigma",
+      "term_ko": "낙인",
+      "term_en": "Stigma",
+      "category": "policy",
+      "definition": "중독을 도덕적 결함으로 보는 사회적 편견으로, 당사자의 수치심을 키우고 도움 요청·치료를 가로막는 회복의 큰 장벽이다. 질병·회복 중심의 언어와 서사가 낙인을 줄이는 데 기여한다.",
+      "example": "예: '의지가 약해서'라는 시선 때문에 도움을 청하지 못하고 문제를 숨기게 되는 경우.",
+      "see_also": [
+        "disease-model",
+        "denial",
+        "recovery",
+        "harm-reduction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "predatory-drugs",
+      "term_ko": "약물이용범죄 물질",
+      "term_en": "Predatory Drugs",
+      "category": "policy",
+      "definition": "피해자를 무력화하는 데 악용되는 물질(무색·무취의 진정제 등)을 가리킨다. 범죄 예방·인식 교육과 함께, 피해자 비난이 아니라 가해에 초점을 두는 접근이 강조된다.",
+      "example": "예: 음료에 몰래 섞여 피해자를 무력화하는 데 악용되는 물질의 위험.",
+      "see_also": [
+        "ghb",
+        "depressants",
+        "prevention"
+      ],
+      "trend": false
+    },
+    {
+      "id": "alcoholics-anonymous",
+      "term_ko": "익명의 알코올중독자(AA)",
+      "term_en": "Alcoholics Anonymous",
+      "category": "program",
+      "definition": "1935년 시작된 세계 최대의 알코올 회복 상호원조 모임으로, 12단계와 후원자·모임 공동체를 통해 단주를 돕는다. 이후 수많은 12단계 프로그램의 원형이 되었다.",
+      "example": "예: 정기 모임과 후원자 관계를 통해 서로의 단주를 지지하는 회복 공동체.",
+      "see_also": [
+        "twelve-step",
+        "alcohol",
+        "recovery",
+        "serenity-prayer"
+      ],
+      "trend": false
+    },
+    {
+      "id": "narcotics-anonymous",
+      "term_ko": "익명의 약물중독자(NA)",
+      "term_en": "Narcotics Anonymous",
+      "category": "program",
+      "definition": "약물 전반의 회복을 위해 12단계를 적용한 상호원조 모임으로, AA 모델을 물질 일반으로 확장했다. 동료 지지와 정체성 회복을 강조한다.",
+      "example": "예: 다양한 약물 문제를 가진 사람들이 함께 모여 회복을 지지하는 모임.",
+      "see_also": [
+        "twelve-step",
+        "alcoholics-anonymous",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "gamblers-anonymous",
+      "term_ko": "단도박 모임(GA)",
+      "term_en": "Gamblers Anonymous",
+      "category": "program",
+      "definition": "도박 문제 회복을 위한 12단계 기반 상호원조 모임으로, 도박장애의 재정·관계 피해 회복을 함께 다룬다.",
+      "example": "예: 도박으로 무너진 삶을 함께 회복해 가는 동료 지지 모임.",
+      "see_also": [
+        "twelve-step",
+        "pathological-gambling",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "al-anon",
+      "term_ko": "알아넌(가족 모임)",
+      "term_en": "Al-Anon",
+      "category": "program",
+      "definition": "중독자의 가족·친지를 위한 상호원조 모임으로, 동반의존에서 벗어나 자신의 삶을 돌보도록 돕는다. 회복이 당사자만의 과제가 아님을 보여 준다.",
+      "example": "예: 중독자 가족이 스스로를 돌보고 건강한 경계를 세우는 법을 배우는 모임.",
+      "see_also": [
+        "codependency",
+        "family-therapy",
+        "twelve-step"
+      ],
+      "trend": false
+    },
+    {
+      "id": "minnesota-model",
+      "term_ko": "미네소타 모델",
+      "term_en": "Minnesota Model",
+      "category": "recovery",
+      "definition": "12단계 철학과 전문 임상을 결합한 중독 치료 모델로, 다학제 팀·동료 지지·단약 지향을 특징으로 한다. 현대 재활치료의 한 표준이 되었다.",
+      "example": "예: 전문 치료진과 12단계 접근을 함께 제공하는 재활 프로그램의 틀.",
+      "see_also": [
+        "twelve-step",
+        "treatment",
+        "therapeutic-community"
+      ],
+      "trend": false
+    },
+    {
+      "id": "serenity-prayer",
+      "term_ko": "평온을 비는 기도",
+      "term_en": "Serenity Prayer",
+      "category": "program",
+      "definition": "바꿀 수 없는 것을 받아들이는 평온, 바꿀 수 있는 것을 바꾸는 용기, 그 둘을 분별하는 지혜를 구하는 짧은 기도로, 12단계 회복에서 널리 낭송된다. 수용과 통제 가능성의 분별이라는 회복의 태도를 담는다.",
+      "example": "예: 통제할 수 없는 것에 대한 집착을 내려놓고 지금 할 수 있는 것에 집중하도록 돕는 회복의 지침.",
+      "see_also": [
+        "twelve-step",
+        "alcoholics-anonymous",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "synanon",
+      "term_ko": "시나논",
+      "term_en": "Synanon",
+      "category": "program",
+      "definition": "1950년대 등장한 초기 치료공동체로, 강한 동료 대면을 특징으로 하며 이후 치료공동체 운동에 큰 영향을 주었으나 후기의 통제적 변질로 논란이 된 역사적 사례다. 공동체 기반 회복의 가능성과 위험을 함께 보여 준다.",
+      "example": "예: 공동체 치료의 강한 영향력과 그 통제적 변질의 위험을 동시에 남긴 역사적 사례.",
+      "see_also": [
+        "therapeutic-community",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "bill-w",
+      "term_ko": "빌 윌슨(빌 W.)",
+      "term_en": "Bill Wilson (Bill W.)",
+      "category": "figures",
+      "definition": "익명의 알코올중독자(AA)의 공동 창립자로, 자신의 회복 경험을 바탕으로 12단계와 상호원조 모델을 정립했다. 당사자 경험을 회복의 핵심 자원으로 삼은 흐름의 상징적 인물이다.",
+      "example": "예: 스스로의 회복 경험에서 출발해 세계적 회복 운동의 토대를 놓은 사례.",
+      "see_also": [
+        "alcoholics-anonymous",
+        "twelve-step",
+        "dr-bob"
+      ],
+      "trend": false
+    },
+    {
+      "id": "dr-bob",
+      "term_ko": "닥터 밥(로버트 스미스)",
+      "term_en": "Dr. Bob (Robert Smith)",
+      "category": "figures",
+      "definition": "AA의 공동 창립자로, 빌 윌슨과 함께 한 사람의 알코올중독자가 다른 이를 돕는 상호원조 원리를 실천으로 세웠다.",
+      "example": "예: 동료가 동료를 돕는 회복 모델을 초기부터 몸소 실천한 인물.",
+      "see_also": [
+        "alcoholics-anonymous",
+        "twelve-step",
+        "bill-w"
+      ],
+      "trend": false
+    },
+    {
+      "id": "jellinek",
+      "term_ko": "E. M. 옐리네크",
+      "term_en": "E. M. Jellinek",
+      "category": "figures",
+      "definition": "알코올중독을 단계적으로 진행하는 질병으로 체계화한 초기 연구자로, 질병모델의 학문적 토대를 놓았다. 그의 '옐리네크 곡선'은 중독 진행과 회복을 단계로 설명한다.",
+      "example": "예: 중독을 도덕 문제가 아니라 진행성 질병으로 바라보게 한 학문적 전환의 기점.",
+      "see_also": [
+        "disease-model",
+        "alcohol",
+        "addiction"
+      ],
+      "trend": false
+    },
+    {
+      "id": "benjamin-rush",
+      "term_ko": "벤저민 러시",
+      "term_en": "Benjamin Rush",
+      "category": "figures",
+      "definition": "18~19세기 미국의 의사로, 만성 과음을 도덕적 타락이 아니라 일종의 질병으로 본 초기 인물이다. 중독의 질병적 이해의 역사적 선구로 언급된다.",
+      "example": "예: 중독을 질병으로 보는 관점의 아주 이른 역사적 뿌리.",
+      "see_also": [
+        "disease-model",
+        "alcohol"
+      ],
+      "trend": false
+    },
+    {
+      "id": "carl-jung",
+      "term_ko": "카를 융",
+      "term_en": "Carl Jung",
+      "category": "figures",
+      "definition": "심층심리학자로, 알코올중독의 회복에 영적 전환이 필요할 수 있다는 견해가 AA의 형성에 영향을 준 것으로 알려져 있다. 중독과 영성·의미의 연결을 시사한 인물로 인용된다.",
+      "example": "예: 중독 회복에서 의미·영적 차원의 중요성을 시사한 사상적 배경.",
+      "see_also": [
+        "alcoholics-anonymous",
+        "twelve-step",
+        "recovery"
+      ],
+      "trend": false
+    },
+    {
+      "id": "nora-volkow",
+      "term_ko": "노라 볼코",
+      "term_en": "Nora Volkow",
+      "category": "figures",
+      "definition": "중독의 뇌과학을 이끈 대표적 연구자로, 도파민·보상회로와 전전두피질 조절 손상을 통해 중독을 뇌질환으로 규명하는 연구를 주도해 왔다. 질병모델의 현대 신경과학적 근거를 대중화한 인물이다.",
+      "example": "예: 뇌영상 연구로 '중독은 뇌의 병'이라는 이해를 과학적으로 뒷받침한 사례.",
+      "see_also": [
+        "brain-addiction",
+        "disease-model",
+        "mesolimbic-dopamine"
+      ],
+      "trend": false
+    },
+    {
+      "id": "george-koob",
+      "term_ko": "조지 쿠브",
+      "term_en": "George Koob",
+      "category": "figures",
+      "definition": "중독의 스트레스·부적 강화 차원을 강조한 신경과학자로, 알로스타시스와 '중독의 어두운 면' 개념으로 후기 중독을 설명했다. 쾌락 추구를 넘어선 중독 동기의 전환을 조명했다.",
+      "example": "예: 중독 후기의 동기가 쾌락에서 고통 회피로 옮겨간다는 이해를 정립한 연구.",
+      "see_also": [
+        "allostasis",
+        "reward-deficiency",
+        "reinforcement"
+      ],
+      "trend": false
+    },
+    {
+      "id": "stanton-peele",
+      "term_ko": "스탠턴 필",
+      "term_en": "Stanton Peele",
+      "category": "figures",
+      "definition": "질병모델을 비판하며 중독을 학습된·맥락적 경험으로 이해해야 한다고 주장한 심리학자다. 중독 이해의 다원적 관점과 자연 회복 가능성을 강조해 논쟁을 이끌었다.",
+      "example": "예: '한 번 중독은 영원한 질병'이라는 관점에 도전하며 회복의 다양성을 강조한 시각.",
+      "see_also": [
+        "disease-model",
+        "recovery",
+        "addiction"
+      ],
+      "trend": false
+    }
+  ]
+}
