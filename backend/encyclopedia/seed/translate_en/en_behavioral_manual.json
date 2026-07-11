@@ -1,0 +1,614 @@
+{
+ "behavioral-addiction": {
+  "definition_en": "A behavioral addiction is compulsive, out-of-control engagement in a behavior—gambling, gaming, shopping, sex, internet use—despite mounting harm, with no substance involved. It can produce craving, tolerance, withdrawal-like distress and relapse much like substance addiction, and it engages the same brain reward circuitry. So far only gambling disorder and gaming disorder are formally recognized (ICD-11); the rest remain under study.",
+  "example_en": "Someone who cannot stop gambling shows the same structure as a substance user: rising 'doses,' failed attempts to quit, and distress when they stop.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Behavioral addiction refers to losing control over a specific behavior—gambling, gaming, shopping, sex, internet use—and repeating it compulsively without any substance involved. The core issue is not the type of behavior but the loss of control. Something once enjoyed crosses into addiction when a person feels anxious without it and cannot stop despite knowing it is harmful."
+   },
+   {
+    "h": "What it shares with substance addiction",
+    "p": "Behavioral addiction closely resembles substance addiction. It shows the same need for ever-stronger stimulation (tolerance), restlessness when stopped (a withdrawal-like response), repeated relapse, and involvement of the brain's reward circuitry. As these parallels accumulated, the concept of addiction expanded from substances to behaviors."
+   },
+   {
+    "h": "Where the line falls",
+    "p": "Not all absorption is addiction. Being passionately engaged differs from losing control and watching life fall apart. The test is not how much time is spent but functional impairment—whether work, relationships, health, and finances actually collapse, and whether one can stop. Because of this, the same hours may be a hobby for one person and a disorder for another."
+   },
+   {
+    "h": "How to view it",
+    "p": "Behavioral addiction cannot be reduced to a matter of willpower. Reward learning in the brain, failures of stress coping, and environments (apps and industries) engineered to induce the behavior all work together. Recovery therefore requires not just resolve but alternative coping, environmental adjustment, and supportive relationships."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Diagnostic status and boundaries",
+    "p": "Currently only gambling disorder (DSM-5, ICD-11) and gaming disorder (ICD-11) are officially recognized behavioral addictions. Shopping, sex, and internet use are addressed clinically and in research but are not established as independent diagnoses. This reflects scholarly caution against the concept inflation implied by 'anything in excess is addiction.' How far to extend the disease label remains actively debated."
+   },
+   {
+    "h": "Shared mechanisms and debate",
+    "p": "Behavioral addiction is explained through reward prediction and incentive salience, a shift from impulsivity to compulsivity (dual-process), and negative reinforcement (escaping distress). Yet there is disagreement over whether it involves the same neural damage as substances or merely similar learning patterns. Critics warn that over-pathologizing risks turning normal passion into disease."
+   },
+   {
+    "h": "Lived-experience and social view",
+    "p": "Many behavioral addictions progress 'in secret,' leaving no physical trace and wearing socially accepted disguises (investment, diligence, hobby). This delays both the person's own recognition and others' awareness. At the same time, there is growing insistence that the responsibility of environments designed to keep people repeating—the attention economy, the gambling industry—should not be reduced to individual pathology."
+   }
+  ]
+ },
+ "compulsive-computer-use": {
+  "definition_en": "Compulsive computer or internet use is loss of control over online activity to the point of functional harm. The field has shifted from a single 'internet addiction' label toward activity-specific disorders—gaming, social media, pornography, shopping—because it is usually what you do online, not the internet itself, that becomes the problem.",
+  "example_en": "The issue is rarely 'too much internet' but losing control over one specific activity such as gaming or social media.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Compulsive computer and internet use broadly refers to the inability to control online activity, causing impairment of daily functioning. Early discussions treated it as a single concept of 'internet addiction,' but the now-dominant view is that the essence lies not in the internet itself but in what one does on it—gaming, social media, pornography, shopping."
+   },
+   {
+    "h": "Why the single concept faded",
+    "p": "The internet is merely a tool; the object over which control is actually lost is a specific activity. The same hours online may be work for one person and compulsive gaming for another. Specifying which activity control is lost over is therefore more accurate—and more useful for treatment—than a lumped-together diagnosis of 'using the internet too much.'"
+   },
+   {
+    "h": "How it appears",
+    "p": "Use far exceeds planned time, attempts to cut back repeatedly fail, leaving the internet brings restlessness, and sleep, study, work, and face-to-face relationships get pushed aside. Cravings for a specific activity (gaming, social media, etc.) are triggered throughout daily life."
+   },
+   {
+    "h": "Response",
+    "p": "The key is to specify 'what' control is lost over, then target that activity. Self-management of use time and situations, adjusting notifications and accessibility, providing alternatives for the emotional needs the activity substituted for, and managing co-occurring depression and anxiety all work together."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Conceptual history and classification",
+    "p": "'Internet addiction' was proposed in the 1990s but drew criticism for lumping heterogeneous activities together, shifting toward activity-specific differentiation. Currently the only official diagnosis is gaming disorder, while social media and pornography remain at the research stage. The core issue is whether to view the various internet-mediated problems as one disorder or as separate behavioral addictions."
+   },
+   {
+    "h": "Medium or object",
+    "p": "The axis of debate is whether the internet is the 'object of addiction' or a 'channel mediating access.' From the latter view, the internet is a facilitator that has dramatically increased the accessibility and intensity of existing behavioral addictions—gambling, sex, shopping—and the real substance of the problem lies in the activities beneath it."
+   },
+   {
+    "h": "Measurement and over-diagnosis risk",
+    "p": "Self-report scales are criticized for insufficiently distinguishing 'usage amount' from 'disorder,' which can inflate prevalence. In an era where digital use has become the default of daily life, strictly applying the criteria that separate normal use from pathology (functional impairment, loss of control) is key to preventing over-diagnosis."
+   }
+  ]
+ },
+ "compulsive-shopping": {
+  "definition_en": "Compulsive buying is repeated, out-of-control purchasing beyond need that causes financial and emotional distress. Not an established diagnosis, it is discussed on the impulse-control and addiction spectrum, with tension before buying and relief or pleasure at the moment of purchase. Mobile and live commerce have sharply raised its accessibility and risk.",
+  "example_en": "Impulsively buying things you don't need whenever your mood dips, feeling briefly better, then facing regret and debt.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Compulsive shopping is a behavioral pattern of repeatedly consuming beyond need without controlling the buying impulse, resulting in financial and emotional distress. Though not established as an official diagnosis, it is discussed within the impulse-control and addiction spectrum."
+   },
+   {
+    "h": "How it appears",
+    "p": "A cycle repeats: tension and craving heighten before buying, relief and pleasure arise at the moment of purchase, and regret and guilt soon follow. One buys to soothe emotions rather than out of need, and may not properly use or even hide the purchased items."
+   },
+   {
+    "h": "Why it is a problem",
+    "p": "Impulsive consumption leads to debt and financial ruin, and the resulting shame and relationship conflict again prompt consumption, creating a vicious cycle. With the spread of mobile and live commerce, instant purchase is possible anytime, anywhere, greatly raising accessibility and risk."
+   },
+   {
+    "h": "Response",
+    "p": "Becoming aware of what emotion (emptiness, anxiety, depression) the consumption tries to soothe is key. Restricting payment methods and shopping-app access, setting a waiting period before purchase, providing alternative emotional regulation, and managing co-occurring depression and anxiety all work together."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Diagnostic status",
+    "p": "Compulsive buying is not an independent diagnosis in DSM or ICD. Views differ on where to place it—impulse-control disorder, behavioral addiction, or a secondary symptom of depression and anxiety. This ambiguity is a factor complicating clinical intervention and research."
+   },
+   {
+    "h": "The emotion-regulation hypothesis",
+    "p": "Compulsive shopping is commonly understood as self-medicating behavior to relieve negative emotion. The pleasure of purchase temporarily lifts mood but soon reverses into guilt, and this emotional cycle reinforces repetition. Approaches addressing the underlying emotion rather than suppressing consumption are therefore emphasized."
+   },
+   {
+    "h": "The role of the consumption environment",
+    "p": "Live and mobile commerce, hyper-personalized recommendations, one-click payment, and interest-free installments remove the friction between impulse and purchase. The role of an environment designed to maximize consumption—making compulsive shopping hard to see as a matter of individual disposition alone—is growing."
+   }
+  ]
+ },
+ "crypto-trading-addiction": {
+  "definition_en": "Cryptocurrency and trading addiction is compulsive, gambling-like high-frequency trading of crypto, stocks or similar assets. Round-the-clock markets, extreme volatility, and apps that gamify trading heighten the risk, and it is often understood through the gambling-disorder frame. The socially sanctioned label of 'investing' tends to delay recognition of the problem.",
+  "example_en": "Watching price charts all night, impulsively buying and selling, and taking bigger risks to recover losses.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Cryptocurrency and investment addiction refers to a behavioral pattern of compulsively repeating high-frequency trading of crypto, stocks, and the like in a gambling-like manner. Wearing the legitimate guise of investment, it easily delays recognition of the problem."
+   },
+   {
+    "h": "How it progresses",
+    "p": "A 24-hour open market and extreme volatility prompt constant checking and trading. Once the thrill of a big gain is imprinted, one gradually takes greater risks, and when losses occur, chasing trades to recover them take hold. One checks price screens all night, and daily life and sleep become governed by the trading rhythm."
+   },
+   {
+    "h": "Why it is close to gambling",
+    "p": "Short-term high-frequency trading often relies on immediate excitement and luck rather than analysis, making it structurally close to gambling. App designs that gamify trading (easy one-tap trades, notifications, celebration effects) fuel impulse. It is commonly understood through the frame of gambling disorder."
+   },
+   {
+    "h": "Response",
+    "p": "Distinguishing 'investment' from 'compulsive trading' is the first step. Setting limits on trade frequency and amount, restricting real-time alerts and app access, becoming aware of the loss-recovery psychology, and the recovery principles of gambling disorder (self-help groups, financial cleanup, supportive relationships) apply equally."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "The boundary between investment and pathology",
+    "p": "Not all active trading is addiction. The criteria separating planned investment from compulsive trading that collapses one's life are, again, loss of control and functional impairment. The social legitimacy of 'investment' delaying recognition of pathology is the particularity of this domain."
+   },
+   {
+    "h": "Structural facilitating factors",
+    "p": "A 24-hour market, unlimited volatility, leverage, gamified trading interfaces, and social media's 'to-the-moon' narratives combine to fuel impulsive trading. This shows that not only individual disposition but market and platform structures amplify risk."
+   },
+   {
+    "h": "An early stage of research",
+    "p": "Cryptocurrency and investment addiction is not an independent diagnosis and is studied at an early stage as a subtype or adjacent phenomenon of gambling disorder. With standard scales and prevalence data lacking, it is often approached by borrowing the framework of gambling disorder research."
+   }
+  ]
+ },
+ "cybersex-addiction": {
+  "definition_en": "Cybersex or pornography addiction is compulsive, out-of-control consumption of online sexual content or activity. Its defining features are unlimited, instant, anonymous access, with debate over how heavy use may shift expectations and response. Its diagnostic status sits within the compulsive sexual behavior framework and the evidence base is still developing.",
+  "example_en": "Spending far more time on online sexual content than intended, unable to cut back, with daily life affected.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Cybersex and pornography addiction refers to compulsively consuming or engaging in online sexual content or activity to the point of losing control. Its core backdrop is the internet's traits of unlimited, instant, anonymous access."
+   },
+   {
+    "h": "How it progresses",
+    "p": "One spends far more time on sexual content than planned, attempts to cut back repeatedly fail, and one may come to seek ever-stronger stimulation. Daily life, sleep, and relationships are disrupted, and the resulting shame again prompts escapist use."
+   },
+   {
+    "h": "Why online is different",
+    "p": "Unlike offline, being able to access unlimited content instantly and anonymously makes control difficult. Endless novelty sustains craving, and anonymity weakens the brakes. There is also discussion that frequent use may alter sexual expectations and responses."
+   },
+   {
+    "h": "Response",
+    "p": "Access control (filters, device management), awareness of the emotional triggers prompting use, managing underlying loneliness, anxiety, and trauma, and recovering healthy intimacy all work together. An environment that lowers shame and enables asking for help is the premise of recovery."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Diagnostic status and evidence",
+    "p": "Cybersex and pornography addiction is addressed within the frame of compulsive sexual behavior disorder and is not established as an independent diagnosis. The criteria separating 'problematic pornography use' from pathological addiction, and the sufficiency of evidence, remain under discussion."
+   },
+   {
+    "h": "The trap of moral incongruence",
+    "p": "Studies point out that 'moral incongruence' about pornography use (a conflict between one's values and behavior) can create distress and a 'sense of addiction' independent of actual addiction. Distinguishing self-stigma from actual loss of control is therefore clinically important."
+   },
+   {
+    "h": "Neural and behavioral debate",
+    "p": "Research on whether frequent pornography use alters reward responses and expectations exists, but results are mixed and causation is not established. Cautious interpretation is required regarding whether one can speak of the same neural damage as substance addiction."
+   }
+  ]
+ },
+ "exercise-addiction": {
+  "definition_en": "Exercise addiction is compulsive continuation of exercise despite injury, exhaustion or disruption to daily life, with withdrawal-like anxiety when stopping. A prime example of a health behavior turning pathological, it often co-occurs with eating disorders or body-image concerns. Control and functional impairment separate devoted exercise from compulsive exercise.",
+  "example_en": "Told to rest for an injury, the person cannot stop exercising out of anxiety and worsens the injury.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Exercise addiction refers to compulsively continuing exercise despite injury, fatigue, and daily disruption, and experiencing withdrawal-like symptoms (anxiety, restlessness) when stopping. It is a leading case of a health behavior turning into pathology."
+   },
+   {
+    "h": "How it differs from dedication",
+    "p": "Exercising hard differs from being addicted to exercise. Healthy exercise allows rest depending on circumstances, but exercise addiction cannot stop due to anxiety even when one should rest for injury. It becomes a problem when exercise is not for life, but life is reorganized around exercise and other areas are pushed aside."
+   },
+   {
+    "h": "What gets entangled",
+    "p": "Exercise addiction commonly appears together with eating disorders and body-image (appearance, shape) problems. In this case exercise becomes a compulsive means of body control or anxiety relief rather than health. Over-exercising despite injury actually harms the body."
+   },
+   {
+    "h": "Response",
+    "p": "The goal is to recover control and balance, not to eliminate exercise. Including rest in the plan, directly addressing the anxiety and body-image problems exercise had been managing, and jointly evaluating a suspected eating disorder. The key is preserving exercise's positive functions while escaping compulsion."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Primary and secondary",
+    "p": "Exercise addiction is sometimes distinguished into 'primary,' where it is an end in itself, and 'secondary,' where it accompanies an eating disorder as a means of weight and shape control. In the secondary case, recovery is difficult through exercise control alone without addressing the underlying eating disorder."
+   },
+   {
+    "h": "Diagnostic status",
+    "p": "Exercise addiction is not an official diagnosis and is studied as a candidate behavioral addiction. Addiction criteria such as withdrawal-like symptoms, tolerance, and loss of control are applied to exercise, but setting the criteria that separate healthy high-intensity training from pathology is tricky."
+   },
+   {
+    "h": "Tension with health discourse",
+    "p": "Because exercise is a socially encouraged health behavior, its pathological form is hard to recognize and easily praised. Given that social-media workout-verification culture may fuel over-exercising and body-image compulsion, the boundary between health discourse and pathology must be examined together."
+   }
+  ]
+ },
+ "food-addiction": {
+  "definition_en": "Food addiction is repeated craving and loss-of-control eating of specific foods, especially high-sugar or high-fat ones. Reward-circuit involvement similar to substance addiction is reported, but it is not an established standalone diagnosis and overlaps with eating disorders such as binge-eating disorder. The engineering of highly processed foods is argued to fuel it.",
+  "example_en": "Compulsively eating a specific ultra-processed food even when not hungry, followed by guilt.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Food addiction refers to a state of recurrent craving for and loss of control over eating certain foods high in sugar and fat. Involvement of reward circuitry similar to substance addiction is reported, but it is not established as an independent diagnosis and overlaps conceptually with eating disorders such as binge-eating disorder."
+   },
+   {
+    "h": "How it appears",
+    "p": "A cycle repeats: one cannot control eating a certain food (mainly ultra-processed) even without hunger and continues, then feels guilt. Attempts to cut back fail, and strong craving for a specific food is triggered by stress or emotion."
+   },
+   {
+    "h": "Is food designed?",
+    "p": "There is a point that highly processed foods combine sugar, fat, salt, and texture to maximize the brain's reward. Strong rewards rare in natural foods fuel repeated eating. This is the point that makes it hard to see as a matter of individual restraint alone."
+   },
+   {
+    "h": "Response",
+    "p": "Identifying 'what the trigger is' (a specific food, emotion, or situation) and addressing the link between that food and emotion is key. Extreme restriction can actually prompt binging and requires caution, and if an eating disorder is suspected, professional help is needed. Providing alternatives for emotional regulation is the fundamental response."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Concept and diagnostic debate",
+    "p": "Debate continues over whether 'food addiction' is a distinct entity, another expression of binge-eating disorder, or an addiction to a specific ingredient (sugar, etc.). Tools like the Yale Food Addiction Scale attempt measurement by applying substance-addiction criteria to food, but the very validity of the concept remains unresolved."
+   },
+   {
+    "h": "Ingredient or behavior",
+    "p": "One core debate is whether the object of addiction is a 'specific ingredient like sugar' or the 'act of eating.' Animal studies sometimes show addiction-like patterns with intermittent sugar intake, but evidence for ingredient-specific addiction in humans is still contested."
+   },
+   {
+    "h": "Relationship with eating disorders",
+    "p": "The food-addiction concept overlaps substantially with binge-eating disorder. Careful review is therefore required of whether treating it as a separate 'addiction' is clinically useful or adds stigma. An approach that does not encourage extreme dietary restriction is especially important."
+   }
+  ]
+ },
+ "gaming-disorder": {
+  "definition_en": "Gaming disorder is impaired control over gaming, prioritizing it over other activities, and continued or escalating play despite harm, typically for 12 months or more. It is formally recognized in ICD-11, while DSM-5-TR lists 'internet gaming disorder' only as a condition for further study. The vast majority of players are not disordered—functional impairment is the key threshold.",
+  "example_en": "Neglecting school, work, sleep and meals to keep playing, unable to cut back as relationships fall apart.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Gaming disorder is losing control over gaming, prioritizing it over other activities, and continuing or escalating despite negative consequences. Diagnosis is typically considered when it persists 12 months or more with clear impairment of daily functioning. Most gamers do not meet this threshold; the core issue is not 'playing a lot' but loss of control and functional impairment."
+   },
+   {
+    "h": "How it progresses",
+    "p": "Games densely provide clear goals, immediate rewards, achievement, and social connection. When gaming fills the competence and belonging hard to obtain in reality, absorption gradually tilts toward escape and compulsion. Sleep, meals, study, and work get postponed for gaming's sake; cutting back brings anxiety and irritability; and relationship conflict and declining performance follow."
+   },
+   {
+    "h": "Why it is a problem",
+    "p": "Games themselves are not bad—the problem arises when control is lost. Especially in growing adolescents, when sleep, study, and relationships collapse together, development can be affected. Risk grows when gambling-like elements such as loot boxes are combined. Conversely, healthy gaming also has the positive functions of stress relief and social connection, which must be considered together."
+   },
+   {
+    "h": "Response and recovery",
+    "p": "Recovery focuses on regaining control rather than quitting gaming entirely. Important elements include skills to self-manage time and situations, recovering in reality the needs (competence, belonging) gaming had substituted for, and addressing co-occurring depression, anxiety, and ADHD. For adolescents, family understanding and alternative activities work better than punishment and blocking alone."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "International differences over diagnosis",
+    "p": "Gaming disorder is a formal diagnosis in ICD-11, but DSM-5-TR places 'internet gaming disorder' in an appendix as requiring further study. This difference reflects the sufficiency of evidence, concerns about pathologizing normal leisure, and entangled cultural and industry interests. The sensitivity and specificity of diagnostic criteria and the variance in prevalence estimates remain under discussion."
+   },
+   {
+    "h": "Risk factors and comorbidity",
+    "p": "Gaming disorder rarely comes alone; it commonly co-occurs with depression, anxiety, ADHD, and social anxiety. It is therefore clinically important to distinguish whether gaming is cause or consequence—whether it is self-medication soothing distress. Its combination with gambling-like revenue models such as loot boxes is flagged as a new risk blurring the boundary between gaming and gambling disorders."
+   },
+   {
+    "h": "Social and industry context",
+    "p": "Games are precisely engineered at the design stage to maximize absorption (variable rewards, progression locks, social-pressure mechanisms). Approaches emphasizing only individual restraint therefore have limits, and the role of user-protection design and regulation is discussed alongside. In Korea, where the game industry and health policy are sharply intertwined, the social controversy over introducing a disease code is a particularly prominent case."
+   }
+  ]
+ },
+ "hypersexuality": {
+  "definition_en": "Hypersexuality is an excessive heightening of sexual urges and activity that dominates daily life and relationships. It is the core feature of compulsive sexual behavior disorder and can also arise as a side effect of certain neurological conditions or medications, so identifying the cause matters.",
+  "example_en": "Unexpected hypersexuality emerging as a side effect in someone taking dopamine-agonist medication for Parkinson's disease.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Hypersexuality refers to a state in which sexual urges and activity are excessively heightened, dominating daily life and relationships. It is a core feature of compulsive sexual behavior disorder, but importantly, its causes are diverse."
+   },
+   {
+    "h": "The cause is not one thing",
+    "p": "Hypersexuality may be part of compulsive sexual behavior disorder, but it can also appear from certain neurological conditions (brain injury, dementia, etc.) or as a side effect of specific drugs (e.g., dopamine agonists used to treat Parkinson's disease). It may also appear as a symptom of a manic episode. Differentiating the cause is therefore the starting point of treatment."
+   },
+   {
+    "h": "Why differentiation matters",
+    "p": "Because the response differs entirely by cause. If it is a drug side effect, medication adjustment; if mania, mood-disorder treatment; if compulsive sexual behavior, psychotherapy comes first. Treating it as a single problem by looking only at the surface symptom misses accurate help."
+   },
+   {
+    "h": "Response",
+    "p": "First confirm the underlying cause through medical and psychiatric evaluation. If a neurological condition, drug, or mood disorder is the background, address that; if compulsive sexual behavior, combine psychotherapy with emotional and relational recovery. A non-stigmatizing approach to finding the cause is key."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Symptom or disorder",
+    "p": "Hypersexuality is more accurately understood as a 'symptom' appearing across various conditions than as an independent diagnosis in itself. The scope of differential diagnosis is broad—compulsive sexual behavior disorder, bipolar mania, neurocognitive disorder, iatrogenic (drug-induced), and more."
+   },
+   {
+    "h": "Iatrogenic hypersexuality",
+    "p": "Impulse-control disorders (hypersexuality, pathological gambling, compulsive shopping, etc.) appearing during dopamine-agonist treatment in Parkinson's disease and the like offer a clinical window into how the dopamine reward circuit is involved in addictive behavior. That it improves with drug adjustment underscores the importance of differentiating cause."
+   },
+   {
+    "h": "Caution in assessment",
+    "p": "Because the 'normal' range of sexual desire varies greatly by individual and culture, judging hypersexuality must be done carefully by synthesizing loss of control and functional impairment, and the presence of an underlying cause, rather than frequency itself."
+   }
+  ]
+ },
+ "loot-boxes": {
+  "definition_en": "Loot boxes are randomized in-game purchases whose uncertainty and reward structure closely resemble gambling. By blurring the line between gaming and gambling they raise particular concern about youth exposure, and some countries regulate or classify them as gambling. They embody the variable-ratio reinforcement at the heart of gambling.",
+  "example_en": "A teen repeatedly buying randomized items to get a wanted character and spending far more than intended.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Loot boxes are products purchased within games to obtain random rewards. In that one pays money without knowing what will come out, the uncertainty of outcome and the reward structure closely resemble gambling."
+   },
+   {
+    "h": "Why it resembles gambling",
+    "p": "Loot boxes carry the very 'variable reward' structure of 'not knowing when the desired item will appear.' This is the same principle that makes gambling addictive. One repeatedly pays until the desired item appears, and the psychology of 'just a little more' inflates spending. It is the point where the boundary between gaming and gambling blurs."
+   },
+   {
+    "h": "Why it is a problem",
+    "p": "That adolescents can easily access them is a major concern. Without recognizing it as gambling, they may learn gambling-like behavior through in-game purchases, and cases of spending larger amounts than expected occur. Packaged as a fun element, it is hard to recognize as a problem."
+   },
+   {
+    "h": "Response and regulation",
+    "p": "Some countries have regulated loot boxes or effectively classified them as gambling. User-protection measures such as odds-disclosure obligations, age restrictions, and spending limits are discussed. For guardians, restricting payments and helping children understand the gambling-like nature of loot boxes is necessary."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "The frontier of gaming-gambling convergence",
+    "p": "Loot boxes are the leading case blurring the boundary between gaming and gambling disorders. Studies report a correlation between loot-box spending and problem gambling, and the issue is whether they serve as a 'gateway' that teaches gambling-like cognition and behavior to adolescents early."
+   },
+   {
+    "h": "The regulatory dilemma",
+    "p": "Whether to define loot boxes as gambling differs by country. Judgment shifts depending on how the legal definition of gambling—'can it be exchanged for real currency,' 'is the outcome purely chance'—is applied. That it is a core revenue model of the industry complicates regulation."
+   },
+   {
+    "h": "Design ethics",
+    "p": "Loot boxes mobilize psychological devices such as engineered near-misses, dazzling acquisition effects, and limited-time sales. Given that such design targets especially the impulses of immature users, it is treated as a matter of design ethics and user protection beyond individual responsibility."
+   }
+  ]
+ },
+ "online-gambling": {
+  "definition_en": "Online and mobile gambling is betting via the internet and apps, marked by 24/7 access, live in-play betting, and the explosive growth of sports betting. With physical barriers gone and instant repeat betting in hand, the slide into problem gambling can be fast, and losses shown only as on-screen numbers dull the sense of loss. Regulators are tightening advertising and access.",
+  "example_en": "Placing live bets on a match through an app and losing control far faster than at a physical venue.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Online and mobile gambling is gambling via the internet and apps, characterized by 24-hour accessibility, real-time in-play betting, and the rapid growth of sports betting. Being able to bet instantly and repeatedly in one's hand without going to a physical venue is a decisive difference from traditional gambling."
+   },
+   {
+    "h": "What makes it more dangerous",
+    "p": "As access barriers vanish, the gap between impulse and action disappears. One can repeat anytime, any amount, 24 hours a day, and because losses appear only as numbers on a screen rather than actual cash, the sense of losing dulls. Real-time betting induces repeated wagering throughout a match. These elements make the shift to risky gambling far faster."
+   },
+   {
+    "h": "How it progresses",
+    "p": "Even starting as light fun, the instant, repeatable structure rapidly erodes control. Chasing losses occurs more easily than offline, and problems surface late because losses are easy to hide. Possible anytime, anywhere with just a smartphone, it seeps into all of daily life."
+   },
+   {
+    "h": "Response",
+    "p": "Blocking access (self-exclusion programs, payment and app restrictions) is even more important than offline. The recovery principles of gambling disorder in general—cognitive-behavioral therapy, self-help groups, financial cleanup, supportive relationships—apply equally, and devices that physically cut off 24-hour access are especially effective."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Structural risk factors",
+    "p": "The risk of online gambling stems not only from individual disposition but from the medium's structure. Unlimited accessibility, rapid betting cycles, in-play and micro-betting, and the abstraction of loss (digital balance) combine to accelerate loss of control. This shows that 'which medium one uses' influences the degree of risk."
+   },
+   {
+    "h": "Regulation and advertising",
+    "p": "Countries increasingly strengthen online gambling advertising, access hours, betting limits, and self-exclusion systems. The surge in sports-betting advertising and youth exposure is a particular policy issue. The boundary between legal and illegal markets and cross-border services make regulation difficult."
+   },
+   {
+    "h": "Digital traces and intervention potential",
+    "p": "Paradoxically, online gambling leaves betting data, creating great potential to detect risky patterns early and intervene. 'Responsible gambling' designs that impose risk-signal monitoring and intervention duties on operators are discussed, but conflicts of interest with revenue structures are noted as limits."
+   }
+  ]
+ },
+ "pathological-gambling": {
+  "definition_en": "Gambling disorder is persistent, recurrent gambling that seriously impairs personal, family and work life. It was the first non-substance addiction to be formally recognized—moved into the addictive-disorders category in DSM-5 and classified as a disorder due to addictive behavior in ICD-11. Hallmarks include chasing losses, escalating stakes (tolerance), restlessness when stopping (withdrawal), and lies to conceal the behavior.",
+  "example_en": "Chasing losses with ever-larger bets, piling up debt, and lying to hide it until family and job are gone.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Gambling disorder is the inability to stop gambling despite clearly harmful consequences. The problem is not losing large sums of money but losing control over gambling while other areas of life—work, relationships, health, finances—collapse and one continues anyway. What separates recreational gambling from the disorder is not 'how much was wagered' but 'whether one can stop.'"
+   },
+   {
+    "h": "How it progresses",
+    "p": "It often begins as fun or stress relief. An early big win becomes strongly imprinted, and stakes gradually rise to recapture the same excitement (tolerance). When losses start, 'just one more and I can win it back' leads to chasing losses, which snowballs the damage. Trying to cut back brings restlessness and anxiety, and as lies and debt pile up to raise funds and hide the problem, relationships and trust collapse."
+   },
+   {
+    "h": "Why it is hard to quit",
+    "p": "Gambling's reward comes 'when you least expect it.' This irregular reward structure trains the brain's reward circuitry most powerfully, so even while losing, the expectation that 'next time might win' sustains the behavior. Notably, the dopamine response is greater in the uncertain moment of 'might win' than in actually winning. Online and mobile gambling, available 24 hours with instant repetition and losses shown only as numbers on a screen, accelerates this dramatically."
+   },
+   {
+    "h": "Is recovery possible",
+    "p": "Yes. Gambling disorder is understood as a chronic, relapsing condition, and relapse is treated not as failure but as part of the recovery process. Cognitive-behavioral therapy, motivational interviewing, self-help communities such as GA, sorting out financial and legal problems, and family recovery work powerfully together. Admitting the problem—moving past denial—is the first gateway, and recovery lasts when it happens within supportive relationships rather than alone."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "A historic shift in classification",
+    "p": "Until DSM-IV, pathological gambling belonged to impulse-control disorders. In DSM-5 (2013) it moved into the 'substance-related and addictive disorders' category, becoming the first officially recognized non-substance addiction. This followed accumulated evidence that the behavior shows reward-circuit mechanisms, course, and treatment response similar to substances. ICD-11 likewise classifies it under 'disorders due to addictive behaviors' alongside gaming disorder. This shift opened the door to later discussions of gaming, internet, and other behavioral addictions."
+   },
+   {
+    "h": "Theoretical perspectives and debate",
+    "p": "Gambling disorder is explained by a dual-process model shifting from impulsivity-driven (early) to compulsivity-driven (late), by reward prediction error and incentive salience, and cognitively by distorted beliefs such as the illusion of control and the gambler's fallacy as maintaining factors. Meanwhile, perspectives differ on whether to view it as a 'disease' or as learned, contextual behavior, and there is a critical view that the gambling industry's design (variable rewards, engineered near-misses) is an environmental cause as significant as individual pathology."
+   },
+   {
+    "h": "Lived-experience and recovery view",
+    "p": "From the recovery field's perspective, the core suffering of gambling disorder lies less in monetary loss than in the collapse of self-control and trust. Chasing losses often operates through a psychology of 'trying to restore a shattered self-image' rather than the loss itself, so financial cleanup alone does not complete recovery—rebuilding relationships, meaning, and self-efficacy is also needed. The thickness of recovery capital—supportive community, stable routine, trusting relationships—greatly determines whether relapse occurs."
+   }
+  ]
+ },
+ "sexual-addiction": {
+  "definition_en": "Sexual addiction is repeated, out-of-control sexual thoughts, urges or behavior that harm functioning and relationships. ICD-11 classifies it as compulsive sexual behavior disorder within impulse-control disorders, and whether to call it an addiction is debated. It calls for careful handling that separates moral judgment from clinical pathology.",
+  "example_en": "Repeated sexual behavior that clearly harms relationships and work, yet the person cannot stop and suffers as a result.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Sexual addiction refers to the inability to control sexual thoughts, urges, and behaviors, repeating them to the harm of one's functioning and relationships. It is a domain requiring careful approach that separates moral judgment from pathology."
+   },
+   {
+    "h": "How to distinguish it",
+    "p": "The core is not the frequency or type of sexual behavior but loss of control and the resulting real harm. It becomes a problem when repeated sexual behavior clearly damages relationships, work, and health, yet one cannot stop and suffers because of it. Not confusing personal values and culture with pathology is important."
+   },
+   {
+    "h": "What gets entangled",
+    "p": "Sexual addiction is often entangled with emotional pain, loneliness, trauma, and depression and anxiety, and sexual behavior may function as a channel to soothe that pain. Shame is great, making it hard to ask for help, and this silence sustains the problem."
+   },
+   {
+    "h": "Response",
+    "p": "Non-stigmatizing understanding and professional help are needed. Treatment addressing the underlying emotional pain and trauma, skills to manage the triggers of compulsive behavior, and recovering healthy intimacy become the goals. An approach including the partner and relationship often helps."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Diagnostic classification and naming debate",
+    "p": "ICD-11 classifies this as 'compulsive sexual behavior disorder' under impulse-control disorders, and scholarly opinion is divided on whether to call it 'addiction.' Criticism that the name 'sexual addiction' promotes pathologization and stigma clashes with advocacy that it reflects clinical reality."
+   },
+   {
+    "h": "Boundaries with morality and culture",
+    "p": "Because judgments about sexual behavior are heavily shaped by culture and values, what counts as 'excessive' is itself contested. Religious and moral guilt risks being confused with actual loss of control, so diagnosis must rest on functional impairment and loss of control rather than cultural norms."
+   },
+   {
+    "h": "Comorbidity and underlying factors",
+    "p": "Compulsive sexual behavior commonly co-occurs with trauma, attachment injury, and depression and anxiety. From this view, sexual behavior is often understood as an attempt to fill deficits in emotional regulation and attachment, and treatment addressing the relational and emotional structure beneath, not just the surface behavior, is emphasized."
+   }
+  ]
+ },
+ "short-form-video": {
+  "definition_en": "Short-form video describes the compulsive viewing driven by endless autoplay and algorithmic recommendation, where each clip delivers an immediate reward. 'Dopamine' is popular shorthand for this reward loop, and 'dopamine fasting' emerged as a loosely evidenced backlash. It is best understood as a cultural and behavioral phenomenon affecting attention and time-use rather than a clinical diagnosis.",
+  "example_en": "Meaning to watch for ten minutes, then losing two hours to autoplay and feeling drained and unfocused afterward.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Short-form and dopamine culture refers to the phenomenon where endless autoplay of short videos and algorithmic recommendation deliver repeated instant rewards, inducing compulsive viewing. More accurately, it is understood as a cultural and behavioral phenomenon affecting attention and time use, rather than a clinical diagnosis."
+   },
+   {
+    "h": "How it works",
+    "p": "Before one clip ends the next plays automatically, and the algorithm learns from the user's reactions to serve ever more captivating videos. Because each clip delivers a short, strong stimulus instantly, 'just a little' stretches into long stretches. 'Dopamine' is used as a popular term for this instant-reward loop."
+   },
+   {
+    "h": "Why it is discussed",
+    "p": "There is concern that getting used to short, strong stimulation may make long, slow immersion—reading, deep conversation, study—feel comparatively boring. Emptiness after viewing and declining concentration are commonly reported. Yet it is prudent to treat this as a matter of habit and attention rather than declaring it a clinical 'addiction.'"
+   },
+   {
+    "h": "Response",
+    "p": "Small environmental and habit adjustments—turning off autoplay, setting viewing time, noticing unconscious scrolling—are effective. Popular discourse like 'dopamine fasting' has emerged, but its scientific basis is loose, so a perspective of restoring balance rather than eliminating stimulation is more realistic."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "'Dopamine' as a scientific expression",
+    "p": "The popular terms 'dopamine addiction' and 'dopamine fasting' are neuroscientifically inaccurate simplifications. Dopamine relates to reward prediction, motivation, and salience rather than pleasure itself, and quitting a particular activity does not 'reset dopamine.' The gap between the term's popular spread and its scientific reality characterizes this topic."
+   },
+   {
+    "h": "Evidence on attention and cognition",
+    "p": "Research on how overconsumption of short videos affects sustained attention, delay of gratification, and learning is ongoing, and conclusions are not yet settled. There are many correlational studies and limited evidence on causation and long-term effects, so cautious interpretation is required over strong assertions."
+   },
+   {
+    "h": "Design and autonomy",
+    "p": "Autoplay and recommendation algorithms are designed to make the user's decision to stop difficult. This phenomenon is therefore better seen as an interaction of design and individual habit than a matter of individual willpower. Designs that return control to users (autoplay off by default, etc.) are discussed as alternatives."
+   }
+  ]
+ },
+ "smartphone-addiction": {
+  "definition_en": "Problematic smartphone use is loss of control over phone use that harms daily life, sleep, relationships or safety. The prevailing view is that specific apps—social media, games, video—are the real problem rather than the device itself, sometimes with anxiety when separated from the phone (nomophobia).",
+  "example_en": "Repeatedly checking the phone while driving or mid-conversation, and feeling intense anxiety when the battery dies.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Smartphone overdependence refers to the inability to control smartphone use, harming daily life, sleep, relationships, and safety. The dominant view holds that the essence lies not in the device itself but in specific activities within it—gaming, social media, video."
+   },
+   {
+    "h": "How it appears",
+    "p": "One checks the screen repeatedly for no reason, cannot put the phone down even during conversation, meals, or driving, and reacts instantly to notifications. Nomophobia—feeling anxious when separated from the device—may accompany it. The habit of reaching for the phone right before sleep and immediately upon waking erodes sleep."
+   },
+   {
+    "h": "Why it is a problem",
+    "p": "Constant checking scatters attention, lowering concentration and productivity, and harms sleep quality. Even in face-to-face situations, attention drawn to the phone lowers relationship quality. There are also risks tied directly to safety, such as using while driving. The essence of the problem is the reversal of the device from a tool that helps life into an object that dominates it."
+   },
+   {
+    "h": "Response",
+    "p": "Specifying 'what' control is lost over and targeting that app comes first. Minimizing notifications, separating from the device in certain times and places (no phones at the table or in the bedroom), reviewing screen time, and providing alternative activities all help. Rather than blaming the device, addressing the activities within it and the emotional needs they fill is key."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Not the 'device' but the 'activity'",
+    "p": "Studies suggest the real substance of the problem is not the smartphone itself but specific activities on it (social media, gaming, video). The expression 'smartphone addiction' is therefore a convenience, and actual intervention is more effective when done at the activity level."
+   },
+   {
+    "h": "Limits of measurement and concept",
+    "p": "Smartphone overdependence scales are criticized for insufficiently separating usage amount from pathology. In an era where the smartphone has become an essential tool for work, relationships, and life, setting the criteria for what counts as 'overdependence' is tricky."
+   },
+   {
+    "h": "Nomophobia and anxiety",
+    "p": "Anxiety when separated from the device (nomophobia) is understood less as an independent disorder than as a manifestation, via the smartphone, of dependence on connection, information, and safety together with underlying anxiety. This view suggests addressing underlying needs and anxiety rather than controlling the device."
+   }
+  ]
+ },
+ "social-media-addiction": {
+  "definition_en": "Social media addiction is compulsive, out-of-control checking and use of social platforms that harms daily life and mental health. Not a formal diagnosis, it is widely studied because attention-economy design—notifications, infinite scroll, likes, intermittent rewards—targets the brain's reward system. Social comparison, fear of missing out (FOMO), and links to adolescent mental health are central concerns.",
+  "example_en": "Reflexively opening an app the moment you wake and just before sleep, scrolling endlessly until focus and rest fall apart.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Social media addiction refers to compulsively checking and using social platforms without control, harming daily life and mental health. Though not an official diagnosis, it is widely studied given that the 'attention economy' design of notifications, infinite scroll, likes, and intermittent rewards targets the brain's reward system."
+   },
+   {
+    "h": "How it works",
+    "p": "Social media combines unpredictable rewards (who might have reacted) with social approval (likes, followers) to reinforce repeated checking. Infinite scroll removes stopping points, and notifications constantly pull attention. As a result, 'a quick check' stretches into long stretches, and fear of missing out (FOMO) prompts reconnection."
+   },
+   {
+    "h": "Why it is a problem",
+    "p": "Excessive use erodes sleep, concentration, and face-to-face relationships. In particular, social comparison—measuring oneself against others' edited lives—is linked to anxiety, depression, and lowered self-esteem, and its relation to adolescent mental health is a major issue. The paradox at its core is that a tool meant for connection becomes instead a source of isolation and comparison."
+   },
+   {
+    "h": "Response",
+    "p": "The goal is use that restores relationships rather than total disconnection. Turning off notifications, managing use time, blocking during certain hours, training to notice unconscious checking habits, and recovering face-to-face relationships and offline activities all help. Healthily meeting the needs for recognition and belonging that social media had filled, elsewhere, is the fundamental response."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Diagnostic status and measurement",
+    "p": "Social media addiction is not listed in standard diagnostic systems and is studied through various self-report scales. The criteria separating 'problematic use' from 'addiction' and the relation between usage amount and functional impairment remain under discussion, and prevalence estimates swing widely due to the heterogeneity of instruments."
+   },
+   {
+    "h": "Debate over the direction of causation",
+    "p": "The correlation between social media use and worsening adolescent mental health is repeatedly observed, but the direction and size of causation are debated. Whether use causes depression, depressed people use more, or a third factor explains both remains unresolved, and there are counterarguments that effect sizes are exaggerated."
+   },
+   {
+    "h": "The attention economy and design responsibility",
+    "p": "Platforms are designed to maximize time spent, and discussion is growing over responsibility for the effects of this design on vulnerable users. Beyond a view that emphasizes only individual restraint, structural responses such as user-protection design, transparency, and age policies are rising as policy agendas."
+   }
+  ]
+ },
+ "work-addiction": {
+  "definition_en": "Work addiction (workaholism) is compulsive over-immersion in work at the expense of rest, health and relationships, with anxiety or guilt when away from work. Not a formal diagnosis, it is examined in burnout and addiction research and is easily overlooked because it is socially praised. The pathology lies in compulsive loss of control, not in achievement itself.",
+  "example_en": "Unable to switch off even on days off, feeling anxious, and failing to cut work hours as health and family suffer.",
+  "body_en": [
+   {
+    "h": "What it is",
+    "p": "Work addiction refers to compulsively immersing oneself in work at the sacrifice of rest, health, and relationships, and feeling anxiety and guilt when away from work. The core is not achievement itself but compulsion that has lost control."
+   },
+   {
+    "h": "How it differs from passion",
+    "p": "Loving work differs from being addicted to it. Healthy immersion allows rest when not working, but work addiction cannot stop because rest brings anxiety and guilt. One cannot reduce working hours even as health and relationships collapse, and tries to prove self-worth through work."
+   },
+   {
+    "h": "Why it is hard to notice",
+    "p": "Work addiction is easily praised socially. Packaged as diligence and dedication, neither the person nor those around them see it as a problem. Yet beneath it, burnout, worsening sleep and health, and alienation from family progress. Social recognition delaying problem awareness is the feature of this addiction."
+   },
+   {
+    "h": "Response",
+    "p": "Becoming aware of what work substitutes for (avoiding anxiety, self-worth, a sense of control) is the starting point. Setting boundaries between work and rest, practicing finding self-worth outside performance, managing burnout and anxiety, and recovering relationships all work together. The influence of an organizational culture that glorifies long hours must also be considered."
+   }
+  ],
+  "advanced_en": [
+   {
+    "h": "Diagnostic status and relation to burnout",
+    "p": "Work addiction is not an official diagnosis and is discussed overlapping with burnout, compulsion, and anxiety. If burnout is the 'result' of exhaustion, work addiction is closer to the 'process' racing toward that exhaustion. Their relationship, boundary, and measurement are research issues."
+   },
+   {
+    "h": "Heterogeneity of motivation",
+    "p": "The motivations of work addiction are not singular. Different underlying motives—achievement orientation, perfectionism, anxiety avoidance, self-esteem compensation—manifest as similar behavior. Because of this heterogeneity, 'working a lot' alone cannot define pathology."
+   },
+   {
+    "h": "Cultural and structural context",
+    "p": "Work addiction is reinforced not only by individual disposition but by a culture that treats long hours as virtue, by performance-ism, and by an always-connected work environment. In societies with high work hours and competitive pressure such as Korea, its social implications are especially large, demanding structural discussion beyond individual treatment."
+   }
+  ]
+ }
+}
