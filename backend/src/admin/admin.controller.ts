@@ -12,7 +12,10 @@ export class AdminController {
 
   // 간단한 비밀번호 인증
   private checkAuth(authHeader: string) {
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin1234';
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword) {
+      throw new Error('ADMIN_PASSWORD 환경변수가 설정되지 않았습니다.');
+    }
     if (authHeader !== `Bearer ${adminPassword}`) {
       throw new UnauthorizedException('관리자 인증 실패');
     }
