@@ -9,6 +9,8 @@ import * as path from 'path';
 import OpenAI from 'openai';
 import { Article } from '../articles/article.entity';
 import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS } from './sourceConfig';
+import { summarizeKoreanDeepSeek } from './deepseek_summary';
+import { extractArticleBody } from './article_extractor';
 
 type RssItem = {
   title?: string;
@@ -477,8 +479,10 @@ async function generateKoreanPack(originalTitle: string, content: string, lang: 
   const isForeign = lang !== 'ko';
 
   if (!isForeign) {
-    const summary = enforceThreeLines(content.slice(0, 400), originalTitle);
-    const teaser = summary.split('\n').slice(0, 2).join(' ');
+    // DeepSeek 충실한 한 문단 요약 → 실패 시 기존 3줄 폴백
+    let summary = await summarizeKoreanDeepSeek(originalTitle, content);
+    if (!summary) summary = enforceThreeLines(content.slice(0, 400), originalTitle);
+    const teaser = summary.replace(/\s+/g, ' ').slice(0, 220);
     return { titleKo: originalTitle, teaser, summary, keywords: [] };
   }
 
@@ -610,8 +614,18 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       if (isDuplicateInSession(rawTitle)) continue;
 
       const publishedAt = parsePublishedAt(it);
-      const rawContent = extractContent(it) || rawTitle;
-      const googleUrl = it.link ? String(it.link) : null;
+      // 1) RSS 스니펫 → 2) 부실하면 원문 본문 추출 → 3) 최후 제목
+      let rawContent = extractContent(it);
+      const itemLink = it.link ? String(it.link) : '';
+      if ((!rawContent || rawContent.length < 200) && itemLink) {
+        const body = await extractArticleBody(itemLink);
+        if (body && body.length > (rawContent || '').length) {
+          console.log(`  │   📄 원문추출 ${body.length}자`);
+          rawContent = body;
+        }
+      }
+      if (!rawContent) rawContent = rawTitle;
+      const googleUrl = itemLink || null;
       const baseUrl = googleUrl || conf.url;
       const sourceUrl = baseUrl.includes('news.google.com') ? await resolveFinalUrl(baseUrl) : baseUrl;
 
@@ -643,7 +657,11 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
 
       const titleKo = isForeign ? pack.titleKo.trim() : rawTitle;
       const teaserKo = pack.teaser || null;
-      const summaryKo = isForeign ? pack.summary : enforceThreeLines(pack.summary || rawContent.slice(0, 400), rawTitle);
+      const summaryKo = isForeign
+        ? pack.summary
+        : (pack.summary && pack.summary.trim()
+            ? pack.summary
+            : enforceThreeLines(rawContent.slice(0, 400), rawTitle));
       const keywordsKo = pack.keywords || [];
 
       // 번역 후 다시 중독 관련성 체크
@@ -776,7 +794,9 @@ async function finalizeStatoryCandidate(
   const teaserKo = pack.teaser || null;
   const summaryKo = isForeign
     ? pack.summary
-    : enforceThreeLines(pack.summary || rawContent.slice(0, 400), rawTitle);
+    : (pack.summary && pack.summary.trim()
+        ? pack.summary
+        : enforceThreeLines(rawContent.slice(0, 400), rawTitle));
   const keywordsKo = pack.keywords.length > 0 ? pack.keywords : partial.keywords;
 
   if (isForeign) {
