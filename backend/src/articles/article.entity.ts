@@ -60,6 +60,12 @@ export class Article {
   @Column({ name: 'is_foreign', type: 'boolean', default: false })
   isForeign: boolean;
 
+  @Column({ name: 'source_type', type: 'varchar', length: 32, nullable: true })
+  sourceType: string | null;
+
+  @Column({ name: 'outlet_id', type: 'varchar', length: 100, nullable: true })
+  outletId: string | null;
+
   @Column({ type: 'simple-array', nullable: true })
   keywords: string[] | null;
 

@@ -1,18 +1,18 @@
 // ============================================================
 // 중독뉴스 요약: DeepSeek 기반 한국어 "충실한 한 문단" 요약
-// env: DEEPSEEK_API_KEY (Statory 값 재사용)
+// 외국어 → 한국어 번역+요약 통합. env: DEEPSEEK_API_KEY
 // ============================================================
 import OpenAI from 'openai';
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
-const deepseekAvailable = !!DEEPSEEK_KEY;
+export const deepseekAvailable = !!DEEPSEEK_KEY;
 
 const deepseek = deepseekAvailable
   ? new OpenAI({ apiKey: DEEPSEEK_KEY, baseURL: 'https://api.deepseek.com' })
   : null;
 
-const SUMMARY_SYSTEM =
+const SUMMARY_SYSTEM_KO =
   '너는 중독(도박·약물·알코올·행동중독 등) 전문 뉴스 큐레이터다. ' +
   '독자가 원문 기사에 가지 않고도 내용을 충분히 파악할 수 있도록, 한국어로 충실한 요약을 쓴다. ' +
   '중독 뉴스 원문에는 도박 광고 등 유해 요소가 많아, 요약만으로 이해가 끝나는 것이 독자에게 이롭다. ' +
@@ -24,19 +24,42 @@ const SUMMARY_SYSTEM =
   '과장·선정성·자극적 표현 배제. 담담하고 정확하게. 도박·약물 사용을 조장하거나 미화하지 말 것. ' +
   '민감한 주제(자살·자해 등)는 방법·수치를 넣지 말 것. 출력은 요약 본문만.';
 
+const SUMMARY_SYSTEM_TRANSLATE =
+  SUMMARY_SYSTEM_KO +
+  ' 원문이 외국어(영어·일본어 등)이면 반드시 한국어로 번역·요약하라. ' +
+  '출력은 JSON만: {"titleKo":"한국어 제목","summary":"한국어 한 문단 요약"}.';
+
+export type DeepSeekPack = { titleKo: string; summary: string };
+
 /**
  * DeepSeek 로 한국어 충실 요약(한 문단) 생성.
+ * translate=true 이면 제목도 한국어로 번역해 함께 반환.
  * 실패 시 null
  */
 export async function summarizeKoreanDeepSeek(
   title: string,
   content: string,
-): Promise<string | null> {
+  opts?: { translate?: boolean },
+): Promise<DeepSeekPack | null> {
   if (!deepseekAvailable || !deepseek) return null;
   const body = (content || '').trim();
+  const translate = !!opts?.translate;
 
   let userMsg: string;
-  if (body.length > 200) {
+  if (translate) {
+    if (body.length > 200) {
+      userMsg =
+        `다음 외국어 기사를 한국어로 번역·요약하라. JSON만 출력.\n\n` +
+        `원제: ${title}\n\n본문:\n${body.slice(0, 4000)}`;
+    } else if (body.length > 30) {
+      userMsg =
+        `다음 외국어 기사 정보를 한국어로 번역·요약하라. 확인된 내용만 3~5문장. JSON만.\n\n` +
+        `원제: ${title}\n\n본문(일부): ${body}`;
+    } else {
+      userMsg =
+        `외국어 제목만 있다. 한국어 제목으로 옮기고, 주제를 2~3문장으로만 요약(사실 창작 금지). JSON만.\n\n원제: ${title}`;
+    }
+  } else if (body.length > 200) {
     userMsg =
       `다음 기사를 5~8문장의 충실한 한 문단으로 요약하라.\n\n` +
       `제목: ${title}\n\n본문:\n${body.slice(0, 4000)}`;
@@ -56,7 +79,7 @@ export async function summarizeKoreanDeepSeek(
       const r = await deepseek.chat.completions.create({
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: 'system', content: SUMMARY_SYSTEM },
+          { role: 'system', content: translate ? SUMMARY_SYSTEM_TRANSLATE : SUMMARY_SYSTEM_KO },
           { role: 'user', content: userMsg },
         ],
         temperature: 0.4,
@@ -64,13 +87,31 @@ export async function summarizeKoreanDeepSeek(
       });
       let text = (r.choices?.[0]?.message?.content || '').trim();
       if (!text) continue;
+
+      if (translate) {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]) as { titleKo?: unknown; summary?: unknown };
+            const titleKo = String(parsed.titleKo || '').trim();
+            let summary = String(parsed.summary || '').trim();
+            summary = summary.replace(/\n{2,}/g, '\n').trim();
+            if (titleKo && summary.length >= 10) return { titleKo, summary };
+          } catch { /* fallthrough */ }
+        }
+        // JSON 실패 시 본문만 요약으로
+        text = text.replace(/\n{2,}/g, '\n').trim();
+        if (text.length >= 10) return { titleKo: title, summary: text };
+        continue;
+      }
+
       text = text.replace(/\n{2,}/g, '\n').trim();
       const firstLine = text.split('\n')[0].trim();
       if (isTitleEcho(firstLine, title)) {
         text = text.split('\n').slice(1).join('\n').trim() || text;
       }
       if (text.length < 10) continue;
-      return text;
+      return { titleKo: title, summary: text };
     } catch (e) {
       if (attempt === 2) {
         console.warn('[deepseek summary] 실패:', (e as Error).message);

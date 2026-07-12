@@ -6,11 +6,11 @@ import { DataSource } from 'typeorm';
 import Parser from 'rss-parser';
 import * as fs from 'fs';
 import * as path from 'path';
-import OpenAI from 'openai';
 import { Article } from '../articles/article.entity';
-import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS } from './sourceConfig';
-import { summarizeKoreanDeepSeek } from './deepseek_summary';
+import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS, SourceType } from './sourceConfig';
+import { summarizeKoreanDeepSeek, deepseekAvailable } from './deepseek_summary';
 import { extractArticleBody } from './article_extractor';
+import { matchesAddictionKeywords } from './addictionFilter';
 
 type RssItem = {
   title?: string;
@@ -46,6 +46,8 @@ type Candidate = {
   isForeign: boolean;
   blocked: boolean;
   blockedReason: string | null;
+  sourceType: SourceType;
+  outletId: string;
 };
 
 const parser = new Parser<RssItem>({
@@ -55,26 +57,18 @@ const parser = new Parser<RssItem>({
 });
 
 // ---------- 설정값 ----------
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_FOREIGN_ARTICLES = Number(process.env.MAX_FOREIGN_ARTICLES ?? 100);  // 50→100 증가
 const ENABLE_IMAGE_EXTRACT = process.env.ENABLE_IMAGE_EXTRACT !== 'false';
-const MIN_ADDICTION_SCORE = 2;  // 최소 2개 키워드 매칭 필요
+const MIN_ADDICTION_SCORE = 2;  // 카테고리 분류용 참고(채택 게이트는 addictionFilter)
 const SKIP_DAILY_CHECK = process.env.SKIP_DAILY_CHECK === 'true';  // true면 하루 1회 제한 해제
 
-let openai: OpenAI | null = null;
-let isOpenAIAvailable = false;
 let foreignArticleCount = 0;
-
-function initializeOpenAI() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey.trim() === '' || !apiKey.startsWith('sk-')) {
-    console.log('⚠️  OpenAI API 비활성화\n');
-    return false;
-  }
-  openai = new OpenAI({ apiKey });
-  console.log(`✅ OpenAI initialized`);
-  return true;
-}
+let crawlStats = {
+  itemsSeen: 0,
+  filterPass: 0,
+  filterSkip: 0,
+  failedFeeds: [] as string[],
+};
 
 let apiCallCount = 0;
 let lastResetTime = Date.now();
@@ -478,55 +472,30 @@ function compactKeywords(keywords: unknown): string[] {
 async function generateKoreanPack(originalTitle: string, content: string, lang: DetectedLang, defaultCategory: CategoryName): Promise<AiPack> {
   const isForeign = lang !== 'ko';
 
-  if (!isForeign) {
-    // DeepSeek 충실한 한 문단 요약 → 실패 시 기존 3줄 폴백
-    let summary = await summarizeKoreanDeepSeek(originalTitle, content);
-    if (!summary) summary = enforceThreeLines(content.slice(0, 400), originalTitle);
-    const teaser = summary.replace(/\s+/g, ' ').slice(0, 220);
-    return { titleKo: originalTitle, teaser, summary, keywords: [] };
+  // DeepSeek 통일: 한국어 요약 / 외국어 번역+요약
+  const pack = await summarizeKoreanDeepSeek(originalTitle, content, { translate: isForeign });
+  if (pack?.summary) {
+    const teaser = pack.summary.replace(/\s+/g, ' ').slice(0, 220);
+    return {
+      titleKo: isForeign ? pack.titleKo : originalTitle,
+      teaser,
+      summary: pack.summary,
+      keywords: [],
+    };
   }
 
-  if (!isOpenAIAvailable || !openai) {
+  // 안전망: DeepSeek 실패 시
+  if (isForeign) {
     return { titleKo: '', teaser: '', summary: '', keywords: [] };
   }
-
-  try {
-    await rateLimitedDelay();
-    const categoryList = VALID_CATEGORIES.join(', ');
-    const rule = `JSON만 출력. {"titleKo":"...","teaser":"...","lines":["...","...","..."],"keywords":["..."],"category":"..."}`;
-    const prompt = `외국어 기사를 한국어로 번역/요약. [원문제목] ${originalTitle} [본문] ${content.slice(0, 800)} [규칙] ${rule} [카테고리] ${categoryList}`;
-
-    const res = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      messages: [
-        { role: 'system', content: '중독 뉴스 전문 번역가. JSON만 출력. 한국어로 작성.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.2,
-      max_tokens: 500,
-    });
-
-    const raw = res.choices[0]?.message?.content?.trim();
-    if (!raw) return { titleKo: '', teaser: '', summary: '', keywords: [] };
-
-    const parsed = safeJsonParse<{ titleKo?: unknown; teaser?: unknown; lines?: unknown; keywords?: unknown; category?: unknown }>(raw);
-    if (parsed && typeof parsed.titleKo === 'string' && Array.isArray(parsed.lines)) {
-      const titleKo = String(parsed.titleKo || '').trim();
-      const teaser = String(parsed.teaser || '').trim();
-      const lines = stripTitleEcho(parsed.lines.map(x => String(x || '').trim()).filter(s => s.length > 0), originalTitle);
-      const summary = enforceThreeLines(lines.join('\n'), originalTitle);
-      const keywords = compactKeywords(parsed.keywords);
-      const rawCategory = typeof parsed.category === 'string' ? parsed.category.trim() : '';
-      const suggestedCategory = isValidCategory(rawCategory) ? rawCategory : normalizeCategory(rawCategory);
-      return { titleKo, teaser: teaser || summary.split('\n').slice(0, 2).join(' '), summary, keywords, suggestedCategory };
-    }
-
-    return { titleKo: '', teaser: '', summary: '', keywords: [] };
-  } catch (e: any) {
-    console.error('  ⚠️ OpenAI failed:', e?.message || e);
-    return { titleKo: '', teaser: '', summary: '', keywords: [] };
-  }
+  const summary = enforceThreeLines(content.slice(0, 400), originalTitle);
+  const teaser = summary.replace(/\s+/g, ' ').slice(0, 220);
+  return { titleKo: originalTitle, teaser, summary, keywords: [] };
 }
+
+/* OpenAI 외국어 경로 보존(미사용) — DeepSeek로 이전됨
+async function generateKoreanPackOpenAI(...) { ... }
+*/
 
 // ---------- URL resolve ----------
 async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
@@ -601,6 +570,9 @@ function normalizeRssFeedUrl(raw: string): string {
 // ---------- Crawl one ----------
 async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
   try {
+    if (conf.verifiedByFetch === false) {
+      console.log(`  ├─ [${conf.id}] verified_by_fetch=false — 시도 후 실패 시 스킵`);
+    }
     console.log(`  ├─ [${conf.id}] Parsing RSS...`);
     const feed = await parser.parseURL(normalizeRssFeedUrl(conf.url));
     const items = (feed.items || []).slice(0, 30);
@@ -609,19 +581,27 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
     const out: Candidate[] = [];
 
     for (const it of items) {
+      crawlStats.itemsSeen++;
       const rawTitle = normalizeText(it.title || '');
       if (!rawTitle) continue;
       if (isDuplicateInSession(rawTitle)) continue;
 
       const publishedAt = parsePublishedAt(it);
-      // 1) RSS 스니펫 → 2) 부실하면 원문 본문 추출 → 3) 최후 제목
+      // 1) RSS 스니펫 → 중독 필터 → (필요 시) 원문 추출 후 재검사 → 요약 재료
       let rawContent = extractContent(it);
       const itemLink = it.link ? String(it.link) : '';
-      if ((!rawContent || rawContent.length < 200) && itemLink) {
+
+      let addictionOk = matchesAddictionKeywords(rawTitle, rawContent || '');
+      if (!addictionOk && (rawContent || '').length >= 200) {
+        crawlStats.filterSkip++;
+        continue;
+      }
+      if ((!addictionOk || !rawContent || rawContent.length < 200) && itemLink) {
         const body = await extractArticleBody(itemLink);
         if (body && body.length > (rawContent || '').length) {
           console.log(`  │   📄 원문추출 ${body.length}자`);
           rawContent = body;
+          addictionOk = matchesAddictionKeywords(rawTitle, rawContent);
         }
       }
       if (!rawContent) rawContent = rawTitle;
@@ -631,24 +611,29 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
 
       if (shouldBlockByDomain(sourceUrl, googleUrl || undefined)) continue;
 
+      // 채택 게이트: addictionFilter (strong≥1 && negative==0)
+      if (!addictionOk) {
+        crawlStats.filterSkip++;
+        continue;
+      }
+      if (isPromotionalAd(rawTitle, rawContent)) {
+        crawlStats.filterSkip++;
+        continue;
+      }
+      crawlStats.filterPass++;
+
       const lang = detectLanguage(rawTitle + ' ' + rawContent);
       const isForeign = lang !== 'ko';
 
       if (isForeign) {
         if (MAX_FOREIGN_ARTICLES === 0) continue;
         if (foreignArticleCount >= MAX_FOREIGN_ARTICLES) continue;
-        if (!isOpenAIAvailable || !openai) continue;
+        if (!deepseekAvailable) continue;
       }
-
-      // v4.0: 강화된 중독 필터 (점수 기반) — 전문 소스/Google은 임계 완화
-      const minScore = minAddictionPassScore(conf);
-      const addictionScore = calculateAddictionScore(rawTitle, rawContent);
-      if (addictionScore < minScore) continue;
 
       const shortTitle = rawTitle.length > 48 ? rawTitle.slice(0, 48) + '...' : rawTitle;
       const prefix = lang === 'ko' ? '[KO]' : `[${lang.toUpperCase()}→KO]`;
-      const scoreInfo = `(점수:${addictionScore})`;
-      console.log(`  │   ${prefix} ${scoreInfo} ${shortTitle}`);
+      console.log(`  │   ${prefix} ${shortTitle}`);
 
       const pack = await generateKoreanPack(rawTitle, rawContent, lang, normalizeCategory(conf.category));
       if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) continue;
@@ -664,12 +649,6 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
             : enforceThreeLines(rawContent.slice(0, 400), rawTitle));
       const keywordsKo = pack.keywords || [];
 
-      // 번역 후 다시 중독 관련성 체크
-      if (isForeign) {
-        const translatedScore = calculateAddictionScore(`${titleKo}\n${summaryKo}`, keywordsKo.join(' '));
-        if (translatedScore < minScore) continue;
-      }
-
       let finalCategory: CategoryName = pack.suggestedCategory 
         ? normalizeCategory(pack.suggestedCategory)
         : classifyCategory(titleKo, summaryKo + ' ' + keywordsKo.join(' '), normalizeCategory(conf.category));
@@ -681,13 +660,15 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
         keywords: keywordsKo, category: finalCategory, region: conf.region, source: conf.sourceName,
         sourceUrl, googleUrl, imageUrl, origin: 'crawler', isTop: false, isFeature: false,
         publishedAt, lang, isForeign, blocked: false, blockedReason: null,
+        sourceType: conf.sourceType, outletId: conf.outletId,
       });
     }
 
     console.log(`  └─ [${conf.id}] Done: ${out.length} collected\n`);
     return out;
   } catch (e: any) {
-    console.error(`  └─ [${conf.id}] ❌ ERROR:`, e?.message || e);
+    console.error(`  └─ [${conf.id}] ❌ ERROR (스킵 후 계속):`, e?.message || e);
+    crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName}): ${e?.message || e}`);
     return [];
   }
 }
@@ -759,12 +740,14 @@ function statoryItemToCandidate(item: Record<string, unknown>, query: string): C
     isForeign: lang !== 'ko',
     blocked: false,
     blockedReason: null,
+    sourceType: 'aggregator',
+    outletId: collectMethod || 'statory',
   };
 }
 
 async function finalizeStatoryCandidate(
   partial: Candidate,
-  minScore: number,
+  _minScore: number,
 ): Promise<Candidate | null> {
   const rawTitle = normalizeText(partial.originalTitle || partial.title);
   if (!rawTitle) return null;
@@ -779,11 +762,11 @@ async function finalizeStatoryCandidate(
   if (isForeign) {
     if (MAX_FOREIGN_ARTICLES === 0) return null;
     if (foreignArticleCount >= MAX_FOREIGN_ARTICLES) return null;
-    if (!isOpenAIAvailable || !openai) return null;
+    if (!deepseekAvailable) return null;
   }
 
-  const addictionScore = calculateAddictionScore(rawTitle, rawContent);
-  if (addictionScore < minScore) return null;
+  if (!matchesAddictionKeywords(rawTitle, rawContent)) return null;
+  if (isPromotionalAd(rawTitle, rawContent)) return null;
 
   const pack = await generateKoreanPack(rawTitle, rawContent, lang, partial.category);
   if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) return null;
@@ -798,14 +781,6 @@ async function finalizeStatoryCandidate(
         ? pack.summary
         : enforceThreeLines(rawContent.slice(0, 400), rawTitle));
   const keywordsKo = pack.keywords.length > 0 ? pack.keywords : partial.keywords;
-
-  if (isForeign) {
-    const translatedScore = calculateAddictionScore(
-      `${titleKo}\n${summaryKo}`,
-      keywordsKo.join(' '),
-    );
-    if (translatedScore < minScore) return null;
-  }
 
   const finalCategory: CategoryName = pack.suggestedCategory
     ? normalizeCategory(pack.suggestedCategory)
@@ -830,7 +805,7 @@ async function finalizeStatoryCandidate(
 
 async function loadStatoryCandidates(): Promise<Candidate[]> {
   const base = process.env.STATORY_API_URL?.trim();
-  if (!base) return [];
+  if (!base || !/^https?:\/\//i.test(base)) return [];
 
   try {
     const query = process.env.STATORY_NEWS_QUERY?.trim() ?? '중독';
@@ -910,6 +885,7 @@ async function saveCandidates(list: Candidate[]) {
         googleUrl: c.googleUrl, imageUrl: c.imageUrl, origin: c.origin, isTop: c.isTop,
         isFeature: c.isFeature, publishedAt: c.publishedAt, lang: c.lang, isForeign: c.isForeign,
         keywords: safeKeywords, blocked: c.blocked, blockedReason: c.blockedReason,
+        sourceType: c.sourceType, outletId: c.outletId,
       });
       await repo.save(ent);
       inserted++;
@@ -923,6 +899,7 @@ async function saveCandidates(list: Candidate[]) {
           googleUrl: c.googleUrl, imageUrl: c.imageUrl, origin: c.origin, isTop: c.isTop,
           isFeature: c.isFeature, publishedAt: c.publishedAt, lang: c.lang, isForeign: c.isForeign,
           keywords: null, blocked: c.blocked, blockedReason: c.blockedReason,
+          sourceType: c.sourceType, outletId: c.outletId,
         });
         await repo.save(ent);
         inserted++;
@@ -939,10 +916,10 @@ async function main() {
   const startTime = Date.now();
   
   console.log('\n========================================');
-  console.log('🚀 Addicted News Crawler v4.0 START');
-  console.log('   - 중독 전문 소스 중심');
-  console.log('   - 강화된 중독 필터 (점수제)');
-  console.log('   - 외국 기사 비율 증가');
+  console.log('🚀 Addicted News Crawler v5.0 START');
+  console.log('   - 세계신문 60 + 국내 10 + 국내구글 소수');
+  console.log('   - 중독 키워드 필터 + DeepSeek 한/영 요약');
+  console.log('   - DeepSeek:', deepseekAvailable ? 'ON' : 'OFF');
   console.log('   - 하루 1회 제한: ' + (SKIP_DAILY_CHECK ? '해제' : '적용'));
   console.log('========================================\n');
 
@@ -954,11 +931,23 @@ async function main() {
     return;
   }
 
-  isOpenAIAvailable = initializeOpenAI();
   await ds.initialize();
   console.log('✅ Database connected\n');
 
-  const crawlSources = [...SOURCES].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+  let crawlSources = [...SOURCES].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+  const typeFilter = (process.env.CRAWL_SOURCE_TYPES || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (typeFilter.length) {
+    crawlSources = crawlSources.filter((s) => typeFilter.includes(s.sourceType));
+    console.log(`⚠️  CRAWL_SOURCE_TYPES=${typeFilter.join(',')} — ${crawlSources.length}개\n`);
+  }
+  const maxSrc = Number(process.env.CRAWL_MAX_SOURCES || 0);
+  if (maxSrc > 0) {
+    crawlSources = crawlSources.slice(0, maxSrc);
+    console.log(`⚠️  CRAWL_MAX_SOURCES=${maxSrc} — ${crawlSources.length}개만 실행\n`);
+  }
   const all: Candidate[] = [];
   console.log(`📡 Crawling ${crawlSources.length} sources...\n`);
 
@@ -983,13 +972,21 @@ async function main() {
     categoryStats[a.category] = (categoryStats[a.category] || 0) + 1;
   }
 
+  const passRate = crawlStats.itemsSeen > 0
+    ? ((crawlStats.filterPass / crawlStats.itemsSeen) * 100).toFixed(1)
+    : '0.0';
   console.log('========================================');
   console.log(`✅ END in ${Math.floor(elapsed/60)}분 ${elapsed%60}초`);
   console.log(`   수집: ${all.length}개 (한국 ${koreanCount}, 외국 ${foreignCount})`);
   const krRatioPct = all.length > 0 ? (koreanCount / all.length) * 100 : 0;
   console.log(`   한국 콘텐츠 비중: ${krRatioPct.toFixed(1)}% (목표 참고 30%)`);
   console.log(`   저장: ${result.inserted}개, 이미지: ${result.withImage}개`);
-  console.log(`   API 호출: ${apiCallCount}회`);
+  console.log(`   필터: 후보 ${crawlStats.itemsSeen} → 통과 ${crawlStats.filterPass} / 스킵 ${crawlStats.filterSkip} (통과율 ${passRate}%)`);
+  if (crawlStats.failedFeeds.length) {
+    console.log(`   실패 피드 ${crawlStats.failedFeeds.length}건 (스킵):`);
+    for (const f of crawlStats.failedFeeds) console.log(`     - ${f}`);
+  }
+  console.log(`   DeepSeek 호출 추적(apiCallCount): ${apiCallCount}회`);
   console.log('\n   카테고리별:');
   for (const [cat, count] of Object.entries(categoryStats)) {
     console.log(`     - ${cat}: ${count}개`);

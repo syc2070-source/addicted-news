@@ -1,0 +1,74 @@
+{
+  "feeds": [
+    {
+      "outlet_id": "연합뉴스",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://www.yna.co.kr/rss/news.xml",
+      "items_seen": 120
+    },
+    {
+      "outlet_id": "뉴시스",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://newsis.com/RSS/society.xml",
+      "items_seen": 100
+    },
+    {
+      "outlet_id": "SBS",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=01&plink=RSSREADER",
+      "items_seen": 29
+    },
+    {
+      "outlet_id": "경향신문",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://www.khan.co.kr/rss/rssdata/total_news.xml",
+      "items_seen": 50
+    },
+    {
+      "outlet_id": "한겨레",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://www.hani.co.kr/rss/",
+      "items_seen": 30
+    },
+    {
+      "outlet_id": "동아일보",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://rss.donga.com/total.xml",
+      "items_seen": 50
+    },
+    {
+      "outlet_id": "국민일보",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://www.kmib.co.kr/rss/data/kmibRssAll.xml",
+      "items_seen": 30
+    },
+    {
+      "outlet_id": "오마이뉴스",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "http://rss.ohmynews.com/rss/ohmynews.xml",
+      "items_seen": 20
+    },
+    {
+      "outlet_id": "프레시안",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://www.pressian.com/api/v3/site/rss/news",
+      "items_seen": 25
+    },
+    {
+      "outlet_id": "세계일보",
+      "region_id": "kr",
+      "lang_primary": "ko",
+      "rss_url": "https://www.segye.com/Articles/RSSList/segye_recent.xml",
+      "items_seen": 20
+    }
+  ]
+}
