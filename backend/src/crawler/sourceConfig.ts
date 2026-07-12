@@ -1,5 +1,5 @@
 // backend/src/crawler/sourceConfig.ts
-// v5.0 — 세계신문 60 + 국내 검증 10 + 국내 구글(중독키워드) 소수
+// v5.1 — 세계신문 60 + 국내 10 + 중독전문 4 + 국내 구글 소수
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -15,7 +15,7 @@ export type CategoryName =
   | '게임·디지털중독'
   | '중독사회와 회복';
 
-export type SourceType = 'world_press' | 'kr_press' | 'aggregator';
+export type SourceType = 'world_press' | 'kr_press' | 'specialty' | 'aggregator';
 
 export interface SourceConfig {
   id: string;
@@ -52,6 +52,7 @@ function loadJson<T>(name: string): T | null {
 function categoryForRegion(regionId: string): CategoryName {
   // 기본 버킷 — 키워드 필터 통과 후 classifyCategory 가 재분류할 수 있음
   if (regionId === 'kr') return '중독사회와 회복';
+  if (regionId === 'specialty') return '중독사회와 회복';
   return '중독사회와 회복';
 }
 
@@ -107,6 +108,37 @@ function loadKrPress(): SourceConfig[] {
       verifiedByFetch: true,
       isSpecialized: true,
       priority: 10,
+    });
+  });
+  return out;
+}
+
+function loadSpecialtyPress(): SourceConfig[] {
+  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>('specialty_press_rss.json');
+  const feeds = raw?.feeds;
+  if (!Array.isArray(feeds)) return [];
+  const out: SourceConfig[] = [];
+  feeds.forEach((f, i) => {
+    const rss = String(f.rss_url || '').trim();
+    if (!rss) return;
+    const outletId = String(f.outlet_id || f.feed_id || `spec-${i}`);
+    const nameEn = String(f.name_en || outletId);
+    const regionId = String(f.region_id || 'specialty');
+    const lang = String(f.lang_primary || 'en');
+    const feedId = String(f.feed_id || outletId);
+    const verified = f.verified_by_fetch !== false;
+    out.push({
+      id: feedId.startsWith('spec-') ? feedId : `spec-${feedId}`,
+      url: rss,
+      sourceName: nameEn,
+      category: categoryForRegion(regionId),
+      region: regionId,
+      lang,
+      sourceType: 'specialty',
+      outletId,
+      verifiedByFetch: verified,
+      isSpecialized: true,
+      priority: 5,
     });
   });
   return out;
@@ -214,8 +246,12 @@ const SPECIALIZED: SourceConfig[] = [
 export function buildSources(): SourceConfig[] {
   const world = loadWorldPress();
   const kr = loadKrPress();
-  console.log(`[sourceConfig] world_press=${world.length}, kr_press=${kr.length}, google_kr=${KR_GOOGLE_AGGREGATORS.length}`);
-  return [...kr, ...world, ...SPECIALIZED, ...KR_GOOGLE_AGGREGATORS];
+  const specialty = loadSpecialtyPress();
+  console.log(
+    `[sourceConfig] world_press=${world.length}, kr_press=${kr.length}, specialty=${specialty.length}, google_kr=${KR_GOOGLE_AGGREGATORS.length}`,
+  );
+  // 전문매체 우선 → 국내 → 세계신문 → 기타 전문/애그리게이터
+  return [...specialty, ...kr, ...world, ...SPECIALIZED, ...KR_GOOGLE_AGGREGATORS];
 }
 
 /** 크롤러가 쓰는 통합 목록 (로드 시점에 구성) */

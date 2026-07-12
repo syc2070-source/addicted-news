@@ -1,0 +1,57 @@
+{
+  "_comment": "중독·회복 전문 매체 (종합지 아님, 중독만 다룸). RSS 생존 확인 완료(2026-07-12). 전부 영어 → 딥시크가 한국어 번역+요약.",
+  "feeds": [
+    {
+      "feed_id": "spec-001",
+      "outlet_id": "the_fix",
+      "name_en": "The Fix",
+      "homepage_url": "https://www.thefix.com/",
+      "rss_url": "https://www.thefix.com/feed/",
+      "lang_primary": "en",
+      "region_id": "specialty",
+      "region_label_en": "Addiction Specialty",
+      "source_type": "specialty",
+      "verified_by_fetch": true,
+      "notes_ko": "알코올·약물 중독 회복 전문 일간 웹진. 채택 1순위."
+    },
+    {
+      "feed_id": "spec-002",
+      "outlet_id": "addiction_recovery_ebulletin",
+      "name_en": "Addiction Recovery eBulletin",
+      "homepage_url": "https://addictionrecoveryebulletin.org/",
+      "rss_url": "https://addictionrecoveryebulletin.org/feed/",
+      "lang_primary": "en",
+      "region_id": "specialty",
+      "region_label_en": "Addiction Specialty",
+      "source_type": "specialty",
+      "verified_by_fetch": true,
+      "notes_ko": "치료 전문가·회복 당사자 대상. 2026 활발. comments 피드 아님(메인 feed)."
+    },
+    {
+      "feed_id": "spec-003",
+      "outlet_id": "treatment_magazine",
+      "name_en": "Treatment Magazine",
+      "homepage_url": "https://treatmentmagazine.com/",
+      "rss_url": "https://treatmentmagazine.com/feed/",
+      "lang_primary": "en",
+      "region_id": "specialty",
+      "region_label_en": "Addiction Specialty",
+      "source_type": "specialty",
+      "verified_by_fetch": true,
+      "notes_ko": "중독 치료 성과·회복 전문지."
+    },
+    {
+      "feed_id": "spec-004",
+      "outlet_id": "sober_nation",
+      "name_en": "Sober Nation",
+      "homepage_url": "https://sobernation.com/",
+      "rss_url": "https://sobernation.com/addiction-recovery-news/feed/",
+      "lang_primary": "en",
+      "region_id": "specialty",
+      "region_label_en": "Addiction Specialty",
+      "source_type": "specialty",
+      "verified_by_fetch": true,
+      "notes_ko": "회복 커뮤니티 대상. 섹션 피드(50건)."
+    }
+  ]
+}

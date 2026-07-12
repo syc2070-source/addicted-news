@@ -916,8 +916,8 @@ async function main() {
   const startTime = Date.now();
   
   console.log('\n========================================');
-  console.log('🚀 Addicted News Crawler v5.0 START');
-  console.log('   - 세계신문 60 + 국내 10 + 국내구글 소수');
+  console.log('🚀 Addicted News Crawler v5.1 START');
+  console.log('   - 전문4 + 세계신문60 + 국내10 + 국내구글 소수');
   console.log('   - 중독 키워드 필터 + DeepSeek 한/영 요약');
   console.log('   - DeepSeek:', deepseekAvailable ? 'ON' : 'OFF');
   console.log('   - 하루 1회 제한: ' + (SKIP_DAILY_CHECK ? '해제' : '적용'));
