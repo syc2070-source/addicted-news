@@ -1,0 +1,54 @@
+# Render — addicted-news 백엔드 (초안)
+# 실제 배포는 Render 대시보드 또는 Blueprint로 적용하세요.
+
+services:
+  - type: web
+    name: addicted-news-api
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: CORS_ORIGINS
+        sync: false
+      - key: STATORY_API_URL
+        sync: false
+      - key: STATORY_NEWS_QUERY
+        sync: false
+      - key: STATORY_NEWS_LIMIT
+        sync: false
+      - key: STATORY_NEWS_REGION_HINT
+        sync: false
+      - key: SKIP_DAILY_CHECK
+        value: "false"
+      - key: MAX_FOREIGN_ARTICLES
+        value: "100"
+      - key: ENABLE_IMAGE_EXTRACT
+        value: "true"
+      - key: ENABLE_AI_IMAGE
+        value: "false"
+
+# 크롤러는 별도 Cron Job 으로 분리 권장 (다음 단계):
+#   buildCommand: npm install
+#   startCommand: npm run crawl:once
