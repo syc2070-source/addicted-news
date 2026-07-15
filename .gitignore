@@ -2,6 +2,8 @@
 node_modules/
 dist/
 .env
+**/.env
+.env.*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -11,3 +13,16 @@ backend/logs/
 crawl-last-run.log
 
 backend/tmp_*
+
+# 배포용 DB 덤프 (공개 레포 제외, Supabase import는 로컬에서)
+deploy/*.sql
+
+# video_pipeline 산출물 (코드만 커밋)
+video_pipeline/video/
+video_pipeline/audio/
+video_pipeline/images/
+video_pipeline/subs/
+video_pipeline/scripts/
+video_pipeline/__pycache__/
+video_pipeline/lib/__pycache__/
+video_pipeline/batch_log*.txt
