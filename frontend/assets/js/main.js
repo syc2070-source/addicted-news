@@ -1,9 +1,9 @@
 // frontend/assets/js/main.js
 // v2.5 - API 경로 수정 완료
 
-var API_BASE = 'http://localhost:4000';
+var API_BASE = window.API_BASE || 'http://localhost:4000';
 // N-3 배포 시 중독사회 운영 URL 주입. 빈값이면 보고서 deep link 비활성.
-var ADDICTION_SOCIETY_URL = '';
+var ADDICTION_SOCIETY_URL = window.ADDICTION_SOCIETY_URL || '';
 var ARTICLES_PER_CATEGORY = 5;
 
 // 카테고리 API는 영문 슬러그만 사용 (한글·중점·공백 URL 경로 오류 방지, backend CATEGORY_MAP과 동일)

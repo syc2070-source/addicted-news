@@ -1,5 +1,5 @@
-// 중독백과 프론트 (정적 페이지 + fetch). main.js 의 API_BASE 와 동일 값 사용.
-const API_BASE = 'http://localhost:4000';
+// 중독백과 프론트 (정적 페이지 + fetch). config.js 의 window.API_BASE 와 동일 값 사용.
+const API_BASE = window.API_BASE || 'http://localhost:4000';
 
 const CAT_LABEL = {
   mechanism:'중독의 과학', psychology:'중독의 심리', substance:'물질중독',

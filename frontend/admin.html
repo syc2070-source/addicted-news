@@ -264,8 +264,9 @@
   </div>
 </div>
 
+<script src="assets/js/config.js"></script>
 <script>
-var API_BASE = 'http://localhost:4000';
+var API_BASE = window.API_BASE || 'http://localhost:4000';
 var authToken = '';
 var currentPage = 1;
 
