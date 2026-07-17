@@ -21,15 +21,20 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
+// v5.2 #3: 재시도용 대체 User-Agent(모바일)
+const UA_ALT =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 ' +
+  '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
 const FETCH_TIMEOUT_MS = 8000;
 
-async function fetchWithTimeout(url: string): Promise<Response | null> {
+async function fetchWithTimeout(url: string, ua: string = UA): Promise<Response | null> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       redirect: 'follow',
-      headers: { 'User-Agent': UA, 'Accept-Language': 'ko,en;q=0.8' },
+      headers: { 'User-Agent': ua, 'Accept-Language': 'ko,en;q=0.8' },
       signal: ctrl.signal,
     });
     return res;
@@ -95,21 +100,80 @@ function cleanup(s: string): string {
 }
 
 /**
+ * v5.2 #5: HTML 에서 og:image(없으면 twitter:image) URL 추출.
+ * 상대경로는 원문 origin 기준 절대경로로 변환. 이미지는 다운로드하지 않고 URL만.
+ */
+export function extractOgImageFromHtml(html: string, baseUrl: string): string | null {
+  const patterns: RegExp[] = [
+    /<meta[^>]+(?:property|name)=["']og:image(?::url)?["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image(?::url)?["']/i,
+    /<meta[^>]+(?:name|property)=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+(?:name|property)=["']twitter:image(?::src)?["']/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m?.[1]) {
+      let img = m[1].trim();
+      if (!img) continue;
+      try {
+        if (img.startsWith('//')) img = 'https:' + img;
+        else if (img.startsWith('/')) img = new URL(baseUrl).origin + img;
+        else if (!/^https?:\/\//i.test(img)) img = new URL(img, baseUrl).href;
+      } catch {
+        continue;
+      }
+      if (/^https?:\/\//i.test(img)) return img;
+    }
+  }
+  return null;
+}
+
+export type ArticleData = { body: string; ogImage: string | null };
+
+/**
+ * v5.2 #3+#5: 기사 링크에서 본문 텍스트와 og:image를 함께 추출.
+ * - 본문이 부실(120자 미만)하면 대체 UA로 1회 재시도.
+ * - 본문 추출 실패해도 og:image는 살아있을 수 있으므로 별도로 반환.
+ * - 실패해도 throw 하지 않음.
+ */
+export async function extractArticleData(link: string): Promise<ArticleData> {
+  const empty: ArticleData = { body: '', ogImage: null };
+  try {
+    if (!link || !String(link).trim()) return empty;
+    const realUrl = await resolveRealUrl(link);
+
+    // 1차 시도(데스크톱 UA)
+    let res = await fetchWithTimeout(realUrl, UA);
+    let html = '';
+    if (res && res.ok && /text\/html/i.test(res.headers.get('content-type') || '')) {
+      html = await res.text();
+    }
+    let body = html ? extractText(html, realUrl) : '';
+    let ogImage = html ? extractOgImageFromHtml(html, realUrl) : null;
+
+    // v5.2 #3: 본문 부실 시 대체 UA(모바일)로 1회 재시도
+    if (body.length < 120) {
+      const res2 = await fetchWithTimeout(realUrl, UA_ALT);
+      if (res2 && res2.ok && /text\/html/i.test(res2.headers.get('content-type') || '')) {
+        const html2 = await res2.text();
+        const body2 = extractText(html2, realUrl);
+        if (body2.length > body.length) body = body2;
+        if (!ogImage) ogImage = extractOgImageFromHtml(html2, realUrl);
+      }
+    }
+
+    return { body: body.length >= 120 ? body.slice(0, 6000) : '', ogImage };
+  } catch {
+    return empty;
+  }
+}
+
+/**
  * 기사 링크에서 본문 텍스트를 추출.
  * 실패 시 빈 문자열 반환(호출측이 RSS 스니펫으로 폴백).
+ * (하위호환 래퍼 — 내부적으로 extractArticleData 사용)
  */
 export async function extractArticleBody(link: string): Promise<string> {
-  try {
-    if (!link || !String(link).trim()) return '';
-    const realUrl = await resolveRealUrl(link);
-    const res = await fetchWithTimeout(realUrl);
-    if (!res || !res.ok) return '';
-    const ctype = res.headers.get('content-type') || '';
-    if (!/text\/html/i.test(ctype)) return '';
-    const html = await res.text();
-    const text = extractText(html, realUrl);
-    return text.length >= 120 ? text.slice(0, 6000) : '';
-  } catch {
-    return '';
-  }
+  const { body } = await extractArticleData(link);
+  return body;
 }
