@@ -8,9 +8,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Article } from '../articles/article.entity';
 import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS, SourceType } from './sourceConfig';
-import { summarizeKoreanDeepSeek, deepseekAvailable } from './deepseek_summary';
-import { extractArticleBody } from './article_extractor';
-import { matchesAddictionKeywords } from './addictionFilter';
+import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats } from './deepseek_summary';
+import { extractArticleData } from './article_extractor';
+import { matchesAddictionKeywords, isIncidentReport } from './addictionFilter';
 
 type RssItem = {
   title?: string;
@@ -61,12 +61,19 @@ const MAX_FOREIGN_ARTICLES = Number(process.env.MAX_FOREIGN_ARTICLES ?? 100);  /
 const ENABLE_IMAGE_EXTRACT = process.env.ENABLE_IMAGE_EXTRACT !== 'false';
 const MIN_ADDICTION_SCORE = 2;  // 카테고리 분류용 참고(채택 게이트는 addictionFilter)
 const SKIP_DAILY_CHECK = process.env.SKIP_DAILY_CHECK === 'true';  // true면 하루 1회 제한 해제
+// v5.2 #3: 본문 최소 길이. 미만이면 추측 요약 방지를 위해 스킵.
+const MIN_BODY_CHARS = Number(process.env.MIN_BODY_CHARS ?? 300);
 
 let foreignArticleCount = 0;
 let crawlStats = {
   itemsSeen: 0,
   filterPass: 0,
   filterSkip: 0,
+  incidentSkip: 0,      // v5.2 #1: 사건사고 스킵
+  dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
+  thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
+  bodyExtractTried: 0,  // v5.2 #3: 원문 추출 시도 수
+  bodyExtractOk: 0,     // v5.2 #3: 원문 추출 성공 수(>=MIN_BODY_CHARS)
   failedFeeds: [] as string[],
 };
 
@@ -427,7 +434,10 @@ async function extractOgImage(url: string): Promise<string | null> {
   } catch { return null; }
 }
 
-async function getArticleImage(item: RssItem, sourceUrl: string): Promise<string | null> {
+// v5.2 #5: 이미지 폴백 순서 — (1) 원문 og:image → (2) RSS enclosure/미디어 → (3) og fetch.
+// 본문 추출 단계에서 이미 받아온 og:image 힌트(ogHint)가 있으면 재요청 없이 우선 사용.
+async function getArticleImage(item: RssItem, sourceUrl: string, ogHint?: string | null): Promise<string | null> {
+  if (ogHint && isValidImageUrl(ogHint)) return ogHint;
   const rssImage = extractImageFromRss(item);
   if (rssImage) return rssImage;
   const ogImage = await extractOgImage(sourceUrl);
@@ -515,15 +525,82 @@ async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
 }
 
 // ---------- 중복 체크 ----------
+// v5.2 #4: 구두점(…·따옴표 등)을 공백으로, 라틴↔한글 경계를 분리("ai챗봇"→"ai 챗봇")해
+// 토큰이 뭉치지 않도록 정규화. 표현 변형 간 핵심어 겹침이 잘 드러난다.
 function normalizeForDuplicateCheck(title: string): string {
-  return (title || '').toLowerCase().replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').replace(/\s+/g, ' ').trim();
+  return (title || '')
+    .toLowerCase()
+    .replace(/([a-z0-9])([가-힣])/g, '$1 $2')
+    .replace(/([가-힣])([a-z0-9])/g, '$1 $2')
+    .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
+// v5.2 #4: 한글 조사·어미 제거로 표현 변형("강원랜드가"≠"강원랜드")까지 동일 핵심어로.
+const KO_PARTICLES = [
+  '으로써', '으로서', '이라고', '라고', '으로', '로서', '로써', '에서', '에게', '에의',
+  '까지', '부터', '조차', '마저', '처럼', '만큼', '보다', '이나', '이란', '라는', '이라는',
+  '와의', '과의', '에는', '에도', '에만', '이라', '이란', '으론', '이든', '든지',
+  '은', '는', '이', '가', '을', '를', '의', '에', '와', '과', '도', '만', '로', '란', '및',
+];
+
+// v5.2 #4: 서술어 어미 제거("도입한다"→"도입", "나선다"→"나서")로 변형 흡수
+const KO_ENDINGS = [
+  '한다는', '한다', '했다', '된다', '되다', '하며', '하고', '하는', '했던',
+  '였다', '이다', '나선다', '나섰다', '나서', '시켰다', '시킨', '밝혔다', '내놨다',
+];
+
+function stripKoParticle(word: string): string {
+  let w = word;
+  // 한글로 끝나는 경우에만 접미 조사 제거(가장 긴 것부터)
+  for (const p of KO_PARTICLES) {
+    if (w.length > p.length + 1 && w.endsWith(p) && /[가-힣]$/.test(w)) {
+      w = w.slice(0, w.length - p.length);
+      break;
+    }
+  }
+  for (const e of KO_ENDINGS) {
+    if (w.length > e.length + 1 && w.endsWith(e) && /[가-힣]$/.test(w)) {
+      w = w.slice(0, w.length - e.length);
+      break;
+    }
+  }
+  return w;
+}
+
+// 중복 판정 전용 불용어. 일반 뉴스 상투어 + 중독뉴스 도메인 상용어(변별력 낮음).
+// ※ 채택 필터(addictionFilter)와 무관 — 오직 "같은 사건" 판정 시 핵심 엔티티만 비교하기 위함.
+const DUP_STOPWORDS = new Set([
+  '에서', '으로', '이다', '하는', '있는', '되는', '위한', '대한', '통해', '관련',
+  '오늘', '내일', '어제', '올해', '지난', '이번', '최근', '다시', '또한', '위해',
+  '대해', '따라', '밝혀', '밝혀져', '전했다', '말했다', '나타났다', '드러났다',
+  '종합', '단독', '속보', '기자', '뉴스', '보도', '영상', '사진', '인터뷰',
+  // 도메인 상용어(거의 모든 기사에 등장 → 중복 판정에서 노이즈)
+  '중독', '도박', '도박중독', '알코올', '마약', '상담', '지원', '예방', '강화',
+  '도입', '서비스', '개시', '운영', '대책', '정책', '사업', '캠페인', '확대',
+  '추진', '발표', '계획', '방안', '행사', '세미나', '토론회', '실태', '현황',
+  '문제', '우려', '논란', '급증', '감소', '증가',
+]);
+
 function extractCoreKeywords(title: string): Set<string> {
-  const stopWords = new Set(['에서', '으로', '이다', '하는', '있는', '되는', '위한', '대한', '통해', '관련', '오늘', '내일', '어제']);
   const normalized = normalizeForDuplicateCheck(title);
-  const words = normalized.split(' ').filter(w => w.length >= 2 && !stopWords.has(w));
+  const words = normalized
+    .split(' ')
+    .map(stripKoParticle)
+    .filter((w) => w.length >= 2 && !DUP_STOPWORDS.has(w));
   return new Set(words);
+}
+
+// v5.2 #4: 대표 선정용 sourceType 우선순위(낮을수록 우선: 전문 > 주요지 > 포털/지방지)
+function sourceTypeRank(t: SourceType): number {
+  switch (t) {
+    case 'specialty': return 0;
+    case 'world_press': return 1;
+    case 'kr_press': return 1;
+    case 'aggregator': return 2;
+    default: return 3;
+  }
 }
 
 function calculateTitleSimilarity(title1: string, title2: string): number {
@@ -544,7 +621,8 @@ function isDuplicateInSession(title: string): boolean {
   for (const [seenNorm, seenOrig] of seenTitles.entries()) {
     const similarity = calculateTitleSimilarity(title, seenOrig);
     if (similarity >= 0.5) {
-      console.log(`  │   ⚠️ 유사 기사 스킵 (${Math.round(similarity * 100)}%): ${title.slice(0, 30)}...`);
+      crawlStats.dupSkipKeyword++;
+      console.log(`  │   ⚠️ 유사 기사 스킵 (핵심어 ${Math.round(similarity * 100)}%): ${title.slice(0, 30)}...`);
       return true;
     }
   }
@@ -590,30 +668,53 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       // 1) RSS 스니펫 → 중독 필터 → (필요 시) 원문 추출 후 재검사 → 요약 재료
       let rawContent = extractContent(it);
       const itemLink = it.link ? String(it.link) : '';
+      let ogImageHint: string | null = null;
 
       let addictionOk = matchesAddictionKeywords(rawTitle, rawContent || '');
+      // 스니펫만으로 이미 걸러진 경우(사건사고 vs 일반 필터) 로그 구분
       if (!addictionOk && (rawContent || '').length >= 200) {
-        crawlStats.filterSkip++;
+        if (isIncidentReport(rawTitle, rawContent || '')) {
+          crawlStats.incidentSkip++;
+          console.log(`  │   🚫 사건사고 스킵: ${rawTitle.slice(0, 34)}...`);
+        } else {
+          crawlStats.filterSkip++;
+        }
         continue;
       }
-      if ((!addictionOk || !rawContent || rawContent.length < 200) && itemLink) {
-        const body = await extractArticleBody(itemLink);
-        if (body && body.length > (rawContent || '').length) {
-          console.log(`  │   📄 원문추출 ${body.length}자`);
-          rawContent = body;
+      // 원문 본문 추출(부족·미통과 시). og:image 힌트도 함께 수집(v5.2 #5).
+      if ((!addictionOk || !rawContent || rawContent.length < MIN_BODY_CHARS) && itemLink) {
+        crawlStats.bodyExtractTried++;
+        const data = await extractArticleData(itemLink);
+        ogImageHint = data.ogImage;
+        if (data.body && data.body.length > (rawContent || '').length) {
+          console.log(`  │   📄 원문추출 ${data.body.length}자`);
+          rawContent = data.body;
           addictionOk = matchesAddictionKeywords(rawTitle, rawContent);
         }
+        if ((rawContent || '').length >= MIN_BODY_CHARS) crawlStats.bodyExtractOk++;
       }
-      if (!rawContent) rawContent = rawTitle;
+
       const googleUrl = itemLink || null;
       const baseUrl = googleUrl || conf.url;
       const sourceUrl = baseUrl.includes('news.google.com') ? await resolveFinalUrl(baseUrl) : baseUrl;
 
       if (shouldBlockByDomain(sourceUrl, googleUrl || undefined)) continue;
 
-      // 채택 게이트: addictionFilter (strong≥1 && negative==0)
+      // 채택 게이트: addictionFilter (strong≥1 && negative==0 && 사건사고 아님)
       if (!addictionOk) {
-        crawlStats.filterSkip++;
+        if (isIncidentReport(rawTitle, rawContent || '')) {
+          crawlStats.incidentSkip++;
+          console.log(`  │   🚫 사건사고 스킵: ${rawTitle.slice(0, 34)}...`);
+        } else {
+          crawlStats.filterSkip++;
+        }
+        continue;
+      }
+      // v5.2 #3: 본문이 부실하면(제목만·짧은 스니펫) 추측 요약 방지 위해 스킵
+      const usableLen = rawContent && rawContent !== rawTitle ? rawContent.length : 0;
+      if (usableLen < MIN_BODY_CHARS) {
+        crawlStats.thinBodySkip++;
+        console.log(`  │   ✂️ 본문부실 스킵(${usableLen}자<${MIN_BODY_CHARS}): ${rawTitle.slice(0, 30)}...`);
         continue;
       }
       if (isPromotionalAd(rawTitle, rawContent)) {
@@ -653,7 +754,7 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
         ? normalizeCategory(pack.suggestedCategory)
         : classifyCategory(titleKo, summaryKo + ' ' + keywordsKo.join(' '), normalizeCategory(conf.category));
 
-      const imageUrl = await getArticleImage(it, sourceUrl);
+      const imageUrl = await getArticleImage(it, sourceUrl, ogImageHint);
 
       out.push({
         title: titleKo, originalTitle: rawTitle, teaser: teaserKo, summary: summaryKo,
@@ -849,13 +950,28 @@ async function loadStatoryCandidates(): Promise<Candidate[]> {
   }
 }
 
+// v5.2 #4: publishedAt(YYYY-MM-DD) 기준 최근 N일 날짜 문자열 목록
+function recentYmdWindow(centerYmd: string, days: number): string[] {
+  const out: string[] = [];
+  const base = new Date(`${centerYmd}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return [centerYmd];
+  for (let d = -days; d <= days; d++) {
+    const dt = new Date(base);
+    dt.setDate(base.getDate() + d);
+    out.push(toYmd(dt));
+  }
+  return out;
+}
+
 // ---------- DB 중복 체크 ----------
 async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
   if (await repo.findOne({ where: { sourceUrl: c.sourceUrl } })) return true;
   if (c.googleUrl && await repo.findOne({ where: { googleUrl: c.googleUrl } })) return true;
   if (await repo.findOne({ where: { title: c.title, publishedAt: c.publishedAt, source: c.source } })) return true;
-  const sameDayArticles = await repo.find({ where: { publishedAt: c.publishedAt } });
-  for (const existing of sameDayArticles) {
+  // v5.2 #4: 같은 날짜만 → 최근 3일 창으로 확장(매체별 게재일 차이 흡수)
+  const window = recentYmdWindow(c.publishedAt, 3);
+  const nearbyArticles = await repo.find({ where: window.map((d) => ({ publishedAt: d })) });
+  for (const existing of nearbyArticles) {
     if (calculateTitleSimilarity(c.title, existing.title) >= 0.5) return true;
   }
   return false;
@@ -934,7 +1050,13 @@ async function main() {
   await ds.initialize();
   console.log('✅ Database connected\n');
 
-  let crawlSources = [...SOURCES].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+  // v5.2 #4: 대표 선정 — 전문매체 > 주요지 > 포털/지방지 순으로 먼저 크롤해,
+  // 세션 내 중복(같은 사건)에서 먼저 채택되는 것이 선호 매체가 되도록 정렬.
+  let crawlSources = [...SOURCES].sort((a, b) => {
+    const r = sourceTypeRank(a.sourceType) - sourceTypeRank(b.sourceType);
+    if (r !== 0) return r;
+    return (a.priority ?? 100) - (b.priority ?? 100);
+  });
   const typeFilter = (process.env.CRAWL_SOURCE_TYPES || '')
     .split(',')
     .map((s) => s.trim())
@@ -980,13 +1102,22 @@ async function main() {
   console.log(`   수집: ${all.length}개 (한국 ${koreanCount}, 외국 ${foreignCount})`);
   const krRatioPct = all.length > 0 ? (koreanCount / all.length) * 100 : 0;
   console.log(`   한국 콘텐츠 비중: ${krRatioPct.toFixed(1)}% (목표 참고 30%)`);
-  console.log(`   저장: ${result.inserted}개, 이미지: ${result.withImage}개`);
+  const imgRate = result.inserted > 0 ? ((result.withImage / result.inserted) * 100).toFixed(1) : '0.0';
+  console.log(`   저장: ${result.inserted}개, 이미지: ${result.withImage}개 (${imgRate}%, 폴백 제외 실이미지)`);
   console.log(`   필터: 후보 ${crawlStats.itemsSeen} → 통과 ${crawlStats.filterPass} / 스킵 ${crawlStats.filterSkip} (통과율 ${passRate}%)`);
+  console.log(`   ├ 사건사고 스킵: ${crawlStats.incidentSkip}건`);
+  console.log(`   ├ 핵심어 중복 스킵: ${crawlStats.dupSkipKeyword}건`);
+  console.log(`   └ 본문부실 스킵: ${crawlStats.thinBodySkip}건`);
+  const extractRate = crawlStats.bodyExtractTried > 0
+    ? ((crawlStats.bodyExtractOk / crawlStats.bodyExtractTried) * 100).toFixed(1)
+    : '0.0';
+  console.log(`   본문추출 성공: ${crawlStats.bodyExtractOk}/${crawlStats.bodyExtractTried} (${extractRate}%)`);
   if (crawlStats.failedFeeds.length) {
     console.log(`   실패 피드 ${crawlStats.failedFeeds.length}건 (스킵):`);
     for (const f of crawlStats.failedFeeds) console.log(`     - ${f}`);
   }
-  console.log(`   DeepSeek 호출 추적(apiCallCount): ${apiCallCount}회`);
+  // v5.2 #6: DeepSeek 실제 호출 집계(성공/실패 분리). 기존 apiCallCount는 미호출 dead-code였음.
+  console.log(`   DeepSeek 호출: 총 ${deepseekStats.calls}회 (성공 ${deepseekStats.ok} / 실패 ${deepseekStats.fail})`);
   console.log('\n   카테고리별:');
   for (const [cat, count] of Object.entries(categoryStats)) {
     console.log(`     - ${cat}: ${count}개`);
