@@ -2,6 +2,7 @@
 // v4.0 - 중독 필터 강화, 외국 기사 비율 증가
 import 'dotenv/config';
 import 'reflect-metadata';
+import axios from 'axios';
 import { DataSource } from 'typeorm';
 import Parser from 'rss-parser';
 import * as fs from 'fs';
@@ -9,7 +10,7 @@ import * as path from 'path';
 import { Article } from '../articles/article.entity';
 import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS, SourceType } from './sourceConfig';
 import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats } from './deepseek_summary';
-import { extractArticleData } from './article_extractor';
+import { extractArticleData, httpGetText } from './article_extractor';
 import { matchesAddictionKeywords, isIncidentReport } from './addictionFilter';
 
 type RssItem = {
@@ -413,15 +414,13 @@ function extractImageFromRss(item: RssItem): string | null {
 
 async function extractOgImage(url: string): Promise<string | null> {
   if (!ENABLE_IMAGE_EXTRACT) return null;
-  
+
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    
-    const html = await res.text();
+    // undici(fetch) 대신 axios 기반 httpGetText 사용(스트리밍 abort 지뢰 회피)
+    const res = await httpGetText(url);
+    if (!res || !res.ok) return null;
+
+    const html = res.body;
     const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
                     html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
     if (ogMatch?.[1]) {
@@ -510,14 +509,12 @@ async function generateKoreanPackOpenAI(...) { ... }
 // ---------- URL resolve ----------
 async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(maybeGoogleUrl, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    clearTimeout(timeout);
-    const finalUrl = res.url || maybeGoogleUrl;
+    // undici(fetch) 대신 axios 기반 httpGetText 사용(스트리밍 abort 지뢰 회피)
+    const res = await httpGetText(maybeGoogleUrl);
+    if (!res) return maybeGoogleUrl;
+    const finalUrl = res.finalUrl || maybeGoogleUrl;
     if (finalUrl.includes('news.google.com')) {
-      const html = await res.text();
-      const m = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+      const m = res.body.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
       if (m?.[1]) return m[1];
     }
     return finalUrl;
@@ -915,18 +912,18 @@ async function loadStatoryCandidates(): Promise<Candidate[]> {
     const limit = Number.isFinite(parsedLimit) ? parsedLimit : 20;
     const regionHint = process.env.STATORY_NEWS_REGION_HINT?.trim() ?? 'KR';
 
-    const res = await fetch(`${base.replace(/\/+$/, '')}/api/search/news`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query,
-        limit,
-        region_hint: regionHint,
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as {
+    // undici(fetch) 대신 axios 사용(전체 크롤에서 undici 제거)
+    const resp = await axios.post(
+      `${base.replace(/\/+$/, '')}/api/search/news`,
+      { query, limit, region_hint: regionHint },
+      {
+        timeout: 20_000,
+        headers: { 'Content-Type': 'application/json' },
+        validateStatus: () => true,
+      },
+    );
+    if (resp.status < 200 || resp.status >= 300) throw new Error(`HTTP ${resp.status}`);
+    const json = (resp.data ?? {}) as {
       success?: boolean;
       items?: unknown[];
     };

@@ -4,7 +4,11 @@
 // - 실패해도 throw 하지 않음(빈 문자열 반환). 요약은 폴백으로 진행.
 // ============================================================
 
-// Node 18+ 전역 fetch 가정.
+// HTTP 요청은 axios 사용(Node http/https 기반). 전역 fetch(undici)는
+// 응답 스트리밍 중 AbortController abort가 겹치면 내부 assert(!this.paused)를
+// uncaughtException 으로 던져 프로세스를 죽이는 지뢰가 있어 사용하지 않는다.
+import axios from 'axios';
+
 // HTML 파싱: @mozilla/readability + jsdom 권장. 미설치 시 정규식 폴백.
 let Readability: any = null;
 let JSDOM: any = null;
@@ -27,21 +31,52 @@ const UA_ALT =
   '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 const FETCH_TIMEOUT_MS = 8000;
+const MAX_HTML_BYTES = 8 * 1024 * 1024; // 8MB 상한
 
-async function fetchWithTimeout(url: string, ua: string = UA): Promise<Response | null> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+export type HttpTextResult = {
+  ok: boolean;
+  status: number;
+  contentType: string;
+  finalUrl: string;
+  body: string;
+};
+
+/**
+ * axios 기반 GET(텍스트). 리다이렉트 추종·타임아웃·gzip 해제를 axios가 처리.
+ * 4xx/5xx 도 throw 하지 않고 결과로 반환. 네트워크/타임아웃 실패 시 null.
+ * undici(전역 fetch)를 쓰지 않으므로 스트리밍 abort 지뢰(assert)에 안전.
+ */
+export async function httpGetText(url: string, ua: string = UA): Promise<HttpTextResult | null> {
   try {
-    const res = await fetch(url, {
-      redirect: 'follow',
-      headers: { 'User-Agent': ua, 'Accept-Language': 'ko,en;q=0.8' },
-      signal: ctrl.signal,
+    const res = await axios.get(url, {
+      timeout: FETCH_TIMEOUT_MS,
+      maxRedirects: 5,
+      responseType: 'text',
+      transformResponse: [(d: any) => d], // JSON 자동 파싱 방지, 원문 문자열 유지
+      decompress: true,
+      maxContentLength: MAX_HTML_BYTES,
+      maxBodyLength: MAX_HTML_BYTES,
+      validateStatus: () => true, // 상태코드로 throw 하지 않음
+      headers: {
+        'User-Agent': ua,
+        'Accept-Language': 'ko,en;q=0.8',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
     });
-    return res;
+    const finalUrl: string =
+      (res.request && res.request.res && res.request.res.responseUrl) || url;
+    const contentType = String(res.headers?.['content-type'] || '');
+    const body = typeof res.data === 'string' ? res.data : String(res.data ?? '');
+    return {
+      ok: res.status >= 200 && res.status < 300,
+      status: res.status,
+      contentType,
+      finalUrl,
+      body,
+    };
   } catch {
+    // 타임아웃·네트워크 오류·본문 초과 등 → 개별 실패로 처리(호출측이 스킵)
     return null;
-  } finally {
-    clearTimeout(t);
   }
 }
 
@@ -52,9 +87,9 @@ async function resolveRealUrl(link: string): Promise<string> {
   try {
     const u = new URL(link);
     if (!/news\.google\./.test(u.hostname)) return link;
-    const res = await fetchWithTimeout(link);
-    if (res && res.url && !/news\.google\./.test(new URL(res.url).hostname)) {
-      return res.url;
+    const res = await httpGetText(link);
+    if (res && res.finalUrl && !/news\.google\./.test(new URL(res.finalUrl).hostname)) {
+      return res.finalUrl;
     }
     return link;
   } catch {
@@ -143,22 +178,21 @@ export async function extractArticleData(link: string): Promise<ArticleData> {
     const realUrl = await resolveRealUrl(link);
 
     // 1차 시도(데스크톱 UA)
-    let res = await fetchWithTimeout(realUrl, UA);
+    const res = await httpGetText(realUrl, UA);
     let html = '';
-    if (res && res.ok && /text\/html/i.test(res.headers.get('content-type') || '')) {
-      html = await res.text();
+    if (res && res.ok && /text\/html/i.test(res.contentType)) {
+      html = res.body;
     }
     let body = html ? extractText(html, realUrl) : '';
     let ogImage = html ? extractOgImageFromHtml(html, realUrl) : null;
 
     // v5.2 #3: 본문 부실 시 대체 UA(모바일)로 1회 재시도
     if (body.length < 120) {
-      const res2 = await fetchWithTimeout(realUrl, UA_ALT);
-      if (res2 && res2.ok && /text\/html/i.test(res2.headers.get('content-type') || '')) {
-        const html2 = await res2.text();
-        const body2 = extractText(html2, realUrl);
+      const res2 = await httpGetText(realUrl, UA_ALT);
+      if (res2 && res2.ok && /text\/html/i.test(res2.contentType)) {
+        const body2 = extractText(res2.body, realUrl);
         if (body2.length > body.length) body = body2;
-        if (!ogImage) ogImage = extractOgImageFromHtml(html2, realUrl);
+        if (!ogImage) ogImage = extractOgImageFromHtml(res2.body, realUrl);
       }
     }
 
