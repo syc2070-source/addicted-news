@@ -12,15 +12,28 @@ const deepseek = deepseekAvailable
   ? new OpenAI({ apiKey: DEEPSEEK_KEY, baseURL: 'https://api.deepseek.com' })
   : null;
 
+// v5.2 #6: DeepSeek 실제 호출 집계(비용 추적). 재시도 포함 매 API 요청을 calls로,
+// 성공/실패를 분리 집계한다. (기존 apiCallCount는 미호출 dead-code였음)
+export const deepseekStats = { calls: 0, ok: 0, fail: 0 };
+
 const SUMMARY_SYSTEM_KO =
   '너는 중독(도박·약물·알코올·행동중독 등) 전문 뉴스 큐레이터다. ' +
   '독자가 원문 기사에 가지 않고도 내용을 충분히 파악할 수 있도록, 한국어로 충실한 요약을 쓴다. ' +
   '중독 뉴스 원문에는 도박 광고 등 유해 요소가 많아, 요약만으로 이해가 끝나는 것이 독자에게 이롭다. ' +
   '형식: 자연스러운 한 문단(대략 5~8문장). 소제목·불릿·번호 없이 서술형으로. ' +
   '내용에 반드시 담을 것: (1) 무슨 일이 있었는가(핵심 사실·주체·시점), ' +
-  '(2) 그 배경이나 맥락, (3) 중독·회복·정책 관점에서 왜 중요한가. ' +
+  '(2) 원문에 나온 배경이나 맥락. ' +
   '규칙: 제목을 그대로 반복하지 말 것. 본문에 없는 사실(수치·인용·이름)을 지어내지 말 것 — ' +
   '재료가 부족하면 확인된 범위에서만 서술하고, 무리하게 늘리지 말 것. ' +
+  // v5.2 #2: 논평·사설 금지 — 사실중심 재서술만
+  '원문에 없는 평가·의견·교훈·전망·의의를 절대 덧붙이지 말 것. ' +
+  '"~을 보여준다", "~로 평가된다", "~이 필요하다", "~을 시사한다", "~을 강조한다", ' +
+  '"~중요성을 보여준다", "~문제다", "~우려된다" 같은 논평·해석·프레임 문장을 쓰지 말 것. ' +
+  '오직 원문이 전한 사실만 담담히 재서술한다. "왜 중요한가"를 네 판단으로 덧붙이지 말고, ' +
+  '원문이 직접 언급한 경우에만 그 근거와 함께 사실로 적을 것. ' +
+  // v5.2 #3: 본문 부실 시 추측 금지
+  '본문이 부실하거나 정보가 적으면 추측하지 말고 확인된 사실만 1~2문장으로 짧게 쓸 것. ' +
+  '"~것으로 보인다", "~것으로 추정된다", "~로 풀이된다" 같은 추측 어미를 쓰지 말 것. ' +
   '과장·선정성·자극적 표현 배제. 담담하고 정확하게. 도박·약물 사용을 조장하거나 미화하지 말 것. ' +
   '민감한 주제(자살·자해 등)는 방법·수치를 넣지 말 것. 출력은 요약 본문만.';
 
@@ -76,6 +89,7 @@ export async function summarizeKoreanDeepSeek(
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
+      deepseekStats.calls++;
       const r = await deepseek.chat.completions.create({
         model: DEEPSEEK_MODEL,
         messages: [
@@ -96,12 +110,12 @@ export async function summarizeKoreanDeepSeek(
             const titleKo = String(parsed.titleKo || '').trim();
             let summary = String(parsed.summary || '').trim();
             summary = summary.replace(/\n{2,}/g, '\n').trim();
-            if (titleKo && summary.length >= 10) return { titleKo, summary };
+            if (titleKo && summary.length >= 10) { deepseekStats.ok++; return { titleKo, summary }; }
           } catch { /* fallthrough */ }
         }
         // JSON 실패 시 본문만 요약으로
         text = text.replace(/\n{2,}/g, '\n').trim();
-        if (text.length >= 10) return { titleKo: title, summary: text };
+        if (text.length >= 10) { deepseekStats.ok++; return { titleKo: title, summary: text }; }
         continue;
       }
 
@@ -111,14 +125,17 @@ export async function summarizeKoreanDeepSeek(
         text = text.split('\n').slice(1).join('\n').trim() || text;
       }
       if (text.length < 10) continue;
+      deepseekStats.ok++;
       return { titleKo: title, summary: text };
     } catch (e) {
       if (attempt === 2) {
         console.warn('[deepseek summary] 실패:', (e as Error).message);
+        deepseekStats.fail++;
         return null;
       }
     }
   }
+  deepseekStats.fail++;
   return null;
 }
 
