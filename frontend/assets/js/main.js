@@ -32,6 +32,37 @@ function categoryDisplayName(displayOrSlug) {
   return displayOrSlug;
 }
 
+// v5.2 #5: 카테고리별 기본 이미지(placeholder). imageUrl 없거나 로드 실패 시 폴백.
+// 실제 이미지 파일은 추후 교체. 경로는 프론트 루트 기준 상대경로.
+var CATEGORY_IMG_SLUG = {
+  '중독정책': 'policy',
+  '알코올·약물중독': 'alcohol-drug',
+  '도박중독': 'gambling',
+  '게임·디지털중독': 'digital',
+  '중독사회와 회복': 'recovery',
+  // 프론트 API 슬러그도 대응
+  policy: 'policy', alcohol: 'alcohol-drug', gambling: 'gambling',
+  game: 'digital', issue: 'recovery',
+};
+
+function categoryDefaultImage(category) {
+  var slug = CATEGORY_IMG_SLUG[category] || CATEGORY_IMG_SLUG[categoryDisplayName(category)] || 'default';
+  return 'assets/img/cat-' + slug + '.svg';
+}
+
+// 기사 카드 이미지 src: 실제 imageUrl 우선, 없으면 카테고리 기본 이미지.
+function articleImageSrc(article) {
+  if (article && article.imageUrl) return article.imageUrl;
+  return categoryDefaultImage(article ? article.category : '');
+}
+
+// onerror 핸들러(외부 이미지 깨짐 시 카테고리 기본 이미지로 1회 교체)
+function imgOnErrorAttr(category) {
+  var fallback = categoryDefaultImage(category);
+  // 무한루프 방지: onerror 제거 후 fallback 지정
+  return 'onerror="this.onerror=null;this.src=\'' + fallback + '\'"';
+}
+
 // ============================================================
 // 중독백과 용어 자동 링크 (main.js 에 추가)
 // - escapeHtml 된 HTML 문자열에서 각 용어 "첫 등장만" 백과 링크로 감싼다.
@@ -493,10 +524,8 @@ function createSidebarItem(article, rank) {
 
 // TOP 뉴스 카드 (1:3 비율 - 이미지:내용)
 function createTopNewsCard(article, isMain) {
-  var imageHtml = article.imageUrl 
-    ? '<div class="top-news-image-wrap"><img src="' + article.imageUrl + '" alt="" class="top-news-image" onerror="this.parentElement.style.display=\'none\'"></div>'
-    : '';
-  
+  var imageHtml = '<div class="top-news-image-wrap"><img src="' + articleImageSrc(article) + '" alt="" class="top-news-image" ' + imgOnErrorAttr(article.category) + '></div>';
+
   var summary = article.summary || article.teaser || '';
   var maxLength = 350;
   var displaySummary = summary.length > maxLength ? summary.substring(0, maxLength) + '...' : summary;
@@ -514,10 +543,8 @@ function createTopNewsCard(article, isMain) {
 
 // 일반 기사 카드
 function createArticleCard(article) {
-  var imageHtml = article.imageUrl 
-    ? '<div class="article-thumb"><img src="' + article.imageUrl + '" alt="" onerror="this.parentElement.style.display=\'none\'"></div>'
-    : '';
-  
+  var imageHtml = '<div class="article-thumb"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category) + '></div>';
+
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);
   // 본문(요약 전문) 표시 영역만 용어 링크. data-* 는 평문 유지.
@@ -541,10 +568,8 @@ function createArticleCard(article) {
 
 // 전체 기사 카드
 function createFullArticleCard(article) {
-  var imageHtml = article.imageUrl 
-    ? '<div class="full-article-image"><img src="' + article.imageUrl + '" alt="" onerror="this.parentElement.style.display=\'none\'"></div>'
-    : '';
-  
+  var imageHtml = '<div class="full-article-image"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category) + '></div>';
+
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);
   var titleHtml = article.sourceUrl
