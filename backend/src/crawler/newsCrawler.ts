@@ -52,8 +52,10 @@ type Candidate = {
 };
 
 const parser = new Parser<RssItem>({
-  customFields: { 
-    item: ['source', 'media:content', 'media:thumbnail', 'content:encoded', 'description', 'enclosure'] 
+  // 피드 요청이 무한히 매달리지 않도록 상한(멈춘 피드가 전체를 못 잡게)
+  timeout: Number(process.env.RSS_TIMEOUT_MS ?? 15000),
+  customFields: {
+    item: ['source', 'media:content', 'media:thumbnail', 'content:encoded', 'description', 'enclosure']
   },
 });
 
@@ -61,9 +63,16 @@ const parser = new Parser<RssItem>({
 const MAX_FOREIGN_ARTICLES = Number(process.env.MAX_FOREIGN_ARTICLES ?? 100);  // 50→100 증가
 const ENABLE_IMAGE_EXTRACT = process.env.ENABLE_IMAGE_EXTRACT !== 'false';
 const MIN_ADDICTION_SCORE = 2;  // 카테고리 분류용 참고(채택 게이트는 addictionFilter)
-const SKIP_DAILY_CHECK = process.env.SKIP_DAILY_CHECK === 'true';  // true면 하루 1회 제한 해제
+// 하루 1회 제한 해제: SKIP_DAILY_CHECK=true, 또는 Render 환경(RENDER=true)에서 자동 해제.
+// Cron Job은 매일 1회 실행되는 스케줄 자체가 제한 역할을 하므로, 락 파일에 걸려
+// 스킵되는 footgun을 방지한다(Render Cron은 파일시스템도 휘발성이라 이중 안전).
+const SKIP_DAILY_CHECK =
+  process.env.SKIP_DAILY_CHECK === 'true' || process.env.RENDER === 'true';
 // v5.2 #3: 본문 최소 길이. 미만이면 추측 요약 방지를 위해 스킵.
 const MIN_BODY_CHARS = Number(process.env.MIN_BODY_CHARS ?? 300);
+// Cron 안전장치: 전체 크롤 상한 시간(기본 40분). 초과 시 그때까지 수집분을 저장하고 종료.
+const CRAWL_TIMEOUT_MS = Number(process.env.CRAWL_TIMEOUT_MS ?? 40 * 60 * 1000);
+let crawlDeadline = Number.POSITIVE_INFINITY;  // main()에서 startTime 기준 설정
 
 let foreignArticleCount = 0;
 let crawlStats = {
@@ -657,6 +666,11 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
     const out: Candidate[] = [];
 
     for (const it of items) {
+      // 상한 시간 초과 시 이 소스의 남은 항목 중단(수집분은 반환되어 저장됨)
+      if (Date.now() > crawlDeadline) {
+        console.log(`  │   ⏱️ 타임아웃 도달 — 소스 [${conf.id}] 남은 항목 중단`);
+        break;
+      }
       crawlStats.itemsSeen++;
       const rawTitle = normalizeText(it.title || '');
       if (!rawTitle) continue;
@@ -1071,15 +1085,27 @@ async function main() {
   const all: Candidate[] = [];
   console.log(`📡 Crawling ${crawlSources.length} sources...\n`);
 
+  // Cron 안전장치: startTime 기준 상한 시간 설정
+  crawlDeadline = startTime + CRAWL_TIMEOUT_MS;
+  let timedOut = false;
+
   for (let i = 0; i < crawlSources.length; i++) {
+    if (Date.now() > crawlDeadline) {
+      timedOut = true;
+      console.warn(`\n⏱️ 상한 시간(${Math.round(CRAWL_TIMEOUT_MS / 60000)}분) 초과 — ${i}/${crawlSources.length} 소스에서 크롤 중단, 수집분 저장 진행\n`);
+      break;
+    }
     const conf = crawlSources[i];
     console.log(`[${i + 1}/${crawlSources.length}] ${conf.sourceName} (${conf.category})`);
     const got = await crawlOneSource(conf);
     all.push(...got);
   }
 
-  const statoryCands = await loadStatoryCandidates();
-  all.push(...statoryCands);
+  // 타임아웃이 아니면 Statory 후보도 수집
+  if (!timedOut && Date.now() <= crawlDeadline) {
+    const statoryCands = await loadStatoryCandidates();
+    all.push(...statoryCands);
+  }
 
   const result = await saveCandidates(all);
   const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -1096,7 +1122,7 @@ async function main() {
     ? ((crawlStats.filterPass / crawlStats.itemsSeen) * 100).toFixed(1)
     : '0.0';
   console.log('========================================');
-  console.log(`✅ END in ${Math.floor(elapsed/60)}분 ${elapsed%60}초`);
+  console.log(`✅ END in ${Math.floor(elapsed/60)}분 ${elapsed%60}초${timedOut ? ' (⏱️ 상한 시간 도달로 조기 종료 — 수집분 저장됨)' : ''}`);
   console.log(`   수집: ${all.length}개 (한국 ${koreanCount}, 외국 ${foreignCount})`);
   const krRatioPct = all.length > 0 ? (koreanCount / all.length) * 100 : 0;
   console.log(`   한국 콘텐츠 비중: ${krRatioPct.toFixed(1)}% (목표 참고 30%)`);
@@ -1126,8 +1152,11 @@ async function main() {
   await ds.destroy();
 }
 
-main().catch(async (e) => {
-  console.error('\n❌ CRITICAL ERROR:', e);
-  try { if (ds.isInitialized) await ds.destroy(); } catch {}
-  process.exit(1);
-});
+// 종료 코드: 정상/타임아웃 조기종료 = 0(Render 성공), 치명적 오류 = 1(Render 실패)
+main()
+  .then(() => process.exit(0))
+  .catch(async (e) => {
+    console.error('\n❌ CRITICAL ERROR:', e);
+    try { if (ds.isInitialized) await ds.destroy(); } catch {}
+    process.exit(1);
+  });

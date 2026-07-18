@@ -49,6 +49,50 @@ services:
       - key: ENABLE_AI_IMAGE
         value: "false"
 
-# 크롤러는 별도 Cron Job 으로 분리 권장 (다음 단계):
-#   buildCommand: npm install
-#   startCommand: npm run crawl:once
+  # ── 매일 자동 크롤 (Cron Job) ──────────────────────────────
+  # 웹서비스와 별개 서비스. env 는 서비스별로 분리되므로 아래 값도 대시보드에서 설정 필요.
+  # 스케줄: UTC 03:00 = KST 12:00 정오. 실행: 빌드 후 dist 실행(crawl:prod).
+  - type: cron
+    name: addicted-news-crawler
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    schedule: "0 3 * * *"
+    buildCommand: npm install && npm run build
+    startCommand: npm run crawl:prod
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # 하루 1회 제한 명시 해제(Cron 스케줄이 곧 1회/일 역할). RENDER=true 로도 자동 해제됨.
+      - key: SKIP_DAILY_CHECK
+        value: "true"
+      # 상한 시간(분*60*1000). 기본 40분. 초과 시 수집분 저장 후 정상 종료.
+      - key: CRAWL_TIMEOUT_MS
+        value: "2400000"
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: MAX_FOREIGN_ARTICLES
+        value: "100"
+      - key: ENABLE_IMAGE_EXTRACT
+        value: "true"
+      - key: STATORY_API_URL
+        sync: false
+      - key: STATORY_NEWS_QUERY
+        sync: false
+      - key: STATORY_NEWS_LIMIT
+        sync: false
+      - key: STATORY_NEWS_REGION_HINT
+        sync: false

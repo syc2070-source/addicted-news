@@ -24,7 +24,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "crawl:once": "ts-node src/crawler/newsCrawler.ts",
     "cleanup:incidents": "ts-node src/crawler/incident_cleanup.ts",
-    "backfill:images": "ts-node src/crawler/image_backfill.ts"
+    "backfill:images": "ts-node src/crawler/image_backfill.ts",
+    "crawl:prod": "node dist/crawler/newsCrawler.js"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
