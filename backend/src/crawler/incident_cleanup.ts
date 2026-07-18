@@ -193,14 +193,24 @@ async function main() {
     const res = await client.query(`SELECT * FROM articles WHERE id = ANY($1::int[])`, [toDeleteIds]);
     backupRows = res.rows;
   }
-  fs.writeFileSync(BACKUP_PATH, JSON.stringify({
+  // 백업은 '이어붙이기'(덮어쓰기 금지) — 실행마다 run 엔트리를 배열에 append.
+  let backupLog: any[] = [];
+  if (fs.existsSync(BACKUP_PATH)) {
+    try {
+      const prev = JSON.parse(fs.readFileSync(BACKUP_PATH, 'utf8'));
+      if (Array.isArray(prev)) backupLog = prev;
+      else if (prev && typeof prev === 'object') backupLog = [prev]; // 구 단일객체 형식 흡수
+    } catch { backupLog = []; }
+  }
+  backupLog.push({
     generatedAt: new Date().toISOString(),
     mode: DRY_RUN ? 'DRY_RUN' : 'APPLY',
     incidentIds: incident.map((r) => r.id),
     dupIds: dupDelete.map((r) => r.id),
     rows: backupRows,
-  }, null, 2), 'utf8');
-  console.log(`💾 백업: ${BACKUP_PATH} (${backupRows.length}행)`);
+  });
+  fs.writeFileSync(BACKUP_PATH, JSON.stringify(backupLog, null, 2), 'utf8');
+  console.log(`💾 백업(누적 ${backupLog.length}회): ${BACKUP_PATH} (이번 ${backupRows.length}행)`);
 
   // 5) 삭제 실행(articles 만). DRY_RUN 이면 건너뜀.
   let deleted = 0;

@@ -111,16 +111,48 @@ const POLICY_CONTEXT_KEYWORDS: string[] = [
 ];
 
 /**
- * 단순 사건사고(교통사고·강력범죄) 보도인지 판정.
- * = 제목에 사건묘사 패턴이 있고 AND 제목+본문에 정책·치료·예방·회복 맥락이 전혀 없음.
+ * 매칭 전 정규화: 둥근/전각 따옴표 통일, HTML 엔티티 디코드, 공백 정리.
+ * DB 원문(RSS·AI요약)의 문자 차이로 패턴이 빗나가는 것을 방지.
  */
-export function isIncidentReport(title: string, body: string): boolean {
-  const t = (title || '').toLowerCase();
-  const full = `${title || ''} ${body || ''}`.toLowerCase();
+export function normalizeForMatch(s: string): string {
+  return (s || '')
+    // 홑따옴표류(‘ ’ ‛ ʼ ′ ＇) → '
+    .replace(/[‘’‛ʼ′＇]/g, "'")
+    // 겹따옴표류(“ ” ″ ＂) → "
+    .replace(/[“”″＂]/g, '"')
+    // 명명 HTML 엔티티
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    // 숫자 엔티티(십진/십육진)
+    .replace(/&#x([0-9a-f]+);/gi, (_m, h) => {
+      try { return String.fromCodePoint(parseInt(h, 16)); } catch { return _m; }
+    })
+    .replace(/&#(\d+);/g, (_m, n) => {
+      try { return String.fromCodePoint(Number(n)); } catch { return _m; }
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 단순 사건사고(교통사고·강력범죄) 보도인지 판정.
+ * = 제목에 사건묘사 패턴이 있고 AND 제목에 정책·치료·예방·회복 맥락이 없음.
+ *
+ * 정책 맥락은 '제목' 기준으로만 판정한다(2번째 인자 body 는 하위호환용, 미사용):
+ * 옛 DeepSeek 요약에는 '정책·예방·대책·실태' 등 논평성 단어가 섞여 있어,
+ * 요약까지 정책 맥락으로 보면 실제 사건사고가 통과해 버린다(관측된 버그).
+ * 실제 정책 보도는 제목에서 정책을 표방한다: "처벌 강화 법안", "정부 종합대책" 등.
+ */
+export function isIncidentReport(title: string, _body?: string): boolean {
+  const t = normalizeForMatch(title).toLowerCase();
   const hasIncident = INCIDENT_PATTERNS.some((re) => re.test(t));
   if (!hasIncident) return false;
   const hasPolicyContext = POLICY_CONTEXT_KEYWORDS.some((k) =>
-    full.includes(k.toLowerCase()),
+    t.includes(k.toLowerCase()),
   );
   return !hasPolicyContext;
 }
