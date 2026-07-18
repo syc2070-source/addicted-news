@@ -211,3 +211,20 @@ export async function extractArticleBody(link: string): Promise<string> {
   const { body } = await extractArticleData(link);
   return body;
 }
+
+/**
+ * 이미지 백필용: 링크(구글뉴스 리다이렉트면 해제)에서 og:image(없으면 twitter:image)
+ * URL만 추출. 본문 추출 없이 1회 요청. 실패 시 null.
+ * (resolveRealUrl·httpGetText·extractOgImageFromHtml 재사용 — undici 미사용)
+ */
+export async function extractOgImageFromUrl(link: string): Promise<string | null> {
+  try {
+    if (!link || !String(link).trim()) return null;
+    const realUrl = await resolveRealUrl(link);
+    const res = await httpGetText(realUrl);
+    if (!res || !res.ok || !/text\/html/i.test(res.contentType)) return null;
+    return extractOgImageFromHtml(res.body, res.finalUrl || realUrl);
+  } catch {
+    return null;
+  }
+}

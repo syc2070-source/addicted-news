@@ -23,7 +23,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/jest/bin/jest.js --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "crawl:once": "ts-node src/crawler/newsCrawler.ts",
-    "cleanup:incidents": "ts-node src/crawler/incident_cleanup.ts"
+    "cleanup:incidents": "ts-node src/crawler/incident_cleanup.ts",
+    "backfill:images": "ts-node src/crawler/image_backfill.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
