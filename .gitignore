@@ -30,3 +30,4 @@ video_pipeline/batch_log*.txt
 # incident_cleanup 런타임 산출물(프로덕션 실행 시 로컬 생성 — 소스 아님)
 deploy/incident_backup.json
 deploy/incident_cleanup_report.txt
+deploy/image_google_cleanup_backup.json
