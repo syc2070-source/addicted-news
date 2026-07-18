@@ -11,7 +11,7 @@ import { Article } from '../articles/article.entity';
 import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS, SourceType } from './sourceConfig';
 import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats } from './deepseek_summary';
 import { extractArticleData, httpGetText } from './article_extractor';
-import { matchesAddictionKeywords, isIncidentReport } from './addictionFilter';
+import { matchesAddictionKeywords, isIncidentReport, normalize } from './addictionFilter';
 
 type RssItem = {
   title?: string;
@@ -525,7 +525,8 @@ async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
 // v5.2 #4: 구두점(…·따옴표 등)을 공백으로, 라틴↔한글 경계를 분리("ai챗봇"→"ai 챗봇")해
 // 토큰이 뭉치지 않도록 정규화. 표현 변형 간 핵심어 겹침이 잘 드러난다.
 function normalizeForDuplicateCheck(title: string): string {
-  return (title || '')
+  // 공용 normalize()로 문자 통일(따옴표·엔티티·대시·전각 등) 후 토큰화 전처리
+  return normalize(title)
     .toLowerCase()
     .replace(/([a-z0-9])([가-힣])/g, '$1 $2')
     .replace(/([가-힣])([a-z0-9])/g, '$1 $2')

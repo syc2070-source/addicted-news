@@ -110,33 +110,54 @@ const POLICY_CONTEXT_KEYWORDS: string[] = [
   'recovery', 'rehabilitation', 'awareness', 'reform',
 ];
 
-/**
- * 매칭 전 정규화: 둥근/전각 따옴표 통일, HTML 엔티티 디코드, 공백 정리.
- * DB 원문(RSS·AI요약)의 문자 차이로 패턴이 빗나가는 것을 방지.
- */
-export function normalizeForMatch(s: string): string {
-  return (s || '')
-    // 홑따옴표류(‘ ’ ‛ ʼ ′ ＇) → '
-    .replace(/[‘’‛ʼ′＇]/g, "'")
-    // 겹따옴표류(“ ” ″ ＂) → "
-    .replace(/[“”″＂]/g, '"')
-    // 명명 HTML 엔티티
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    // 숫자 엔티티(십진/십육진)
+// 명명 HTML 엔티티 → 문자 (자주 등장하는 것만)
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  lsquo: "'", rsquo: "'", sbquo: "'", ldquo: '"', rdquo: '"', bdquo: '"',
+  hellip: '...', middot: '·', ndash: '-', mdash: '-', minus: '-',
+  copy: '(c)', reg: '(r)', trade: '(tm)', deg: '°',
+};
+
+function decodeEntities(s: string): string {
+  return s
     .replace(/&#x([0-9a-f]+);/gi, (_m, h) => {
       try { return String.fromCodePoint(parseInt(h, 16)); } catch { return _m; }
     })
     .replace(/&#(\d+);/g, (_m, n) => {
       try { return String.fromCodePoint(Number(n)); } catch { return _m; }
     })
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/&([a-z][a-z0-9]*);/gi, (_m, name) => {
+      const v = NAMED_ENTITIES[String(name).toLowerCase()];
+      return v !== undefined ? v : _m;
+    });
 }
+
+/**
+ * 공용 정규화(단일 소스) — isIncidentReport 와 중복 핵심어 추출 양쪽 입구,
+ * 크롤러 실시간 필터와 cleanup 스크립트가 동일하게 사용한다.
+ * 처리: HTML 엔티티 디코드 → NFKC(전각→반각·호환문자 통일) →
+ *       둥근/전각 따옴표 통일 → 특수 대시·말줄임 통일 → 연속공백 정리.
+ * ※ 가타카나 장음(ー, U+30FC)은 하이픈으로 바꾸지 않음(일본어 훼손 방지).
+ */
+export function normalize(s: string): string {
+  let x = s || '';
+  x = decodeEntities(x);
+  // NFKC: 전각 영숫자/기호 → 반각, 호환 문자 통일(… → ... 포함), 전각공백 → 공백
+  try { x = x.normalize('NFKC'); } catch { /* noop */ }
+  // 홑따옴표류 → '  (‘ ’ ‛ ʼ ′ ` ´ ＇)
+  x = x.replace(/[‘’‛ʼ′`´＇]/g, "'");
+  // 겹따옴표류 → "  (“ ” ‟ ″ 〝 〞 ＂)
+  x = x.replace(/[“”‟″〝〞＂]/g, '"');
+  // 특수 대시류 → -  (‐ ‑ ‒ – — ― − 및 전각 －). ー(U+30FC)는 제외.
+  x = x.replace(/[‐‑‒–—―−－]/g, '-');
+  // 말줄임 변형 → ...  (⋯, 그리고 혹시 남은 …)
+  x = x.replace(/[…⋯]/g, '...');
+  x = x.replace(/\s+/g, ' ').trim();
+  return x;
+}
+
+/** @deprecated normalize() 로 통일 — 하위호환 별칭 */
+export const normalizeForMatch = normalize;
 
 /**
  * 단순 사건사고(교통사고·강력범죄) 보도인지 판정.
@@ -148,7 +169,7 @@ export function normalizeForMatch(s: string): string {
  * 실제 정책 보도는 제목에서 정책을 표방한다: "처벌 강화 법안", "정부 종합대책" 등.
  */
 export function isIncidentReport(title: string, _body?: string): boolean {
-  const t = normalizeForMatch(title).toLowerCase();
+  const t = normalize(title).toLowerCase();
   const hasIncident = INCIDENT_PATTERNS.some((re) => re.test(t));
   if (!hasIncident) return false;
   const hasPolicyContext = POLICY_CONTEXT_KEYWORDS.some((k) =>

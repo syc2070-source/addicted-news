@@ -16,7 +16,9 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
-import { isIncidentReport } from './addictionFilter';
+import { isIncidentReport, normalize } from './addictionFilter';
+
+const DIAG = process.env.DIAG === 'true';
 
 const DRY_RUN = process.env.DRY_RUN === 'true';
 const DEPLOY_DIR = path.join(__dirname, '../../../deploy');
@@ -25,7 +27,8 @@ const BACKUP_PATH = path.join(DEPLOY_DIR, 'incident_backup.json');
 
 // ---------- 중복 판정: newsCrawler v5.2 핵심어 로직 미러 ----------
 function normalizeForDuplicateCheck(title: string): string {
-  return (title || '')
+  // 공용 normalize()로 문자 통일(따옴표·엔티티·대시·전각 등) 후 토큰화 전처리
+  return normalize(title)
     .toLowerCase()
     .replace(/([a-z0-9])([가-힣])/g, '$1 $2')
     .replace(/([가-힣])([a-z0-9])/g, '$1 $2')
@@ -63,19 +66,32 @@ const DUP_STOPWORDS = new Set([
   '추진', '발표', '계획', '방안', '행사', '세미나', '토론회', '실태', '현황',
   '문제', '우려', '논란', '급증', '감소', '증가',
 ]);
-function extractCoreKeywords(title: string): Set<string> {
+export function extractCoreKeywords(title: string): Set<string> {
   return new Set(
     normalizeForDuplicateCheck(title).split(' ').map(stripKoParticle)
       .filter((w) => w.length >= 2 && !DUP_STOPWORDS.has(w)),
   );
 }
-function titleSimilarity(a: string, b: string): number {
+function simStats(a: string, b: string): { jaccard: number; overlap: number; shared: number } {
   const k1 = extractCoreKeywords(a), k2 = extractCoreKeywords(b);
-  if (k1.size === 0 || k2.size === 0) return 0;
+  if (k1.size === 0 || k2.size === 0) return { jaccard: 0, overlap: 0, shared: 0 };
   let inter = 0;
   for (const k of k1) if (k2.has(k)) inter++;
   const union = k1.size + k2.size - inter;
-  return union > 0 ? inter / union : 0;
+  return {
+    jaccard: union > 0 ? inter / union : 0,
+    overlap: inter / Math.min(k1.size, k2.size),
+    shared: inter,
+  };
+}
+// 같은 사건 판정(보수적 — 오삭제 방지 우선):
+//   Jaccard≥0.5, 또는 핵심어 3개 이상 겹치고 작은 집합의 60% 이상 겹침.
+// 매체별 제목 변형(부가어 차이)으로 Jaccard가 낮아도 핵심 엔티티를 충분히
+// 공유하면 같은 사건으로 본다. shared≥3 요구로 서로 다른 기사(예: 지역만 다른
+// 동일 주제)를 잘못 묶어 '삭제'하는 것을 막는다.
+export function isSameEvent(a: string, b: string): boolean {
+  const s = simStats(a, b);
+  return s.jaccard >= 0.5 || (s.shared >= 3 && s.overlap >= 0.6);
 }
 // 대표 선정 순위: 전문 > 주요지 > 포털/지방지
 function sourceTypeRank(t: string | null): number {
@@ -124,6 +140,26 @@ async function main() {
   );
   console.log(`전체 기사: ${rows.length}건`);
 
+  // DIAG: 문제 제목의 실제 코드포인트 + normalize 결과를 덤프(원인 확인용)
+  if (DIAG) {
+    const probe = /리어카|반포대교|이음공간|쾅/;
+    const hits = rows.filter((r) => probe.test(r.title || ''));
+    console.log(`\n===== DIAG: 문제 제목 ${hits.length}건 코드포인트 =====`);
+    for (const r of hits) {
+      const t = r.title || '';
+      const cps = Array.from(t).map((ch: string) => {
+        const cp = ch.codePointAt(0) ?? 0;
+        return cp > 0x2000 || cp < 0x20 ? `[U+${cp.toString(16).toUpperCase()}]` : ch;
+      }).join('');
+      console.log(`  id=${r.id}`);
+      console.log(`    raw : ${t}`);
+      console.log(`    cps : ${cps}`);
+      console.log(`    norm: ${normalize(t)}`);
+      console.log(`    isIncident=${isIncidentReport(t, r.summary || '')}`);
+    }
+    console.log('===== /DIAG =====\n');
+  }
+
   // 1) 사건사고 판정 (제목+요약)
   const incident: Row[] = [];
   const incidentIds = new Set<number>();
@@ -143,7 +179,7 @@ async function main() {
     if (dupIds.has(r.id)) continue;
     let placed = false;
     for (const cl of clusters) {
-      if (titleSimilarity(cl[0].title || '', r.title || '') >= 0.5) { cl.push(r); placed = true; break; }
+      if (cl.some((m) => isSameEvent(m.title || '', r.title || ''))) { cl.push(r); placed = true; break; }
     }
     if (!placed) clusters.push([r]);
   }
@@ -243,7 +279,10 @@ async function main() {
   await client.end();
 }
 
-main().catch((e) => {
-  console.error('❌ incident_cleanup 실패:', e);
-  process.exit(1);
-});
+// 직접 실행 시에만 main() 구동(테스트에서 import 하면 DB 연결 안 함)
+if (require.main === module) {
+  main().catch((e) => {
+    console.error('❌ incident_cleanup 실패:', e);
+    process.exit(1);
+  });
+}
