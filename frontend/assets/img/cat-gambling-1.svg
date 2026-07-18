@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="도박중독">
+  <defs><linearGradient id="ggambling1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#5b21b6"/></linearGradient></defs>
+  <rect width="800" height="450" fill="url(#ggambling1)"/>
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="2"><circle cx="400" cy="150" r="78"/><circle cx="400" cy="150" r="54"/><circle cx="400" cy="150" r="30"/></g>
+  <text x="400" y="292" text-anchor="middle" font-family="'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="46" font-weight="700" fill="#ffffff">도박중독</text>
+  <text x="400" y="340" text-anchor="middle" font-family="'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="21" fill="#ffffff" fill-opacity="0.8">중독뉴스 · addicted news</text>
+</svg>

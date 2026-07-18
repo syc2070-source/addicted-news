@@ -45,20 +45,35 @@ var CATEGORY_IMG_SLUG = {
   game: 'digital', issue: 'recovery',
 };
 
-function categoryDefaultImage(category) {
-  var slug = CATEGORY_IMG_SLUG[category] || CATEGORY_IMG_SLUG[categoryDisplayName(category)] || 'default';
-  return 'assets/img/cat-' + slug + '.svg';
+// 카테고리당 3종(-1/-2/-3). 기사 id 해시로 하나를 결정적으로 선택
+// → 같은 기사는 항상 같은 이미지(새로고침해도 안 바뀜), 목록엔 골고루 분산.
+var CATEGORY_IMG_VARIANTS = 3;
+
+function hashVariant(id) {
+  var n = parseInt(id, 10);
+  if (!isFinite(n)) {
+    // id가 없으면 문자열 해시로 대체(안정적)
+    var s = String(id || '');
+    n = 0;
+    for (var i = 0; i < s.length; i++) { n = (n * 31 + s.charCodeAt(i)) | 0; }
+  }
+  return (Math.abs(n) % CATEGORY_IMG_VARIANTS) + 1; // 1..3
 }
 
-// 기사 카드 이미지 src: 실제 imageUrl 우선, 없으면 카테고리 기본 이미지.
+function categoryDefaultImage(category, id) {
+  var slug = CATEGORY_IMG_SLUG[category] || CATEGORY_IMG_SLUG[categoryDisplayName(category)] || 'default';
+  return 'assets/img/cat-' + slug + '-' + hashVariant(id) + '.svg';
+}
+
+// 기사 카드 이미지 src: 실제 imageUrl 우선, 없으면 카테고리 기본 이미지(3종 중 id 해시).
 function articleImageSrc(article) {
   if (article && article.imageUrl) return article.imageUrl;
-  return categoryDefaultImage(article ? article.category : '');
+  return categoryDefaultImage(article ? article.category : '', article ? article.id : '');
 }
 
-// onerror 핸들러(외부 이미지 깨짐 시 카테고리 기본 이미지로 1회 교체)
-function imgOnErrorAttr(category) {
-  var fallback = categoryDefaultImage(category);
+// onerror 핸들러(외부 이미지 깨짐 시 카테고리 기본 이미지로 1회 교체) — 같은 변형 사용
+function imgOnErrorAttr(category, id) {
+  var fallback = categoryDefaultImage(category, id);
   // 무한루프 방지: onerror 제거 후 fallback 지정
   return 'onerror="this.onerror=null;this.src=\'' + fallback + '\'"';
 }
@@ -524,7 +539,7 @@ function createSidebarItem(article, rank) {
 
 // TOP 뉴스 카드 (1:3 비율 - 이미지:내용)
 function createTopNewsCard(article, isMain) {
-  var imageHtml = '<div class="top-news-image-wrap"><img src="' + articleImageSrc(article) + '" alt="" class="top-news-image" ' + imgOnErrorAttr(article.category) + '></div>';
+  var imageHtml = '<div class="top-news-image-wrap"><img src="' + articleImageSrc(article) + '" alt="" class="top-news-image" ' + imgOnErrorAttr(article.category, article.id) + '></div>';
 
   var summary = article.summary || article.teaser || '';
   var maxLength = 350;
@@ -543,7 +558,7 @@ function createTopNewsCard(article, isMain) {
 
 // 일반 기사 카드
 function createArticleCard(article) {
-  var imageHtml = '<div class="article-thumb"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category) + '></div>';
+  var imageHtml = '<div class="article-thumb"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category, article.id) + '></div>';
 
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);
@@ -568,7 +583,7 @@ function createArticleCard(article) {
 
 // 전체 기사 카드
 function createFullArticleCard(article) {
-  var imageHtml = '<div class="full-article-image"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category) + '></div>';
+  var imageHtml = '<div class="full-article-image"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category, article.id) + '></div>';
 
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);

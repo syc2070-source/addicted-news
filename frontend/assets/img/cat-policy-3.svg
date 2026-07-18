@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="중독정책">
+  <defs><linearGradient id="gpolicy3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e3a8a"/><stop offset="1" stop-color="#312e81"/></linearGradient></defs>
+  <rect width="800" height="450" fill="url(#gpolicy3)"/>
+  <defs><pattern id="dot" width="34" height="34" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="3" fill="#ffffff" fill-opacity="0.14"/></pattern></defs><rect width="800" height="450" fill="url(#dot)"/>
+  <text x="400" y="292" text-anchor="middle" font-family="'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="46" font-weight="700" fill="#ffffff">중독정책</text>
+  <text x="400" y="340" text-anchor="middle" font-family="'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="21" fill="#ffffff" fill-opacity="0.8">중독뉴스 · addicted news</text>
+</svg>

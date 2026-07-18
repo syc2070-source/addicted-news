@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="게임·디지털중독">
+  <defs><linearGradient id="gdigital2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06b6d4"/><stop offset="1" stop-color="#0891b2"/></linearGradient></defs>
+  <rect width="800" height="450" fill="url(#gdigital2)"/>
+  <defs><pattern id="dg" width="40" height="40" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="40" stroke="#ffffff" stroke-opacity="0.10" stroke-width="6"/></pattern></defs><rect width="800" height="450" fill="url(#dg)"/>
+  <text x="400" y="292" text-anchor="middle" font-family="'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="46" font-weight="700" fill="#ffffff">게임·디지털중독</text>
+  <text x="400" y="340" text-anchor="middle" font-family="'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif" font-size="21" fill="#ffffff" fill-opacity="0.8">중독뉴스 · addicted news</text>
+</svg>
