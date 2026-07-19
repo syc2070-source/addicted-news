@@ -10,7 +10,8 @@ import * as path from 'path';
 import { Article } from '../articles/article.entity';
 import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS, SourceType } from './sourceConfig';
 import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats } from './deepseek_summary';
-import { extractArticleData, httpGetText } from './article_extractor';
+import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extractor';
+import { isValidArticleImageUrl } from './image_validation';
 import { matchesAddictionKeywords, isIncidentReport, normalize } from './addictionFilter';
 
 type RssItem = {
@@ -153,30 +154,9 @@ function shouldBlockByDomain(sourceUrl: string, googleUrl?: string): boolean {
   return host ? BLOCKED_DOMAINS.has(host) : false;
 }
 
-// ---------- 이미지 URL 검증 ----------
-const BLOCKED_IMAGE_PATTERNS = [
-  'google.com/images', 'gstatic.com', 'googleusercontent.com/proxy',
-  'news.google.com', 'google-news', 'googlenews',
-  'doubleclick', 'adsystem', 'adserver', 'tracking', 'pixel', 'beacon',
-  'analytics', 'advertisement', 'banner', 'sponsor',
-  'facebook.com/tr', 'twitter.com/favicon', 'linkedin.com/favicon',
-  'favicon', 'logo', 'icon', 'placeholder', 'default', 'noimage', 'no-image',
-  'blank.gif', 'spacer.gif', '1x1', 'transparent',
-  'width=1', 'height=1', 'w=1', 'h=1',
-];
-
+// ---------- 이미지 URL 검증 (image_validation.ts 공용) ----------
 function isValidImageUrl(url: string | null): boolean {
-  if (!url) return false;
-  const lowerUrl = url.toLowerCase();
-  for (const pattern of BLOCKED_IMAGE_PATTERNS) {
-    if (lowerUrl.includes(pattern)) return false;
-  }
-  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-  const validImageServices = ['cloudinary', 'imgix', 'amazonaws.com', 'wp-content/uploads'];
-  const hasValidExtension = validExtensions.some(ext => lowerUrl.includes(ext));
-  const isImageService = validImageServices.some(svc => lowerUrl.includes(svc));
-  if (url.length < 30) return false;
-  return hasValidExtension || isImageService || lowerUrl.includes('/image') || lowerUrl.includes('/photo');
+  return isValidArticleImageUrl(url);
 }
 
 // ---------- v4.0: 강화된 중독 키워드 시스템 ----------
@@ -515,20 +495,7 @@ async function generateKoreanPack(originalTitle: string, content: string, lang: 
 async function generateKoreanPackOpenAI(...) { ... }
 */
 
-// ---------- URL resolve ----------
-async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
-  try {
-    // undici(fetch) 대신 axios 기반 httpGetText 사용(스트리밍 abort 지뢰 회피)
-    const res = await httpGetText(maybeGoogleUrl);
-    if (!res) return maybeGoogleUrl;
-    const finalUrl = res.finalUrl || maybeGoogleUrl;
-    if (finalUrl.includes('news.google.com')) {
-      const m = res.body.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
-      if (m?.[1]) return m[1];
-    }
-    return finalUrl;
-  } catch { return maybeGoogleUrl; }
-}
+// ---------- URL resolve (article_extractor.resolveFinalUrl 공용) ----------
 
 // ---------- 중복 체크 ----------
 // v5.2 #4: 구두점(…·따옴표 등)을 공백으로, 라틴↔한글 경계를 분리("ai챗봇"→"ai 챗봇")해

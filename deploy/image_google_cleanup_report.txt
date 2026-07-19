@@ -1,0 +1,16 @@
+=== image_google_cleanup 2026-07-18T10:43:27.115Z ===
+대상(구글 오염): 2447건
+재수집 성공: 0건
+NULL 처리: 2447건
+잔여 구글 오염: 0건
+최종 실이미지 보유: 694/3223 (21.5%)
+백업: D:\addicted-news\deploy\image_google_cleanup_backup.json
+
+=== image_google_cleanup 2026-07-18T10:55:59.244Z ===
+대상(구글 오염): 489건
+재수집 성공: 0건
+NULL 처리: 489건
+잔여 구글 오염: 0건
+최종 실이미지 보유: 694/3223 (21.5%)
+백업: D:\addicted-news\deploy\image_google_cleanup_backup.json
+

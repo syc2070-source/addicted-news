@@ -8,6 +8,8 @@
 // 응답 스트리밍 중 AbortController abort가 겹치면 내부 assert(!this.paused)를
 // uncaughtException 으로 던져 프로세스를 죽이는 지뢰가 있어 사용하지 않는다.
 import axios from 'axios';
+import { isValidArticleImageUrl } from './image_validation';
+import { decodeGoogleNewsUrl } from './google_news_url';
 
 // HTML 파싱: @mozilla/readability + jsdom 권장. 미설치 시 정규식 폴백.
 let Readability: any = null;
@@ -80,20 +82,36 @@ export async function httpGetText(url: string, ua: string = UA): Promise<HttpTex
   }
 }
 
-/**
- * 구글 뉴스 링크 등에서 실제 기사 URL 을 해석.
- */
-async function resolveRealUrl(link: string): Promise<string> {
+/** 구글 뉴스·RSS articles URL 여부 */
+export function isGoogleNewsUrl(link: string): boolean {
   try {
-    const u = new URL(link);
-    if (!/news\.google\./.test(u.hostname)) return link;
-    const res = await httpGetText(link);
-    if (res && res.finalUrl && !/news\.google\./.test(new URL(res.finalUrl).hostname)) {
-      return res.finalUrl;
-    }
-    return link;
+    return /news\.google\./.test(new URL(link).hostname);
   } catch {
-    return link;
+    return /news\.google\./.test(link);
+  }
+}
+
+/**
+ * 구글 뉴스 링크 등에서 실제 기사 URL 해석.
+ * newsCrawler.resolveFinalUrl 과 동일 — canonical 폴백 포함.
+ */
+export async function resolveFinalUrl(maybeGoogleUrl: string): Promise<string> {
+  try {
+    if (isGoogleNewsUrl(maybeGoogleUrl)) {
+      const decoded = await decodeGoogleNewsUrl(maybeGoogleUrl);
+      if (decoded && !isGoogleNewsUrl(decoded)) return decoded;
+      return maybeGoogleUrl;
+    }
+    const res = await httpGetText(maybeGoogleUrl);
+    if (!res) return maybeGoogleUrl;
+    const finalUrl = res.finalUrl || maybeGoogleUrl;
+    if (finalUrl.includes('news.google.com')) {
+      const m = res.body.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i);
+      if (m?.[1] && !isGoogleNewsUrl(m[1])) return m[1];
+    }
+    return finalUrl;
+  } catch {
+    return maybeGoogleUrl;
   }
 }
 
@@ -175,7 +193,13 @@ export async function extractArticleData(link: string): Promise<ArticleData> {
   const empty: ArticleData = { body: '', ogImage: null };
   try {
     if (!link || !String(link).trim()) return empty;
-    const realUrl = await resolveRealUrl(link);
+    let realUrl = link;
+    if (isGoogleNewsUrl(link)) {
+      realUrl = await resolveFinalUrl(link);
+      if (isGoogleNewsUrl(realUrl)) return empty;
+    } else {
+      realUrl = await resolveFinalUrl(link);
+    }
 
     // 1차 시도(데스크톱 UA)
     const res = await httpGetText(realUrl, UA);
@@ -196,6 +220,7 @@ export async function extractArticleData(link: string): Promise<ArticleData> {
       }
     }
 
+    if (ogImage && !isValidArticleImageUrl(ogImage)) ogImage = null;
     return { body: body.length >= 120 ? body.slice(0, 6000) : '', ogImage };
   } catch {
     return empty;
@@ -220,10 +245,17 @@ export async function extractArticleBody(link: string): Promise<string> {
 export async function extractOgImageFromUrl(link: string): Promise<string | null> {
   try {
     if (!link || !String(link).trim()) return null;
-    const realUrl = await resolveRealUrl(link);
+    let realUrl = link;
+    if (isGoogleNewsUrl(link)) {
+      realUrl = await resolveFinalUrl(link);
+      if (isGoogleNewsUrl(realUrl)) return null;
+    } else {
+      realUrl = await resolveFinalUrl(link);
+    }
     const res = await httpGetText(realUrl);
     if (!res || !res.ok || !/text\/html/i.test(res.contentType)) return null;
-    return extractOgImageFromHtml(res.body, res.finalUrl || realUrl);
+    const og = extractOgImageFromHtml(res.body, res.finalUrl || realUrl);
+    return isValidArticleImageUrl(og) ? og : null;
   } catch {
     return null;
   }

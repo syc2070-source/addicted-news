@@ -19,6 +19,7 @@
 import 'dotenv/config';
 import { Client, ClientConfig } from 'pg';
 import { extractOgImageFromUrl } from './article_extractor';
+import { isValidArticleImageUrl } from './image_validation';
 
 const DELAY_MS = Number(process.env.DELAY_MS ?? 700);
 const LIMIT = Number(process.env.BACKFILL_LIMIT ?? 0); // 0 = 전체
@@ -42,18 +43,7 @@ function buildClientConfig(): ClientConfig {
   };
 }
 
-// 추적 픽셀·로고 등 명백한 비이미지 배제(가벼운 검증)
-const BAD_IMG = [
-  'favicon', 'logo', 'sprite', 'placeholder', 'default', 'blank', 'spacer',
-  '1x1', 'pixel', 'beacon', 'tracking', 'doubleclick', 'adsystem',
-];
-function isLikelyImage(u: string | null): boolean {
-  if (!u || !/^https?:\/\//i.test(u)) return false;
-  const low = u.toLowerCase();
-  if (u.length < 20) return false;
-  if (BAD_IMG.some((b) => low.includes(b))) return false;
-  return true;
-}
+// 추적 픽셀·로고 등 — image_validation.isValidArticleImageUrl 공용
 
 async function main() {
   const resume = process.argv.includes('--resume');
@@ -78,10 +68,9 @@ async function main() {
   for (const t of targets) {
     done++;
     try {
-      // 구글뉴스 링크면 google_url보다 source_url 우선(이미 해석된 원문일 수 있음)
-      const link = t.source_url || t.google_url || '';
+      const link = t.google_url || t.source_url || '';
       const img = await extractOgImageFromUrl(link);
-      if (isLikelyImage(img)) {
+      if (isValidArticleImageUrl(img)) {
         await client.query(`UPDATE articles SET image_url = $1, updated_at = now() WHERE id = $2`, [img, t.id]);
         ok++;
       } else {
