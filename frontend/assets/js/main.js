@@ -45,14 +45,23 @@ var CATEGORY_IMG_SLUG = {
   game: 'digital', issue: 'recovery',
 };
 
-// 카테고리당 3종(-1/-2/-3). 기사 id 해시로 하나를 결정적으로 선택
-// → 같은 기사는 항상 같은 이미지(새로고침해도 안 바뀜), 목록엔 골고루 분산.
+// 카테고리당 3종 색조(-1/-2/-3). 기사 id 해시로 하나를 결정적으로 선택
+// → 같은 기사는 항상 같은 톤(새로고침해도 안 바뀜), 목록엔 골고루 분산.
 var CATEGORY_IMG_VARIANTS = 3;
+
+// cat-{slug}-{1..3}.svg 와 동일한 그라데이션 색쌍(제목 텍스트 카드에 재사용)
+var CATEGORY_COLORS = {
+  policy:         [['#2563eb','#1e40af'],['#3b82f6','#1d4ed8'],['#1e3a8a','#312e81']],
+  'alcohol-drug': [['#dc2626','#991b1b'],['#ef4444','#b91c1c'],['#b91c1c','#7f1d1d']],
+  gambling:       [['#7c3aed','#5b21b6'],['#8b5cf6','#6d28d9'],['#6d28d9','#4c1d95']],
+  digital:        [['#0891b2','#0e7490'],['#06b6d4','#0891b2'],['#0e7490','#155e75']],
+  recovery:       [['#ea580c','#c2410c'],['#f97316','#ea580c'],['#c2410c','#9a3412']],
+  default:        [['#475569','#334155'],['#64748b','#475569'],['#334155','#1e293b']]
+};
 
 function hashVariant(id) {
   var n = parseInt(id, 10);
   if (!isFinite(n)) {
-    // id가 없으면 문자열 해시로 대체(안정적)
     var s = String(id || '');
     n = 0;
     for (var i = 0; i < s.length; i++) { n = (n * 31 + s.charCodeAt(i)) | 0; }
@@ -60,22 +69,100 @@ function hashVariant(id) {
   return (Math.abs(n) % CATEGORY_IMG_VARIANTS) + 1; // 1..3
 }
 
-function categoryDefaultImage(category, id) {
-  var slug = CATEGORY_IMG_SLUG[category] || CATEGORY_IMG_SLUG[categoryDisplayName(category)] || 'default';
-  return 'assets/img/cat-' + slug + '-' + hashVariant(id) + '.svg';
+function categorySlug(category) {
+  return CATEGORY_IMG_SLUG[category] || CATEGORY_IMG_SLUG[categoryDisplayName(category)] || 'default';
 }
 
-// 기사 카드 이미지 src: 실제 imageUrl 우선, 없으면 카테고리 기본 이미지(3종 중 id 해시).
+function xmlEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 넓은 글자(한글·CJK·전각) 판별 — 줄바꿈 폭 계산용
+function isWideChar(ch) {
+  return /[ᄀ-ᇿ㄰-㆏가-힯぀-ヿㇰ-ㇿ一-鿿＀-￯]/.test(ch);
+}
+function textWidth(str, fontSize) {
+  var w = 0, arr = Array.from(String(str || ''));
+  for (var i = 0; i < arr.length; i++) w += isWideChar(arr[i]) ? fontSize : fontSize * 0.55;
+  return w;
+}
+// 제목을 maxWidth 폭에 맞춰 최대 maxLines 줄로 줄바꿈(넘치면 … 말줄임)
+function wrapText(title, maxWidth, fontSize, maxLines) {
+  var chars = Array.from(String(title || '').trim());
+  var lines = [], cur = '', curW = 0, idx = 0, truncated = false;
+  for (idx = 0; idx < chars.length; idx++) {
+    var ch = chars[idx];
+    var cw = isWideChar(ch) ? fontSize : fontSize * 0.55;
+    if (curW + cw > maxWidth && cur.length) {
+      lines.push(cur);
+      cur = ''; curW = 0;
+      if (lines.length >= maxLines) { truncated = true; break; }
+    }
+    cur += ch; curW += cw;
+  }
+  if (!truncated) { if (cur.length) lines.push(cur); }
+  else {
+    // 마지막 줄에 … 추가(폭 맞춰 잘라내기)
+    var last = lines[lines.length - 1];
+    while (last.length && textWidth(last + '…', fontSize) > maxWidth) last = last.slice(0, -1);
+    lines[lines.length - 1] = last + '…';
+  }
+  return lines;
+}
+
+// 제목 텍스트 카드(동적 SVG data URI): 카테고리 색 배경 + 제목 2~3줄 + 하단 매체명·로고타입
+function titleCardDataUri(article) {
+  var W = 800, H = 450, PAD = 56;
+  var cat = article ? article.category : '';
+  var slug = categorySlug(cat);
+  var variant = hashVariant(article ? article.id : '');
+  var pair = (CATEGORY_COLORS[slug] || CATEGORY_COLORS.default)[variant - 1];
+  var c1 = pair[0], c2 = pair[1];
+  var title = (article && article.title) ? article.title : '';
+  var source = (article && article.source) ? article.source : '';
+
+  var fontSize = 44, lineH = 60, maxLines = 3;
+  var lines = wrapText(title, W - PAD * 2, fontSize, maxLines);
+  // 제목 블록을 세로 중앙 정렬(상단 여백 확보)
+  var blockH = lines.length * lineH;
+  var startY = Math.max(120, (H - 70 - blockH) / 2 + fontSize);
+  var tspans = '';
+  for (var i = 0; i < lines.length; i++) {
+    tspans += '<tspan x="' + PAD + '" y="' + (startY + i * lineH) + '">' + xmlEscape(lines[i]) + '</tspan>';
+  }
+  var gid = 'g_' + slug + '_' + variant;
+  var fontFam = "'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR','맑은 고딕',sans-serif";
+  var svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + xmlEscape(title) + '">' +
+      '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0" stop-color="' + c1 + '"/><stop offset="1" stop-color="' + c2 + '"/></linearGradient></defs>' +
+      '<rect width="' + W + '" height="' + H + '" fill="url(#' + gid + ')"/>' +
+      '<g fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="2">' +
+        '<circle cx="' + (W - 70) + '" cy="70" r="52"/><circle cx="' + (W - 70) + '" cy="70" r="32"/></g>' +
+      '<text font-family="' + fontFam + '" font-size="' + fontSize + '" font-weight="700" fill="#ffffff">' + tspans + '</text>' +
+      '<text x="' + PAD + '" y="' + (H - 40) + '" font-family="' + fontFam + '" font-size="22" fill="#ffffff" fill-opacity="0.85">' + xmlEscape(source) + '</text>' +
+      '<text x="' + (W - PAD) + '" y="' + (H - 40) + '" text-anchor="end" font-family="' + fontFam + '" font-size="22" font-weight="700" fill="#ffffff" fill-opacity="0.9">중독뉴스</text>' +
+    '</svg>';
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+// (하위호환) 정적 카테고리 SVG 경로 — 현재는 텍스트 카드로 대체됨
+function categoryDefaultImage(category, id) {
+  return 'assets/img/cat-' + categorySlug(category) + '-' + hashVariant(id) + '.svg';
+}
+
+// 기사 카드 이미지 src: 실제 imageUrl 우선, 없으면 제목 텍스트 카드.
 function articleImageSrc(article) {
   if (article && article.imageUrl) return article.imageUrl;
-  return categoryDefaultImage(article ? article.category : '', article ? article.id : '');
+  return titleCardDataUri(article);
 }
 
-// onerror 핸들러(외부 이미지 깨짐 시 카테고리 기본 이미지로 1회 교체) — 같은 변형 사용
-function imgOnErrorAttr(category, id) {
-  var fallback = categoryDefaultImage(category, id);
-  // 무한루프 방지: onerror 제거 후 fallback 지정
-  return 'onerror="this.onerror=null;this.src=\'' + fallback + '\'"';
+// onerror 핸들러(외부 이미지 깨짐 시 제목 텍스트 카드로 1회 교체) — 무한루프 방지
+function imgOnErrorAttr(article) {
+  var fallback = titleCardDataUri(article).replace(/"/g, '&quot;');
+  return 'onerror="this.onerror=null;this.src=\'' + fallback.replace(/'/g, '%27') + '\'"';
 }
 
 // ============================================================
@@ -539,7 +626,7 @@ function createSidebarItem(article, rank) {
 
 // TOP 뉴스 카드 (1:3 비율 - 이미지:내용)
 function createTopNewsCard(article, isMain) {
-  var imageHtml = '<div class="top-news-image-wrap"><img src="' + articleImageSrc(article) + '" alt="" class="top-news-image" ' + imgOnErrorAttr(article.category, article.id) + '></div>';
+  var imageHtml = '<div class="top-news-image-wrap"><img src="' + articleImageSrc(article) + '" alt="" class="top-news-image" ' + imgOnErrorAttr(article) + '></div>';
 
   var summary = article.summary || article.teaser || '';
   var maxLength = 350;
@@ -558,7 +645,7 @@ function createTopNewsCard(article, isMain) {
 
 // 일반 기사 카드
 function createArticleCard(article) {
-  var imageHtml = '<div class="article-thumb"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category, article.id) + '></div>';
+  var imageHtml = '<div class="article-thumb"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article) + '></div>';
 
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);
@@ -583,7 +670,7 @@ function createArticleCard(article) {
 
 // 전체 기사 카드
 function createFullArticleCard(article) {
-  var imageHtml = '<div class="full-article-image"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article.category, article.id) + '></div>';
+  var imageHtml = '<div class="full-article-image"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article) + '></div>';
 
   var summary = article.summary || '';
   var teaser = article.teaser || summary.substring(0, 100);

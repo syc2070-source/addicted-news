@@ -243,20 +243,29 @@ export async function extractArticleBody(link: string): Promise<string> {
  * (resolveRealUrl·httpGetText·extractOgImageFromHtml 재사용 — undici 미사용)
  */
 export async function extractOgImageFromUrl(link: string): Promise<string | null> {
+  const { image } = await fetchImageForBackfill(link);
+  return image;
+}
+
+/**
+ * 백필용: og:image 추출 + 마지막 HTTP 상태코드를 함께 반환(429 감지용).
+ * 구글 429는 원문 페이지 fetch가 429로 나타나므로 status 로 노출한다.
+ * status: 마지막 요청의 HTTP 상태(요청 자체 실패/타임아웃이면 0).
+ */
+export async function fetchImageForBackfill(
+  link: string,
+): Promise<{ image: string | null; status: number }> {
   try {
-    if (!link || !String(link).trim()) return null;
-    let realUrl = link;
-    if (isGoogleNewsUrl(link)) {
-      realUrl = await resolveFinalUrl(link);
-      if (isGoogleNewsUrl(realUrl)) return null;
-    } else {
-      realUrl = await resolveFinalUrl(link);
-    }
+    if (!link || !String(link).trim()) return { image: null, status: 0 };
+    const realUrl = await resolveFinalUrl(link);
     const res = await httpGetText(realUrl);
-    if (!res || !res.ok || !/text\/html/i.test(res.contentType)) return null;
+    if (!res) return { image: null, status: 0 };
+    if (!res.ok || !/text\/html/i.test(res.contentType)) {
+      return { image: null, status: res.status };
+    }
     const og = extractOgImageFromHtml(res.body, res.finalUrl || realUrl);
-    return isValidArticleImageUrl(og) ? og : null;
+    return { image: isValidArticleImageUrl(og) ? og : null, status: res.status };
   } catch {
-    return null;
+    return { image: null, status: 0 };
   }
 }

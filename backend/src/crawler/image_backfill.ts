@@ -18,11 +18,14 @@
 // ============================================================
 import 'dotenv/config';
 import { Client, ClientConfig } from 'pg';
-import { extractOgImageFromUrl } from './article_extractor';
-import { isValidArticleImageUrl } from './image_validation';
+import { fetchImageForBackfill } from './article_extractor';
 
 const DELAY_MS = Number(process.env.DELAY_MS ?? 700);
 const LIMIT = Number(process.env.BACKFILL_LIMIT ?? 0); // 0 = 전체
+// 429(rate limit) 대응
+const RL_MAX_RETRY = Number(process.env.RL_MAX_RETRY ?? 3);       // 지수 백오프 최대 재시도
+const RL_BASE_MS = Number(process.env.RL_BASE_MS ?? 2000);         // 백오프 기준(2s,4s,8s)
+const RL_ABORT_STREAK = Number(process.env.RL_ABORT_STREAK ?? 50); // 연속 429 이 수만큼이면 중단
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -64,23 +67,50 @@ async function main() {
 
   console.log(`전체 ${totalArticles}건 중 대상(이미지 없음) ${targets.length}건 처리 시작\n`);
 
-  let ok = 0, fail = 0, done = 0;
+  let ok = 0, fail = 0, done = 0, rateLimited = 0, consec429 = 0;
+  let aborted = false;
   for (const t of targets) {
     done++;
-    try {
-      const link = t.google_url || t.source_url || '';
-      const img = await extractOgImageFromUrl(link);
-      if (isValidArticleImageUrl(img)) {
+    const link = t.google_url || t.source_url || '';
+
+    // 429면 지수 백오프로 최대 RL_MAX_RETRY 회 재시도
+    let status = 0, img: string | null = null;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const r = await fetchImageForBackfill(link);
+        img = r.image; status = r.status;
+      } catch {
+        img = null; status = 0;
+      }
+      if (status === 429 && attempt < RL_MAX_RETRY) {
+        const backoff = RL_BASE_MS * Math.pow(2, attempt); // 2s,4s,8s
+        console.log(`  ⏳ 429 백오프 ${attempt + 1}/${RL_MAX_RETRY} (${backoff}ms) id=${t.id}`);
+        await sleep(backoff);
+        continue;
+      }
+      break;
+    }
+
+    if (status === 429) {
+      // 재시도 후에도 429 → 이 건은 rate-limit 스킵, 연속 카운트 증가
+      rateLimited++; consec429++;
+      if (consec429 >= RL_ABORT_STREAK) {
+        aborted = true;
+        console.warn(`\n🛑 연속 429 ${consec429}건 — 남은 작업 자동 중단(집계 출력). 나중에 --resume 으로 재개 가능.\n`);
+        break;
+      }
+    } else {
+      consec429 = 0; // 429 연속 끊김
+      if (img) {
         await client.query(`UPDATE articles SET image_url = $1, updated_at = now() WHERE id = $2`, [img, t.id]);
         ok++;
       } else {
         fail++;
       }
-    } catch {
-      fail++;
     }
+
     if (done % 100 === 0) {
-      console.log(`  …${done}/${targets.length} 처리 (성공 ${ok}, 실패 ${fail})`);
+      console.log(`  …${done}/${targets.length} 처리 (성공 ${ok}, 실패 ${fail}, 429 ${rateLimited})`);
     }
     if (DELAY_MS > 0) await sleep(DELAY_MS);
   }
@@ -93,9 +123,11 @@ async function main() {
   const rate = totalArticles > 0 ? ((withImg / totalArticles) * 100).toFixed(1) : '0.0';
 
   console.log('\n================ 결과 ================');
-  console.log(`대상: ${targets.length}건`);
+  console.log(`${aborted ? '⚠️ 연속 429로 중단됨' : '완료'}`);
+  console.log(`대상: ${targets.length}건 (처리 ${done}건)`);
   console.log(`성공(백필): ${ok}건`);
   console.log(`실패(og 없음/부적합): ${fail}건`);
+  console.log(`429(rate limit) 스킵: ${rateLimited}건`);
   console.log(`최종 이미지 보유: ${withImg}/${totalArticles} (${rate}%)`);
   console.log('=====================================\n');
 
