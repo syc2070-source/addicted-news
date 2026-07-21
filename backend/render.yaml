@@ -88,6 +88,9 @@ services:
         value: "100"
       - key: ENABLE_IMAGE_EXTRACT
         value: "true"
+      # v5.4: 자동 블랙리스트/알림용 Discord 웹훅(선택, 없으면 콘솔 로그로 no-op)
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
       - key: STATORY_API_URL
         sync: false
       - key: STATORY_NEWS_QUERY
@@ -96,3 +99,34 @@ services:
         sync: false
       - key: STATORY_NEWS_REGION_HINT
         sync: false
+
+  # ── v5.4 2-5: judge_cleanup 안전망(주 1회 일요일 새벽) ──
+  # 입구 게이트 도입 후 일상 도구가 아닌 안전망으로 강등. restored_manual 은 제외됨.
+  - type: cron
+    name: addicted-news-judge-cleanup
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: backend
+    schedule: "0 18 * * 6"   # 토 18:00 UTC = 일 03:00 KST (일요일 새벽)
+    buildCommand: npm install && npm run build
+    startCommand: node dist/crawler/judge_cleanup.js
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: JUDGE_DAYS
+        value: "14"
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat

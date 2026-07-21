@@ -37,18 +37,26 @@ const SUMMARY_SYSTEM_KO_BASE =
   '과장·선정성·자극적 표현 배제. 담담하고 정확하게. 도박·약물 사용을 조장하거나 미화하지 말 것. ' +
   '민감한 주제(자살·자해 등)는 방법·수치를 넣지 말 것.';
 
-// v5.4: 최종 판정 필드 — 요약과 함께 JSON으로 반환.
+// v5.4: 입구 게이트용 판정 — 정밀도 우선("엄한 기사가 실리는 것보다 잃는 것이 낫다").
 const JUDGE_JSON_INSTRUCTION =
-  ' 그리고 기사의 성격을 판정한다. ' +
-  'report_type: 개별 인물·특정 사건의 사고·범죄·폭행·투약·음주운전·밀수·판결·구형·선고·검거·기소·수사 등 ' +
-  '"단일 사건/사고/범죄" 보도이면 "incident", ' +
-  '정책·제도·법안·규제·통계·실태·연구·조사·치료·예방·회복·재활·캠페인·사회구조·이슈 보도이면 "issue". ' +
-  '단순 범죄/사고/판결 보도는 본문에 중독 관련 단어가 있어도 "incident"다. ' +
-  'category_fit: 이 기사가 "중독(도박·약물·알코올·게임/디지털·행동중독)" 이슈로서 유효하고 아래 배정 카테고리에 실제로 부합하면 true, ' +
-  '단순 사건사고이거나 중독과 무관하거나 배정 카테고리와 맞지 않으면 false. ' +
-  '반드시 아래 JSON만 출력하라(다른 텍스트 금지): ' +
-  '{"titleKo":"제목(외국어 기사는 한국어 번역, 한국어 기사는 원제 그대로)",' +
-  '"summary":"한국어 한 문단 요약","report_type":"incident|issue","category_fit":true|false}';
+  ' 그리고 이 기사가 "중독 전문 매체"에 실릴 자격이 있는지 엄격히 판정한다. 정밀도 우선 — 애매하면 거부한다.\n' +
+  '[유지 = category_fit:true, is_incident:false] ' +
+  '중독 관련 정책·법·제도·규제 동향; 정부·지자체·공공기관·공익재단의 예방사업·캠페인·포럼·교육(강원랜드·사행산업통합감독위 유형); ' +
+  '중독 관련 연구 결과·통계·역학 데이터·치료법·치료과학; 중독 산업 구조 분석·심층 기획·연재; 해외 중독 정책·대응 사례.\n' +
+  '[거부 = category_fit:false 또는 is_incident:true] ' +
+  '개인의 사건·사고·범죄·사망 보도(범인/피해자가 특정 개인); ' +
+  '연예인·유명인의 중독 고백·신변잡기·예능 내용(금쪽이·결혼지옥·상담소 유형); ' +
+  '소송·재판·판결 보도(집단소송 포함 — 전부 사건으로 분류); ' +
+  '스포츠 경기 결과·문화연예 일반·건강 일반 상식; ' +
+  '"중독"이 비유·수사로만 쓰인 기사(규제 중독, 중독성 있는 맛, 관직 중독 등); ' +
+  '카지노·토토 홍보 및 SEO 생성 콘텐츠(부자연스러운 조사, 무의미한 부제 패턴); ' +
+  '확신이 서지 않는 모든 경우.\n' +
+  'is_incident: 개별 인물·특정 사건의 사고·범죄·판결·수사 보도이면 true(본문에 중독 단어가 있어도). ' +
+  'category_fit: 위 [유지] 기준에 확실히 부합하고 배정 카테고리에 맞으면 true, 아니면 false. ' +
+  'confidence: 판정 확신도 "high"|"medium"|"low"(조금이라도 애매하면 high 를 주지 말 것).\n' +
+  '반드시 아래 JSON만 출력(다른 텍스트 금지): ' +
+  '{"titleKo":"제목(외국어는 한국어 번역, 한국어는 원제)","summary":"한국어 한 문단 요약",' +
+  '"is_incident":true|false,"category_fit":true|false,"confidence":"high|medium|low"}';
 
 const SUMMARY_SYSTEM_KO = SUMMARY_SYSTEM_KO_BASE + JUDGE_JSON_INSTRUCTION;
 
@@ -57,12 +65,13 @@ const SUMMARY_SYSTEM_TRANSLATE =
   ' 원문이 외국어(영어·일본어 등)이면 반드시 한국어로 번역·요약하라.' +
   JUDGE_JSON_INSTRUCTION;
 
-export type ReportType = 'incident' | 'issue';
+export type Confidence = 'high' | 'medium' | 'low';
 export type DeepSeekPack = {
   titleKo: string;
   summary: string;
-  reportType?: ReportType;   // v5.4: incident면 저장 스킵
-  categoryFit?: boolean;     // v5.4: false면 저장 스킵
+  isIncident?: boolean;      // v5.4: true면 거부
+  categoryFit?: boolean;     // v5.4: false면 거부
+  confidence?: Confidence;   // v5.4: high 아니면 거부(입구 게이트)
 };
 
 /**
@@ -128,21 +137,31 @@ export async function summarizeKoreanDeepSeek(
       if (jsonMatch) {
         try {
           const parsed = JSON.parse(jsonMatch[0]) as {
-            titleKo?: unknown; summary?: unknown; report_type?: unknown; category_fit?: unknown;
+            titleKo?: unknown; summary?: unknown; is_incident?: unknown;
+            report_type?: unknown; category_fit?: unknown; confidence?: unknown;
           };
-          let summary = String(parsed.summary || '').trim().replace(/\n{2,}/g, '\n').trim();
+          const summary = String(parsed.summary || '').trim().replace(/\n{2,}/g, '\n').trim();
           const titleKo = String(parsed.titleKo || '').trim() || title;
-          const rt = String(parsed.report_type || '').toLowerCase();
-          const reportType: ReportType | undefined =
-            rt === 'incident' ? 'incident' : rt === 'issue' ? 'issue' : undefined;
+          // is_incident(신) 우선, 없으면 report_type(구) 호환
+          let isIncident: boolean | undefined;
+          const ii = parsed.is_incident;
+          if (ii === true || ii === 'true') isIncident = true;
+          else if (ii === false || ii === 'false') isIncident = false;
+          else {
+            const rt = String(parsed.report_type || '').toLowerCase();
+            isIncident = rt === 'incident' ? true : rt === 'issue' ? false : undefined;
+          }
           const cf = parsed.category_fit;
           const categoryFit: boolean | undefined =
             cf === false || cf === 'false' ? false : cf === true || cf === 'true' ? true : undefined;
+          const conf = String(parsed.confidence || '').toLowerCase();
+          const confidence: Confidence | undefined =
+            conf === 'high' ? 'high' : conf === 'medium' ? 'medium' : conf === 'low' ? 'low' : undefined;
           // 번역 경로는 titleKo 필수, 국내 경로는 원제 사용
           const okTitle = translate ? String(parsed.titleKo || '').trim().length > 0 : true;
           if (okTitle && summary.length >= 10) {
             deepseekStats.ok++;
-            return { titleKo, summary, reportType, categoryFit };
+            return { titleKo, summary, isIncident, categoryFit, confidence };
           }
         } catch { /* JSON 파싱 실패 → 아래 폴백 */ }
       }

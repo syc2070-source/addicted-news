@@ -1,0 +1,13 @@
+{
+  "_comment": "v5.4 도메인 블랙리스트. 이 도메인 기사는 딥시크 호출 없이 즉시 폐기(0원 필터). 카지노 SEO 스팸 등.",
+  "domains": [
+    "termokonteiner.ru",
+    "kmrk.ru",
+    "russia-asean.com",
+    "pekergyo.com",
+    "horacke-noviny.com",
+    "rumexbaltics.eu",
+    "mkpsm.ru",
+    "les24heures.fr"
+  ]
+}

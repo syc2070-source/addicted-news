@@ -23,6 +23,7 @@ import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { summarizeKoreanDeepSeek, deepseekAvailable } from './deepseek_summary';
 import { isIncidentReport } from './addictionFilter';
+import { shouldDelete, Judgment } from './judge_article';
 
 const DRY_RUN = process.env.DRY_RUN === 'true';
 const DELAY_MS = Number(process.env.DELAY_MS ?? 500);
@@ -56,7 +57,7 @@ type Row = {
   source: string | null; published_at: string | null; created_at: string | Date | null;
 };
 
-type Judged = { reportType?: 'incident' | 'issue'; categoryFit?: boolean; via: 'deepseek' | 'keyword' };
+type Judged = Judgment & { via: 'deepseek' | 'keyword' };
 
 async function judge(row: Row): Promise<Judged> {
   const content = (row.summary && row.summary.trim()) || row.title || '';
@@ -66,20 +67,17 @@ async function judge(row: Row): Promise<Judged> {
         translate: false,
         category: row.category || '미지정',
       });
-      if (pack) return { reportType: pack.reportType, categoryFit: pack.categoryFit, via: 'deepseek' };
+      if (pack) {
+        return { isIncident: pack.isIncident, categoryFit: pack.categoryFit, confidence: pack.confidence, via: 'deepseek' };
+      }
     } catch { /* 폴백 */ }
   }
   // 폴백: 키워드 사건사고 판정(딥시크 미가용/실패 시 — 주로 로컬 검증용)
   return {
-    reportType: isIncidentReport(row.title || '', content) ? 'incident' : 'issue',
+    isIncident: isIncidentReport(row.title || '', content),
     categoryFit: undefined,
     via: 'keyword',
   };
-}
-
-// 삭제 판정: incident 이거나 category_fit=false. 판정 미상은 삭제 안 함(fail-safe).
-export function shouldDelete(j: { reportType?: 'incident' | 'issue'; categoryFit?: boolean }): boolean {
-  return j.reportType === 'incident' || j.categoryFit === false;
 }
 
 async function main() {
@@ -91,11 +89,13 @@ async function main() {
   const { rows: totalRow } = await client.query<{ c: string }>(`SELECT COUNT(*)::text c FROM articles`);
   const totalBefore = Number(totalRow[0]?.c ?? 0);
 
-  // 최근 JUDGE_DAYS 일 내 저장분(created_at) 대상
+  // 최근 JUDGE_DAYS 일 내 저장분(created_at) 대상.
+  // v5.4: restored_manual(수동 복원)은 재심사 제외(작업1과 연동).
   const targetSql =
     `SELECT id, title, summary, category, source, published_at, created_at
        FROM articles
       WHERE created_at >= now() - ($1::int * interval '1 day')
+        AND (judge_status IS DISTINCT FROM 'restored_manual')
       ORDER BY id DESC` + (JUDGE_LIMIT > 0 ? ` LIMIT ${JUDGE_LIMIT}` : '');
   const { rows: targets } = await client.query<Row>(targetSql, [JUDGE_DAYS]);
   console.log(`전체 ${totalBefore}건 / 재심사 대상(최근 ${JUDGE_DAYS}일) ${targets.length}건\n`);
@@ -107,7 +107,7 @@ async function main() {
     const j = await judge(row);
     if (shouldDelete(j)) {
       toDelete.push({ ...row, judged: j });
-      const reason = j.reportType === 'incident' ? 'incident' : 'category_fit=false';
+      const reason = j.isIncident === true ? 'incident' : 'category_fit=false';
       console.log(`  🤖 삭제대상(${reason}, ${j.via}) [id=${row.id}] ${String(row.title).slice(0, 40)}`);
     }
     if (reviewed % 50 === 0) console.log(`  …${reviewed}/${targets.length} 심사 (삭제대상 ${toDelete.length})`);
@@ -123,7 +123,7 @@ async function main() {
   lines.push(`# 대상 ${targets.length}건 중 삭제대상 ${toDelete.length}건`);
   lines.push('');
   for (const r of toDelete) {
-    const reason = r.judged.reportType === 'incident' ? 'incident' : 'category_fit=false';
+    const reason = r.judged.isIncident === true ? 'incident' : 'category_fit=false';
     lines.push(`  [id=${r.id}] (${r.published_at ?? '-'}) [${reason}/${r.judged.via}] ${r.title}`);
   }
   fs.writeFileSync(REPORT_PATH, lines.join('\n'), 'utf8');
@@ -164,8 +164,8 @@ async function main() {
 
   const { rows: afterRow } = await client.query<{ c: string }>(`SELECT COUNT(*)::text c FROM articles`);
   const remaining = Number(afterRow[0]?.c ?? 0);
-  const incidentN = toDelete.filter((r) => r.judged.reportType === 'incident').length;
-  const catN = toDelete.filter((r) => r.judged.reportType !== 'incident' && r.judged.categoryFit === false).length;
+  const incidentN = toDelete.filter((r) => r.judged.isIncident === true).length;
+  const catN = toDelete.filter((r) => r.judged.isIncident !== true && r.judged.categoryFit === false).length;
 
   console.log('\n================ 결과 ================');
   console.log(`판정 방식: ${deepseekAvailable ? 'DeepSeek' : '키워드 폴백'}`);

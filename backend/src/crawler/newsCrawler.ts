@@ -8,11 +8,15 @@ import Parser from 'rss-parser';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Article } from '../articles/article.entity';
+import { RejectedArticle } from '../articles/rejected_article.entity';
 import { SOURCES, SourceConfig, CategoryName, AD_PENALTY_KEYWORDS, SourceType } from './sourceConfig';
-import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats } from './deepseek_summary';
+import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats, Confidence } from './deepseek_summary';
 import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extractor';
 import { isValidArticleImageUrl } from './image_validation';
 import { matchesAddictionKeywords, isIncidentReport, normalize } from './addictionFilter';
+import { passesIngestionGate, rejectReason } from './judge_article';
+import { isBlacklistedDomain, recordCategoryFitFail, getBlacklistSnapshot } from './domain_blacklist';
+import { notifyDiscord } from './notifier';
 
 type RssItem = {
   title?: string;
@@ -83,12 +87,24 @@ let crawlStats = {
   incidentSkip: 0,      // v5.2 #1: 사건사고 스킵(키워드 1차 거름망)
   judgeIncidentSkip: 0, // v5.4: 딥시크 판정 incident 스킵
   judgeCatSkip: 0,      // v5.4: 딥시크 판정 category_fit=false 스킵
+  gateRejectLowConf: 0, // v5.4: 확신도 부족(medium/low/미상) 거부
+  blacklistSkip: 0,     // v5.4: 블랙리스트 도메인 즉시 폐기(딥시크 호출 없음)
+  quarantined: 0,       // v5.4: rejected_articles 격리 저장
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
   bodyExtractTried: 0,  // v5.2 #3: 원문 추출 시도 수
   bodyExtractOk: 0,     // v5.2 #3: 원문 추출 성공 수(>=MIN_BODY_CHARS)
   failedFeeds: [] as string[],
 };
+
+// v5.4: 입구 게이트에서 거부된 기사 격리(rejected_articles). 블랙리스트는 제외(저장 가치 없음).
+type RejectedRecord = {
+  title: string; originalTitle: string | null; summary: string | null; category: string;
+  source: string; sourceUrl: string; googleUrl: string | null; publishedAt: string;
+  lang: string; sourceType: SourceType; rejectReason: string; confidence: Confidence | null;
+};
+const rejectedAll: RejectedRecord[] = [];
+const pendingBlacklistNotifies: string[] = [];  // 자동 블랙리스트 추가 도메인(Discord 알림)
 
 let apiCallCount = 0;
 let lastResetTime = Date.now();
@@ -111,7 +127,7 @@ const ds = new DataSource({
   username: process.env.DB_USER || 'postgres',
   password: String(process.env.DB_PASSWORD ?? ''),
   database: process.env.DB_NAME || 'addiction_news',
-  entities: [Article],
+  entities: [Article, RejectedArticle],
   synchronize: false,
   logging: false,
 });
@@ -458,7 +474,7 @@ function enforceThreeLines(raw: string, title: string): string {
 }
 
 // ---------- OpenAI pack ----------
-type AiPack = { titleKo: string; teaser: string; summary: string; keywords: string[]; suggestedCategory?: CategoryName; reportType?: 'incident' | 'issue'; categoryFit?: boolean };
+type AiPack = { titleKo: string; teaser: string; summary: string; keywords: string[]; suggestedCategory?: CategoryName; isIncident?: boolean; categoryFit?: boolean; confidence?: Confidence };
 
 function safeJsonParse<T>(text: string): T | null {
   try { return JSON.parse(text) as T; } catch { return null; }
@@ -481,8 +497,9 @@ async function generateKoreanPack(originalTitle: string, content: string, lang: 
       teaser,
       summary: pack.summary,
       keywords: [],
-      reportType: pack.reportType,
+      isIncident: pack.isIncident,
       categoryFit: pack.categoryFit,
+      confidence: pack.confidence,
     };
   }
 
@@ -683,6 +700,13 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
 
       if (shouldBlockByDomain(sourceUrl, googleUrl || undefined)) continue;
 
+      // v5.4 2-1: 도메인 블랙리스트 — 딥시크 호출 없이 즉시 폐기(0원 필터, 격리 저장 안 함)
+      if (isBlacklistedDomain(sourceUrl, googleUrl || undefined)) {
+        crawlStats.blacklistSkip++;
+        console.log(`  │   ⛔ 블랙리스트 도메인 폐기: ${rawTitle.slice(0, 30)}...`);
+        continue;
+      }
+
       // 채택 게이트: addictionFilter (strong≥1 && negative==0 && 사건사고 아님)
       if (!addictionOk) {
         if (isIncidentReport(rawTitle, rawContent || '')) {
@@ -723,16 +747,39 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       const provCategory = classifyCategory(rawTitle, rawContent, normalizeCategory(conf.category));
       const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
 
-      // v5.4: 딥시크 최종 판정 게이트(키워드 1차 거름망을 통과했더라도 재판정)
-      if (pack.reportType === 'incident') {
-        crawlStats.judgeIncidentSkip++;
-        console.log(`  │   🤖 딥시크 판정 스킵(incident): ${shortTitle}`);
-        continue;
-      }
-      if (pack.categoryFit === false) {
-        crawlStats.judgeCatSkip++;
-        console.log(`  │   🤖 딥시크 판정 스킵(category_fit=false): ${shortTitle}`);
-        continue;
+      // v5.4 2-2: 입구 게이트(정밀도 우선). DeepSeek 가용 시에만 엄격 적용.
+      //  진입 = category_fit=true AND is_incident=false AND confidence=high. 그 외 전부 거부.
+      if (deepseekAvailable) {
+        const j = { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence };
+        if (!passesIngestionGate(j)) {
+          const reason = rejectReason(j) || 'rejected';
+          if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
+          else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
+          else crawlStats.gateRejectLowConf++;
+          console.log(`  │   🚫 입구 게이트 거부(${reason}): ${shortTitle}`);
+
+          // category_fit=false 누적 → 도메인 자동 블랙리스트
+          if (j.categoryFit === false) {
+            const added = recordCategoryFitFail(sourceUrl, googleUrl || undefined);
+            if (added) pendingBlacklistNotifies.push(added);
+          }
+          // 격리 저장(rejected_articles) — 감사·프롬프트 개선 소재
+          rejectedAll.push({
+            title: (isForeign ? pack.titleKo.trim() : rawTitle) || rawTitle,
+            originalTitle: rawTitle,
+            summary: pack.summary || null,
+            category: provCategory,
+            source: conf.sourceName,
+            sourceUrl,
+            googleUrl,
+            publishedAt,
+            lang,
+            sourceType: conf.sourceType,
+            rejectReason: reason,
+            confidence: pack.confidence ?? null,
+          });
+          continue;
+        }
       }
       if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) continue;
 
@@ -853,6 +900,7 @@ async function finalizeStatoryCandidate(
 
   const rawContent = partial.summary || rawTitle;
   if (shouldBlockByDomain(partial.sourceUrl)) return null;
+  if (isBlacklistedDomain(partial.sourceUrl)) { crawlStats.blacklistSkip++; return null; }
 
   const lang = partial.lang;
   const isForeign = partial.isForeign;
@@ -868,16 +916,28 @@ async function finalizeStatoryCandidate(
 
   const provCategory = classifyCategory(rawTitle, rawContent, partial.category);
   const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
-  // v5.4: 딥시크 최종 판정 게이트
-  if (pack.reportType === 'incident') {
-    crawlStats.judgeIncidentSkip++;
-    console.log(`  │   🤖 딥시크 판정 스킵(incident, statory): ${rawTitle.slice(0, 34)}`);
-    return null;
-  }
-  if (pack.categoryFit === false) {
-    crawlStats.judgeCatSkip++;
-    console.log(`  │   🤖 딥시크 판정 스킵(category_fit=false, statory): ${rawTitle.slice(0, 34)}`);
-    return null;
+  // v5.4 2-2: 입구 게이트(정밀도 우선). DeepSeek 가용 시에만 엄격 적용.
+  if (deepseekAvailable) {
+    const j = { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence };
+    if (!passesIngestionGate(j)) {
+      const reason = rejectReason(j) || 'rejected';
+      if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
+      else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
+      else crawlStats.gateRejectLowConf++;
+      console.log(`  │   🚫 입구 게이트 거부(${reason}, statory): ${rawTitle.slice(0, 30)}`);
+      if (j.categoryFit === false) {
+        const added = recordCategoryFitFail(partial.sourceUrl);
+        if (added) pendingBlacklistNotifies.push(added);
+      }
+      rejectedAll.push({
+        title: (isForeign ? pack.titleKo.trim() : rawTitle) || rawTitle,
+        originalTitle: rawTitle, summary: pack.summary || null, category: provCategory,
+        source: partial.source, sourceUrl: partial.sourceUrl, googleUrl: partial.googleUrl,
+        publishedAt: partial.publishedAt, lang, sourceType: partial.sourceType,
+        rejectReason: reason, confidence: pack.confidence ?? null,
+      });
+      return null;
+    }
   }
   if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) return null;
 
@@ -1036,6 +1096,26 @@ async function saveCandidates(list: Candidate[]) {
   return { inserted, dup, withImage };
 }
 
+// v5.4: 거부 기사 격리 저장(rejected_articles). 실패는 개별 무시(크롤 지속).
+async function saveRejected(list: RejectedRecord[]): Promise<number> {
+  if (list.length === 0) return 0;
+  const repo = ds.getRepository(RejectedArticle);
+  let n = 0;
+  for (const r of list) {
+    try {
+      const ent = repo.create({
+        title: r.title, originalTitle: r.originalTitle, summary: r.summary,
+        category: r.category, source: r.source, sourceUrl: r.sourceUrl, googleUrl: r.googleUrl,
+        publishedAt: r.publishedAt, lang: r.lang, sourceType: r.sourceType,
+        rejectReason: r.rejectReason, confidence: r.confidence, judgedAt: new Date(),
+      });
+      await repo.save(ent);
+      n++;
+    } catch { /* 격리 저장 실패는 무시 */ }
+  }
+  return n;
+}
+
 // ---------- Main ----------
 async function main() {
   const startTime = Date.now();
@@ -1105,6 +1185,12 @@ async function main() {
   }
 
   const result = await saveCandidates(all);
+  // v5.4: 거부 기사 격리 저장 + 자동 블랙리스트 Discord 알림
+  crawlStats.quarantined = await saveRejected(rejectedAll);
+  if (pendingBlacklistNotifies.length) {
+    const uniq = [...new Set(pendingBlacklistNotifies)];
+    await notifyDiscord(`⛔ 중독뉴스 크롤: category_fit=false 누적으로 도메인 자동 블랙리스트 추가 — ${uniq.join(', ')}`);
+  }
   const elapsed = Math.round((Date.now() - startTime) / 1000);
 
   // 통계 출력
@@ -1127,8 +1213,13 @@ async function main() {
   console.log(`   저장: ${result.inserted}개, 이미지: ${result.withImage}개 (${imgRate}%, 폴백 제외 실이미지)`);
   console.log(`   필터: 후보 ${crawlStats.itemsSeen} → 통과 ${crawlStats.filterPass} / 스킵 ${crawlStats.filterSkip} (통과율 ${passRate}%)`);
   console.log(`   ├ 사건사고 스킵(키워드): ${crawlStats.incidentSkip}건`);
-  console.log(`   ├ 🤖 딥시크 판정 스킵(incident): ${crawlStats.judgeIncidentSkip}건`);
-  console.log(`   ├ 🤖 딥시크 판정 스킵(category_fit): ${crawlStats.judgeCatSkip}건`);
+  console.log(`   ├ ⛔ 블랙리스트 도메인 폐기: ${crawlStats.blacklistSkip}건`);
+  console.log(`   ├ 🚫 입구게이트 거부(incident): ${crawlStats.judgeIncidentSkip}건`);
+  console.log(`   ├ 🚫 입구게이트 거부(category_fit): ${crawlStats.judgeCatSkip}건`);
+  console.log(`   ├ 🚫 입구게이트 거부(확신도부족): ${crawlStats.gateRejectLowConf}건`);
+  console.log(`   ├ 📦 격리 저장(rejected_articles): ${crawlStats.quarantined}건`);
+  const blSnap = getBlacklistSnapshot();
+  console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);
   console.log(`   ├ 핵심어 중복 스킵: ${crawlStats.dupSkipKeyword}건`);
   console.log(`   └ 본문부실 스킵: ${crawlStats.thinBodySkip}건`);
   const extractRate = crawlStats.bodyExtractTried > 0
