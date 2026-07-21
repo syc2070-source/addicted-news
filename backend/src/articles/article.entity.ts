@@ -75,6 +75,10 @@ export class Article {
   @Column({ name: 'blocked_reason', type: 'varchar', length: 200, nullable: true })
   blockedReason: string | null;
 
+  // v5.4: 판정 상태. 'restored_manual' 이면 judge_cleanup 재심사에서 제외.
+  @Column({ name: 'judge_status', type: 'varchar', length: 32, nullable: true })
+  judgeStatus: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

@@ -35,3 +35,7 @@ deploy/image_google_cleanup_backup.json
 # judge_cleanup 런타임 산출물(프로덕션 실행 시 로컬 생성 — 소스 아님)
 deploy/judge_backup.json
 deploy/judge_cleanup_report.txt
+
+# v5.4 judge_restore 산출물/로컬 백업
+deploy/judge_restore_report.txt
+deploy/judge_backup_20260721_run1.json
