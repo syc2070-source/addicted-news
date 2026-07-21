@@ -26,7 +26,8 @@
     "cleanup:incidents": "ts-node src/crawler/incident_cleanup.ts",
     "backfill:images": "ts-node src/crawler/image_backfill.ts",
     "crawl:prod": "node dist/crawler/newsCrawler.js",
-    "cleanup:google-images": "ts-node src/crawler/image_google_cleanup.ts"
+    "cleanup:google-images": "ts-node src/crawler/image_google_cleanup.ts",
+    "judge:cleanup": "ts-node src/crawler/judge_cleanup.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

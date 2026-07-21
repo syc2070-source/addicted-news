@@ -80,7 +80,9 @@ let crawlStats = {
   itemsSeen: 0,
   filterPass: 0,
   filterSkip: 0,
-  incidentSkip: 0,      // v5.2 #1: 사건사고 스킵
+  incidentSkip: 0,      // v5.2 #1: 사건사고 스킵(키워드 1차 거름망)
+  judgeIncidentSkip: 0, // v5.4: 딥시크 판정 incident 스킵
+  judgeCatSkip: 0,      // v5.4: 딥시크 판정 category_fit=false 스킵
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
   bodyExtractTried: 0,  // v5.2 #3: 원문 추출 시도 수
@@ -456,7 +458,7 @@ function enforceThreeLines(raw: string, title: string): string {
 }
 
 // ---------- OpenAI pack ----------
-type AiPack = { titleKo: string; teaser: string; summary: string; keywords: string[]; suggestedCategory?: CategoryName };
+type AiPack = { titleKo: string; teaser: string; summary: string; keywords: string[]; suggestedCategory?: CategoryName; reportType?: 'incident' | 'issue'; categoryFit?: boolean };
 
 function safeJsonParse<T>(text: string): T | null {
   try { return JSON.parse(text) as T; } catch { return null; }
@@ -470,8 +472,8 @@ function compactKeywords(keywords: unknown): string[] {
 async function generateKoreanPack(originalTitle: string, content: string, lang: DetectedLang, defaultCategory: CategoryName): Promise<AiPack> {
   const isForeign = lang !== 'ko';
 
-  // DeepSeek 통일: 한국어 요약 / 외국어 번역+요약
-  const pack = await summarizeKoreanDeepSeek(originalTitle, content, { translate: isForeign });
+  // DeepSeek 통일: 한국어 요약 / 외국어 번역+요약 + 최종 판정(report_type/category_fit)
+  const pack = await summarizeKoreanDeepSeek(originalTitle, content, { translate: isForeign, category: defaultCategory });
   if (pack?.summary) {
     const teaser = pack.summary.replace(/\s+/g, ' ').slice(0, 220);
     return {
@@ -479,6 +481,8 @@ async function generateKoreanPack(originalTitle: string, content: string, lang: 
       teaser,
       summary: pack.summary,
       keywords: [],
+      reportType: pack.reportType,
+      categoryFit: pack.categoryFit,
     };
   }
 
@@ -715,7 +719,21 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       const prefix = lang === 'ko' ? '[KO]' : `[${lang.toUpperCase()}→KO]`;
       console.log(`  │   ${prefix} ${shortTitle}`);
 
-      const pack = await generateKoreanPack(rawTitle, rawContent, lang, normalizeCategory(conf.category));
+      // 판정용 배정 카테고리(제목+본문 기준 잠정 분류) — category_fit 판정 기준
+      const provCategory = classifyCategory(rawTitle, rawContent, normalizeCategory(conf.category));
+      const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
+
+      // v5.4: 딥시크 최종 판정 게이트(키워드 1차 거름망을 통과했더라도 재판정)
+      if (pack.reportType === 'incident') {
+        crawlStats.judgeIncidentSkip++;
+        console.log(`  │   🤖 딥시크 판정 스킵(incident): ${shortTitle}`);
+        continue;
+      }
+      if (pack.categoryFit === false) {
+        crawlStats.judgeCatSkip++;
+        console.log(`  │   🤖 딥시크 판정 스킵(category_fit=false): ${shortTitle}`);
+        continue;
+      }
       if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) continue;
 
       if (isForeign) foreignArticleCount++;
@@ -848,7 +866,19 @@ async function finalizeStatoryCandidate(
   if (!matchesAddictionKeywords(rawTitle, rawContent)) return null;
   if (isPromotionalAd(rawTitle, rawContent)) return null;
 
-  const pack = await generateKoreanPack(rawTitle, rawContent, lang, partial.category);
+  const provCategory = classifyCategory(rawTitle, rawContent, partial.category);
+  const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
+  // v5.4: 딥시크 최종 판정 게이트
+  if (pack.reportType === 'incident') {
+    crawlStats.judgeIncidentSkip++;
+    console.log(`  │   🤖 딥시크 판정 스킵(incident, statory): ${rawTitle.slice(0, 34)}`);
+    return null;
+  }
+  if (pack.categoryFit === false) {
+    crawlStats.judgeCatSkip++;
+    console.log(`  │   🤖 딥시크 판정 스킵(category_fit=false, statory): ${rawTitle.slice(0, 34)}`);
+    return null;
+  }
   if (isForeign && (!pack.titleKo.trim() || !pack.summary.trim())) return null;
 
   if (isForeign) foreignArticleCount++;
@@ -1096,7 +1126,9 @@ async function main() {
   const imgRate = result.inserted > 0 ? ((result.withImage / result.inserted) * 100).toFixed(1) : '0.0';
   console.log(`   저장: ${result.inserted}개, 이미지: ${result.withImage}개 (${imgRate}%, 폴백 제외 실이미지)`);
   console.log(`   필터: 후보 ${crawlStats.itemsSeen} → 통과 ${crawlStats.filterPass} / 스킵 ${crawlStats.filterSkip} (통과율 ${passRate}%)`);
-  console.log(`   ├ 사건사고 스킵: ${crawlStats.incidentSkip}건`);
+  console.log(`   ├ 사건사고 스킵(키워드): ${crawlStats.incidentSkip}건`);
+  console.log(`   ├ 🤖 딥시크 판정 스킵(incident): ${crawlStats.judgeIncidentSkip}건`);
+  console.log(`   ├ 🤖 딥시크 판정 스킵(category_fit): ${crawlStats.judgeCatSkip}건`);
   console.log(`   ├ 핵심어 중복 스킵: ${crawlStats.dupSkipKeyword}건`);
   console.log(`   └ 본문부실 스킵: ${crawlStats.thinBodySkip}건`);
   const extractRate = crawlStats.bodyExtractTried > 0
