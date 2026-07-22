@@ -694,6 +694,10 @@ function createFullArticleCard(article) {
         '<button class="btn-toggle">요약 보기</button>' +
         sourceBtnHtml +
       '</div>' +
+      // AN-LINK-1: 기사 하단 고정 안내(템플릿 레벨 — 전체 기사 일괄 적용)
+      '<p class="article-observatory-note">이 기사의 통계·발표 일정은 ' +
+        '<a href="https://addictionsociety.net/sources" target="_blank" rel="noopener noreferrer">중독사회 데이터 관측소</a>' +
+        '에서 원본과 함께 확인할 수 있습니다.</p>' +
     '</div>' +
   '</div>';
 }
