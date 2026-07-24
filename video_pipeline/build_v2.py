@@ -21,6 +21,7 @@ import sys
 import os
 import argparse
 import traceback
+import json
 import subprocess
 import shutil
 from pathlib import Path
@@ -32,7 +33,7 @@ from fetch import fetch_one, fetch_all_ids          # noqa
 from script import build_script                     # noqa
 from tts import synth                               # noqa
 from subs import write_srt                          # noqa
-from scenes import build_scenes                     # noqa
+from scenes import build_scenes, layer_toc          # noqa
 from scene_keywords import scene_keywords           # noqa
 from images_v2 import get_scene_backgrounds         # noqa
 from render_v2 import render_multi                  # noqa
@@ -144,6 +145,21 @@ def build_one_v2(term_id, resume=False):
     # 7) 크로스페이드 렌더
     _, dur = render_multi(bg_imgs, scene_durs, audio, str(srt),
                           item["term_ko"], str(out_mp4))
+
+    # 8) 업로드용 사이드카(video_v2/{id}.json): 목차 타임스탬프 + 메타
+    meta = {
+        "id": term_id,
+        "term_ko": item.get("term_ko", ""),
+        "term_en": item.get("term_en", ""),
+        "category": item.get("category", ""),
+        "definition": item.get("definition", "") or "",
+        "duration": round(dur or 0.0, 3),
+        "toc": layer_toc(chapters, chap_durs),
+        "scenes": [{"index": sc["index"], "kind": sc["kind"],
+                    "start": sc["start"], "dur": sc["dur"]} for sc in scenes],
+    }
+    (DIRS["video"] / f"{term_id}.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"  ✓ {term_id} | {item['term_ko']} | {len(scenes)}장면 "
           f"| 자막 {n_lines}줄 | {dur:.0f}초 → {out_mp4}")

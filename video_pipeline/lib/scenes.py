@@ -143,6 +143,26 @@ def build_scenes(chapters, durations):
     return scenes
 
 
+# 층(kind) → 목차 라벨. 현재 대본 구조엔 별도 '요약' 층이 없어 body=본문/advanced=심화.
+KIND_LABEL = {"body": "본문", "advanced": "심화", "outro": "중독뉴스"}
+
+
+def layer_toc(chapters, durations):
+    """kind 층이 바뀌는 지점마다 목차 항목 생성 → [{kind, label, start}]. (업로드 설명 TOC용)"""
+    spans, _ = _chapter_spans(chapters, durations)
+    toc = []
+    last = None
+    for s in spans:
+        if s["kind"] != last:
+            toc.append({
+                "kind": s["kind"],
+                "label": KIND_LABEL.get(s["kind"], s["kind"]),
+                "start": round(s["start"], 3),
+            })
+            last = s["kind"]
+    return toc
+
+
 if __name__ == "__main__":
     demo_chapters = [
         {"title": "정의", "kind": "body"},

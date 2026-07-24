@@ -1,0 +1,14 @@
+# v2 작업2: OAuth 비밀·토큰·상태는 절대 커밋하지 않는다.
+client_secret.json
+token.json
+upload_state.json
+
+# v2 산출물(로컬 생성물) — 리포에 올리지 않음
+audio_v2/
+subs_v2/
+video_v2/
+images/
+audio/
+subs/
+video/
+scripts/
