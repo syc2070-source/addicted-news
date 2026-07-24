@@ -8,15 +8,33 @@ import os
 import sys
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
-key = os.environ.get("PEXELS_API_KEY", "")
 
-print("=== 1) 환경변수 확인 ===")
+def _env_key():
+    """PEXELS_API_KEY: 환경변수 우선, 없으면 backend/.env (build_v2 와 동일 경로)."""
+    k = os.environ.get("PEXELS_API_KEY", "")
+    if k:
+        return k, "환경변수"
+    env_path = Path(__file__).resolve().parents[1] / "backend" / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("PEXELS_API_KEY=") and "=" in line:
+                return line.split("=", 1)[1].strip().strip('"').strip("'"), "backend/.env"
+    return "", None
+
+
+key, src = _env_key()
+
+print("=== 1) 키 로딩 확인 ===")
 if not key:
-    print("  [X] PEXELS_API_KEY 가 비어 있음.")
-    print("      → 이 창에서 다음을 실행 후 다시 시도:")
-    print('        $env:PEXELS_API_KEY="발급받은키"')
+    print("  [X] PEXELS_API_KEY 가 비어 있음(환경변수·backend/.env 모두).")
+    print("      → 둘 중 하나로 설정 후 다시 시도:")
+    print('        (A) 이 창: $env:PEXELS_API_KEY="발급받은키"')
+    print("        (B) backend/.env 에  PEXELS_API_KEY=발급받은키  한 줄 추가")
     sys.exit(1)
+print(f"  키 출처: {src}")
 
 print(f"  키 길이: {len(key)} 자")
 print(f"  앞 4자: {key[:4]}...  뒤 4자: ...{key[-4:]}")

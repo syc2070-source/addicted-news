@@ -16,6 +16,7 @@ DEEPSEEK_API_KEY / DEEPSEEK_MODEL 은 backend/.env 또는 환경변수에서 읽
 import os
 import json
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 try:
@@ -98,13 +99,17 @@ def _parse_keywords(content, n):
 
 
 def scene_keywords(item, scenes, timeout=40):
-    """항목 + 장면들 → 장면 수만큼의 영어 검색어 리스트 (DeepSeek 1회)."""
+    """항목 + 장면들 → {"keywords":[...], "source":"deepseek"|"fallback", "reason":str}.
+    항상 장면 수만큼의 영어 검색어를 담아 반환(DeepSeek 1회)."""
     n = len(scenes)
     if n == 0:
-        return []
+        return {"keywords": [], "source": "fallback", "reason": "장면 없음"}
     key = _api_key()
     if not key:
-        return _fallback(item, n)
+        print("  [scene_keywords][경고] DEEPSEEK_API_KEY 없음(환경변수·backend/.env 모두) "
+              "→ 카테고리 폴백 검색어")
+        return {"keywords": _fallback(item, n), "source": "fallback",
+                "reason": "DEEPSEEK_API_KEY 없음"}
 
     lines = []
     for i, sc in enumerate(scenes):
@@ -137,11 +142,18 @@ def scene_keywords(item, scenes, timeout=40):
         content = data["choices"][0]["message"]["content"]
         kws = _parse_keywords(content, n)
         if not kws:
-            return _fallback(item, n)
-        return kws
+            print("  [scene_keywords][경고] DeepSeek 응답 파싱 실패 → 카테고리 폴백")
+            return {"keywords": _fallback(item, n), "source": "fallback",
+                    "reason": "응답 파싱 실패"}
+        return {"keywords": kws, "source": "deepseek", "reason": ""}
+    except urllib.error.HTTPError as e:
+        print(f"  [scene_keywords][경고] DeepSeek HTTP {e.code} {e.reason} → 카테고리 폴백")
+        return {"keywords": _fallback(item, n), "source": "fallback",
+                "reason": f"HTTP {e.code} {e.reason}"}
     except Exception as e:
-        print(f"  [scene_keywords] DeepSeek 실패 → 카테고리 폴백:", e)
-        return _fallback(item, n)
+        print(f"  [scene_keywords][경고] DeepSeek 실패 → 카테고리 폴백:", e)
+        return {"keywords": _fallback(item, n), "source": "fallback",
+                "reason": f"{type(e).__name__}: {e}"}
 
 
 if __name__ == "__main__":
@@ -150,4 +162,6 @@ if __name__ == "__main__":
     demo_scenes = [{"kind": "body", "title": "정의"},
                    {"kind": "advanced", "title": "기전"},
                    {"kind": "outro", "title": "중독뉴스"}]
-    print(scene_keywords(demo_item, demo_scenes))
+    res = scene_keywords(demo_item, demo_scenes)
+    print("source:", res["source"], "reason:", res["reason"])
+    print("keywords:", res["keywords"])

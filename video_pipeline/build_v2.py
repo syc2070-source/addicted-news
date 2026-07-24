@@ -137,10 +137,39 @@ def build_one_v2(term_id, resume=False):
     scenes = build_scenes(chapters, chap_durs)
 
     # 5) 장면 검색어(DeepSeek 1회) → 6) 장면별 배경(images/{id}/{n}.jpg)
-    keywords = scene_keywords(item, scenes)
+    kw_res = scene_keywords(item, scenes)
+    keywords = kw_res["keywords"]
+    if kw_res["source"] != "deepseek":
+        print(f"  [경고] 장면 검색어 폴백({kw_res['reason']}) — 배경이 단조로울 수 있음")
     img_dir = DIRS["images"] / term_id
-    bg_imgs = get_scene_backgrounds(item, scenes, keywords, str(img_dir))
+    src = get_scene_backgrounds(item, scenes, keywords, str(img_dir))
+    bg_imgs = src["paths"]
     scene_durs = [sc["dur"] for sc in scenes]
+
+    # 6-1) 조용한 폴백 금지: 소스 요약 출력 + 절반 이상 폴백이면 중단
+    print(f"  [배경] 실사진 {len(scenes) - src['fallbacks']}/{len(scenes)} "
+          f"· 폴백 {src['fallbacks']} · Pexels키 {'있음' if src['key'] else '없음'}")
+    for i, (p, s, r) in enumerate(zip(bg_imgs, src["sources"], src["reasons"])):
+        tag = "OK " if s.startswith("pexels") else "폴백"
+        try:
+            sz = os.path.getsize(p)
+        except OSError:
+            sz = -1
+        print(f"      장면{i}: {tag} {s} · {sz:,}B" + (f"  ← {r}" if r else ""))
+    # 서로 다른 사진인지 즉시 확인용: 고유 파일크기 수
+    try:
+        uniq = len({os.path.getsize(p) for p in bg_imgs})
+        print(f"      고유 파일크기 {uniq}/{len(bg_imgs)} "
+              f"({'서로 다름' if uniq == len(bg_imgs) else '중복 있음'})")
+    except OSError:
+        pass
+    allow_fallback = os.environ.get("ALLOW_GRADIENT_FALLBACK", "").strip() in ("1", "true", "yes")
+    if src["fallbacks"] * 2 >= len(scenes) and not allow_fallback:
+        raise RuntimeError(
+            f"배경 소싱 실패: {len(scenes)}장면 중 {src['fallbacks']}장면이 그라디언트 폴백. "
+            f"(Pexels키 {'있음' if src['key'] else '없음'}) 위 장면별 사유 확인. "
+            "의도적으로 그라디언트를 쓰려면 ALLOW_GRADIENT_FALLBACK=1 로 재실행."
+        )
 
     # 7) 크로스페이드 렌더
     _, dur = render_multi(bg_imgs, scene_durs, audio, str(srt),
