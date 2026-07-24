@@ -144,7 +144,8 @@ def build_scenes(chapters, durations):
 
 
 # 층(kind) → 목차 라벨. 현재 대본 구조엔 별도 '요약' 층이 없어 body=본문/advanced=심화.
-KIND_LABEL = {"body": "본문", "advanced": "심화", "outro": "중독뉴스"}
+# outro(마지막 챕터)는 "마무리". (업로드 설명은 upload_youtube.TOC_LABELS 로 표시 시점 매핑)
+KIND_LABEL = {"body": "본문", "advanced": "심화", "outro": "마무리"}
 
 
 def layer_toc(chapters, durations):

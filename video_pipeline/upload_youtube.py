@@ -49,6 +49,10 @@ DEFAULT_DAILY_LIMIT = 5       # 기본 하루 상한(≤6)
 STATORY_URL = os.environ.get("STATORY_SITE_URL", "https://statory.org")
 ADDICTION_NEWS_URL = os.environ.get("ADDICTION_NEWS_URL", "https://addictionnews.net")
 
+# 설명 목차 표시 라벨(kind 기준). 마지막 챕터(outro)는 "마무리"로 표기.
+# 표시 시점에 매핑하므로 이미 생성된 사이드카(라벨 "중독뉴스")에도 소급 적용된다.
+TOC_LABELS = {"body": "본문", "advanced": "심화", "outro": "마무리"}
+
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube",
@@ -107,7 +111,7 @@ def build_metadata(term_id, item, sidecar, private=False):
         lines.append(definition)
         lines.append("")
     lines.append("▶ 통계·뉴스")
-    lines.append(f"· 스태토리: {STATORY_URL}")
+    lines.append(f"· statory: {STATORY_URL}")
     lines.append(f"· 중독뉴스: {ADDICTION_NEWS_URL}")
 
     toc = (sidecar or {}).get("toc") or []
@@ -115,7 +119,9 @@ def build_metadata(term_id, item, sidecar, private=False):
         lines.append("")
         lines.append("⏱ 목차")
         for e in toc:
-            lines.append(f"{_fmt_ts(e.get('start', 0))} {e.get('label', '')}")
+            # 표시 라벨은 kind 기준 매핑(이미 생성된 사이드카에도 적용). 미매핑은 저장 라벨.
+            label = TOC_LABELS.get(e.get("kind", ""), e.get("label", ""))
+            lines.append(f"{_fmt_ts(e.get('start', 0))} {label}")
 
     lines.append("")
     lines.append("#중독백과 #중독 #중독뉴스")
