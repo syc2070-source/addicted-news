@@ -32,7 +32,7 @@ async function main() {
   console.log('✅ DB 연결');
 
   // published_at 이 오염일이고 created_at 은 그 날짜가 아닌 행(= 파싱 실패로 찍힌 것)
-  const where = `published_at = $1 AND to_char(created_at,'YYYY-MM-DD') <> $1`;
+  const where = `published_at::text = $1 AND to_char(created_at,'YYYY-MM-DD') <> $1`;
   const { rows } = await client.query<{ id: number; created: string }>(
     `SELECT id, to_char(created_at,'YYYY-MM-DD') AS created FROM articles WHERE ${where} ORDER BY id`,
     [POLLUTED],
@@ -44,7 +44,7 @@ async function main() {
   let updated = 0;
   if (!DRY_RUN && rows.length > 0) {
     const res = await client.query(
-      `UPDATE articles SET published_at = to_char(created_at,'YYYY-MM-DD'), updated_at=now() WHERE ${where}`,
+      `UPDATE articles SET published_at = to_char(created_at,'YYYY-MM-DD')::date, updated_at=now() WHERE ${where}`,
       [POLLUTED],
     );
     updated = res.rowCount ?? 0;
