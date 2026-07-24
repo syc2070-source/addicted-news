@@ -1,3 +1,6 @@
 edge-tts>=7.0.0
 psycopg2-binary>=2.9
 Pillow>=10.0
+# v2 작업2 유튜브 업로드
+google-api-python-client>=2.100
+google-auth-oauthlib>=1.2

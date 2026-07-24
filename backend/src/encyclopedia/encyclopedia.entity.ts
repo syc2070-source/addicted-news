@@ -36,6 +36,10 @@ export class EncyclopediaTerm {
   @Column({ name: 'video_status', type: 'text', default: 'pending' })
   videoStatus: string;
 
+  // v2 작업3: 유튜브 업로드 성공 시 채워지는 영상 ID(백과 페이지 임베드용). 없으면 미표시.
+  @Column({ name: 'youtube_video_id', type: 'text', nullable: true })
+  youtubeVideoId: string | null;
+
   @Column({ type: 'boolean', default: true })
   published: boolean;
 
