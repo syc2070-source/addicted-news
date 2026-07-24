@@ -24,8 +24,9 @@ import { Client, ClientConfig } from 'pg';
 import { summarizeKoreanDeepSeek, deepseekAvailable } from './deepseek_summary';
 import { isIncidentReport } from './addictionFilter';
 import { shouldDelete, Judgment } from './judge_article';
+import { isApply } from './cli_flags';
 
-const DRY_RUN = process.env.DRY_RUN === 'true';
+const DRY_RUN = !isApply();
 const DELAY_MS = Number(process.env.DELAY_MS ?? 500);
 const JUDGE_DAYS = Number(process.env.JUDGE_DAYS ?? 14);
 const JUDGE_LIMIT = Number(process.env.JUDGE_LIMIT ?? 0); // 0 = 전체

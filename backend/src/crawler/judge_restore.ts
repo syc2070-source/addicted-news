@@ -15,6 +15,7 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
+import { isApply } from './cli_flags';
 
 // 복원 대상 22건 (상단 하드코딩)
 const RESTORE_IDS: number[] = [
@@ -27,7 +28,7 @@ const RESTORE_IDS: number[] = [
 // - 연구·통계·치료과학: 2492, 2963, 3086, 3303
 // - 이슈 기획·해외 정책: 23, 122, 154, 234, 399, 3539
 
-const DRY_RUN = process.env.DRY_RUN !== 'false'; // 기본 true, 명시적 false 만 실제 INSERT
+const DRY_RUN = !isApply(); // --apply 없으면 무조건 DRY_RUN(env 무시)
 const DEPLOY_DIR = path.join(__dirname, '../../../deploy');
 const REPORT_PATH = path.join(DEPLOY_DIR, 'judge_restore_report.txt');
 const BACKUP_FILES = ['judge_backup.json', 'judge_backup_20260721_run1.json'];
