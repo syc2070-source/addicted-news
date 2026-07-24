@@ -83,6 +83,11 @@ async function renderDetail(id){
     : '';
   const title=isEn()?t.termEn:t.termKo;
   const other=isEn()?t.termKo:t.termEn;
+  // v2 작업3: youtube_video_id 있으면 제목 아래 유튜브 임베드(nocookie·지연로드·16:9). 없으면 미표시.
+  const ytId=(t.youtubeVideoId||'').trim();
+  const ytEmbed=/^[A-Za-z0-9_-]{6,20}$/.test(ytId)
+    ? `<div class="enc-yt"><iframe loading="lazy" src="https://www.youtube-nocookie.com/embed/${ytId}" title="${esc(title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+    : '';
   root.innerHTML=`
     <div class="enc-header">
       <a class="enc-back" href="${withLang('encyclopedia.html')}">${isEn()?'← Encyclopedia':'← 중독백과'}</a>
@@ -91,6 +96,7 @@ async function renderDetail(id){
     <div class="enc-detail">
       <h1>${esc(title)}</h1>
       <div class="en">${esc(other)} · ${esc(catLabel(t.category))}</div>
+      ${ytEmbed}
       ${video}
       <p>${esc(t.definition)}</p>
       ${bodyHtml}
