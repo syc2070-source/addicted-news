@@ -39,6 +39,10 @@ export class RejectedArticle {
   @Column({ name: 'source_type', type: 'varchar', length: 32, nullable: true })
   sourceType: string | null;
 
+  // v5.4.1: 도메인(자동 블랙리스트 집계용)
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  domain: string | null;
+
   // v5.4: 거부 사유(incident / category_fit=false / low_confidence 등)
   @Column({ name: 'reject_reason', type: 'varchar', length: 200 })
   rejectReason: string;

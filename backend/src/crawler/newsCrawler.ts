@@ -3,7 +3,7 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import axios from 'axios';
-import { DataSource } from 'typeorm';
+import { DataSource, MoreThanOrEqual } from 'typeorm';
 import Parser from 'rss-parser';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,8 +15,9 @@ import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extr
 import { isValidArticleImageUrl } from './image_validation';
 import { matchesAddictionKeywords, isIncidentReport, normalize } from './addictionFilter';
 import { passesIngestionGate, rejectReason } from './judge_article';
-import { isBlacklistedDomain, recordCategoryFitFail, getBlacklistSnapshot } from './domain_blacklist';
+import { isBlacklistedDomain, getBlacklistSnapshot, normalizeHost, evaluateAutoBlacklistFromDb } from './domain_blacklist';
 import { notifyDiscord } from './notifier';
+import { decodeEntities, crossMediaSimilarity } from './text_utils';
 
 type RssItem = {
   title?: string;
@@ -56,13 +57,41 @@ type Candidate = {
   outletId: string;
 };
 
-const parser = new Parser<RssItem>({
-  // 피드 요청이 무한히 매달리지 않도록 상한(멈춘 피드가 전체를 못 잡게)
-  timeout: Number(process.env.RSS_TIMEOUT_MS ?? 15000),
-  customFields: {
-    item: ['source', 'media:content', 'media:thumbnail', 'content:encoded', 'description', 'enclosure']
+const RSS_TIMEOUT = Number(process.env.RSS_TIMEOUT_MS ?? 15000);
+const RSS_CUSTOM_FIELDS = {
+  item: ['source', 'media:content', 'media:thumbnail', 'content:encoded', 'description', 'enclosure'] as string[],
+};
+const parser = new Parser<RssItem>({ timeout: RSS_TIMEOUT, customFields: RSS_CUSTOM_FIELDS });
+
+// v5.4.1 작업5: 406/403 회피용 브라우저 UA 재시도 파서(1회만).
+const browserParser = new Parser<RssItem>({
+  timeout: RSS_TIMEOUT,
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+    Accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7',
+    'Accept-Language': 'ko,en;q=0.8',
   },
+  customFields: RSS_CUSTOM_FIELDS,
 });
+
+function httpStatusOf(err: any): number | null {
+  const m = String(err?.message || err || '').match(/status code\s*(\d{3})/i);
+  return m ? Number(m[1]) : null;
+}
+
+// 피드 파싱: 기본 파서 실패(특히 406/403) 시 브라우저 UA로 1회 재시도(무한 재시도 금지).
+async function parseFeedWithRetry(url: string): Promise<{ feed: any; retried: boolean }> {
+  try {
+    return { feed: await parser.parseURL(url), retried: false };
+  } catch (e) {
+    const st = httpStatusOf(e);
+    if (st === 406 || st === 403) {
+      const feed = await browserParser.parseURL(url); // 실패하면 상위 catch로 전파
+      return { feed, retried: true };
+    }
+    throw e;
+  }
+}
 
 // ---------- 설정값 ----------
 const MAX_FOREIGN_ARTICLES = Number(process.env.MAX_FOREIGN_ARTICLES ?? 100);  // 50→100 증가
@@ -90,11 +119,15 @@ let crawlStats = {
   gateRejectLowConf: 0, // v5.4: 확신도 부족(medium/low/미상) 거부
   blacklistSkip: 0,     // v5.4: 블랙리스트 도메인 즉시 폐기(딥시크 호출 없음)
   quarantined: 0,       // v5.4: rejected_articles 격리 저장
+  crossMediaDupSkip: 0, // v5.4.1 3-2: 크로스매체 동일 사건 중복 스킵
+  dateParseFail: 0,     // v5.4.1 3-3: published_at 파싱 실패(now 대체)
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
   bodyExtractTried: 0,  // v5.2 #3: 원문 추출 시도 수
   bodyExtractOk: 0,     // v5.2 #3: 원문 추출 성공 수(>=MIN_BODY_CHARS)
   failedFeeds: [] as string[],
+  // v5.4.1 작업5: 구조화된 피드 실패(상태코드별 분류·복구 판단용)
+  feedFailures: [] as { id: string; source: string; sourceType: SourceType; status: number | null; retried: boolean }[],
 };
 
 // v5.4: 입구 게이트에서 거부된 기사 격리(rejected_articles). 블랙리스트는 제외(저장 가치 없음).
@@ -102,9 +135,9 @@ type RejectedRecord = {
   title: string; originalTitle: string | null; summary: string | null; category: string;
   source: string; sourceUrl: string; googleUrl: string | null; publishedAt: string;
   lang: string; sourceType: SourceType; rejectReason: string; confidence: Confidence | null;
+  domain: string | null;
 };
 const rejectedAll: RejectedRecord[] = [];
-const pendingBlacklistNotifies: string[] = [];  // 자동 블랙리스트 추가 도메인(Discord 알림)
 
 let apiCallCount = 0;
 let lastResetTime = Date.now();
@@ -381,10 +414,13 @@ function toYmd(d: Date): string {
 }
 
 function parsePublishedAt(item: RssItem): string {
+  // v5.4.1 3-3: 파싱 실패 시 2026-01-01 같은 고정값이 아니라 '수집 시각(now)'으로.
+  //   최신순 정렬 왜곡 방지. 실패 건수는 END 집계에 표기(parse_failed 대체 로그).
   const raw = item.isoDate || item.pubDate;
-  if (!raw) return toYmd(new Date());
+  if (!raw) { crawlStats.dateParseFail++; return toYmd(new Date()); }
   const dt = new Date(raw);
-  return Number.isNaN(dt.getTime()) ? toYmd(new Date()) : toYmd(dt);
+  if (Number.isNaN(dt.getTime())) { crawlStats.dateParseFail++; return toYmd(new Date()); }
+  return toYmd(dt);
 }
 
 // ---------- 이미지 추출 ----------
@@ -647,7 +683,8 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       console.log(`  ├─ [${conf.id}] verified_by_fetch=false — 시도 후 실패 시 스킵`);
     }
     console.log(`  ├─ [${conf.id}] Parsing RSS...`);
-    const feed = await parser.parseURL(normalizeRssFeedUrl(conf.url));
+    const { feed, retried } = await parseFeedWithRetry(normalizeRssFeedUrl(conf.url));
+    if (retried) console.log(`  ├─ [${conf.id}] 406/403 → 브라우저 UA 재시도 성공`);
     const items = (feed.items || []).slice(0, 30);
     console.log(`  ├─ [${conf.id}] Found ${items.length} items`);
 
@@ -757,13 +794,8 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
           else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
           else crawlStats.gateRejectLowConf++;
           console.log(`  │   🚫 입구 게이트 거부(${reason}): ${shortTitle}`);
-
-          // category_fit=false 누적 → 도메인 자동 블랙리스트
-          if (j.categoryFit === false) {
-            const added = recordCategoryFitFail(sourceUrl, googleUrl || undefined);
-            if (added) pendingBlacklistNotifies.push(added);
-          }
-          // 격리 저장(rejected_articles) — 감사·프롬프트 개선 소재
+          // 격리 저장(rejected_articles) — 감사·프롬프트 개선 소재. 자동 블랙리스트는
+          // 이 테이블 집계로 다음 실행 시작 시 재평가(in-memory 카운트 폐기, v5.4.1 작업2).
           rejectedAll.push({
             title: (isForeign ? pack.titleKo.trim() : rawTitle) || rawTitle,
             originalTitle: rawTitle,
@@ -777,6 +809,7 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
             sourceType: conf.sourceType,
             rejectReason: reason,
             confidence: pack.confidence ?? null,
+            domain: normalizeHost(sourceUrl) || normalizeHost(googleUrl || undefined) || null,
           });
           continue;
         }
@@ -812,8 +845,10 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
     console.log(`  └─ [${conf.id}] Done: ${out.length} collected\n`);
     return out;
   } catch (e: any) {
-    console.error(`  └─ [${conf.id}] ❌ ERROR (스킵 후 계속):`, e?.message || e);
-    crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName}): ${e?.message || e}`);
+    const status = httpStatusOf(e);
+    console.error(`  └─ [${conf.id}] ❌ ERROR (스킵 후 계속)${status ? ` [${status}]` : ''}:`, e?.message || e);
+    crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName})${status ? ` [${status}]` : ''}: ${e?.message || e}`);
+    crawlStats.feedFailures.push({ id: conf.id, source: conf.sourceName, sourceType: conf.sourceType, status, retried: false });
     return [];
   }
 }
@@ -925,16 +960,13 @@ async function finalizeStatoryCandidate(
       else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
       else crawlStats.gateRejectLowConf++;
       console.log(`  │   🚫 입구 게이트 거부(${reason}, statory): ${rawTitle.slice(0, 30)}`);
-      if (j.categoryFit === false) {
-        const added = recordCategoryFitFail(partial.sourceUrl);
-        if (added) pendingBlacklistNotifies.push(added);
-      }
       rejectedAll.push({
         title: (isForeign ? pack.titleKo.trim() : rawTitle) || rawTitle,
         originalTitle: rawTitle, summary: pack.summary || null, category: provCategory,
         source: partial.source, sourceUrl: partial.sourceUrl, googleUrl: partial.googleUrl,
         publishedAt: partial.publishedAt, lang, sourceType: partial.sourceType,
         rejectReason: reason, confidence: pack.confidence ?? null,
+        domain: normalizeHost(partial.sourceUrl) || null,
       });
       return null;
     }
@@ -1043,6 +1075,17 @@ async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
   for (const existing of nearbyArticles) {
     if (calculateTitleSimilarity(c.title, existing.title) >= 0.5) return true;
   }
+  // v5.4.1 3-2: 최근 72시간 저장분과 크로스매체(매체만 다른 동일 사건) 유사도 검사
+  const since = new Date(Date.now() - 72 * 3600 * 1000);
+  const recent72h = await repo.find({ where: { createdAt: MoreThanOrEqual(since) } });
+  for (const existing of recent72h) {
+    const sim = crossMediaSimilarity(c.title, existing.title);
+    if (sim >= 0.6) {
+      crawlStats.crossMediaDupSkip++;
+      console.log(`  │   🔁 크로스매체 중복 스킵(${Math.round(sim * 100)}%, 기존유지): ${c.title.slice(0, 30)}...`);
+      return true;
+    }
+  }
   return false;
 }
 
@@ -1053,8 +1096,14 @@ async function saveCandidates(list: Candidate[]) {
 
   console.log(`\n💾 Saving to DB (${list.length} candidates)...`);
   for (const c of list) {
+    // v5.4.1 3-1: 저장 직전 HTML 엔티티 디코딩(제목·요약·티저·원제)
+    c.title = decodeEntities(c.title);
+    if (c.summary) c.summary = decodeEntities(c.summary);
+    if (c.teaser) c.teaser = decodeEntities(c.teaser);
+    if (c.originalTitle) c.originalTitle = decodeEntities(c.originalTitle);
+
     if (await isDuplicateInDb(repo, c)) { dup++; continue; }
-    
+
     let safeKeywords: string[] | null = null;
     try {
       if (c.keywords && Array.isArray(c.keywords) && c.keywords.length > 0) {
@@ -1107,7 +1156,7 @@ async function saveRejected(list: RejectedRecord[]): Promise<number> {
         title: r.title, originalTitle: r.originalTitle, summary: r.summary,
         category: r.category, source: r.source, sourceUrl: r.sourceUrl, googleUrl: r.googleUrl,
         publishedAt: r.publishedAt, lang: r.lang, sourceType: r.sourceType,
-        rejectReason: r.rejectReason, confidence: r.confidence, judgedAt: new Date(),
+        rejectReason: r.rejectReason, confidence: r.confidence, domain: r.domain, judgedAt: new Date(),
       });
       await repo.save(ent);
       n++;
@@ -1138,6 +1187,26 @@ async function main() {
 
   await ds.initialize();
   console.log('✅ Database connected\n');
+
+  // v5.4.1 작업2: rejected_articles 집계로 자동 블랙리스트 재평가(실행 시작 시).
+  // 누적 판정 10+ AND cat_fit/seo 거부율 90%+ 도메인만 추가(is_incident 제외).
+  try {
+    const autoHits = await evaluateAutoBlacklistFromDb((sql) => ds.query(sql));
+    if (autoHits.length) {
+      for (const h of autoHits) {
+        console.log(`⛔ 자동 블랙리스트 추가: ${h.domain} (판정 ${h.total}건, 거부 ${h.catSeoRejects})`);
+        const titles = h.recentTitles.map((t) => `  · ${t}`).join('\n');
+        await notifyDiscord(
+          `⛔ 중독뉴스: 도메인 자동 블랙리스트 추가\n도메인: ${h.domain}\n` +
+          `누적 판정 ${h.total}건 중 category_fit/SEO 거부 ${h.catSeoRejects}건(≥90%)\n` +
+          `최근 거부 기사:\n${titles}\n` +
+          `해제: data/domain_blacklist.json 에서 제거 후 재배포(또는 DOMAIN_AUTOADD_* 조정)`,
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('[auto-blacklist] 평가 실패(무시):', (e as Error).message);
+  }
 
   // v5.2 #4: 대표 선정 — 전문매체 > 주요지 > 포털/지방지 순으로 먼저 크롤해,
   // 세션 내 중복(같은 사건)에서 먼저 채택되는 것이 선호 매체가 되도록 정렬.
@@ -1185,12 +1254,8 @@ async function main() {
   }
 
   const result = await saveCandidates(all);
-  // v5.4: 거부 기사 격리 저장 + 자동 블랙리스트 Discord 알림
+  // v5.4: 거부 기사 격리 저장(자동 블랙리스트는 다음 실행 시작 시 rejected 집계로 재평가)
   crawlStats.quarantined = await saveRejected(rejectedAll);
-  if (pendingBlacklistNotifies.length) {
-    const uniq = [...new Set(pendingBlacklistNotifies)];
-    await notifyDiscord(`⛔ 중독뉴스 크롤: category_fit=false 누적으로 도메인 자동 블랙리스트 추가 — ${uniq.join(', ')}`);
-  }
   const elapsed = Math.round((Date.now() - startTime) / 1000);
 
   // 통계 출력
@@ -1221,6 +1286,8 @@ async function main() {
   const blSnap = getBlacklistSnapshot();
   console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);
   console.log(`   ├ 핵심어 중복 스킵: ${crawlStats.dupSkipKeyword}건`);
+  console.log(`   ├ 🔁 크로스매체 중복 스킵: ${crawlStats.crossMediaDupSkip}건`);
+  console.log(`   ├ 📅 날짜 파싱 실패(now 대체): ${crawlStats.dateParseFail}건`);
   console.log(`   └ 본문부실 스킵: ${crawlStats.thinBodySkip}건`);
   const extractRate = crawlStats.bodyExtractTried > 0
     ? ((crawlStats.bodyExtractOk / crawlStats.bodyExtractTried) * 100).toFixed(1)
@@ -1229,6 +1296,45 @@ async function main() {
   if (crawlStats.failedFeeds.length) {
     console.log(`   실패 피드 ${crawlStats.failedFeeds.length}건 (스킵):`);
     for (const f of crawlStats.failedFeeds) console.log(`     - ${f}`);
+    // v5.4.1 작업5: 상태코드별 분류(복구 판단용)
+    const byStatus: Record<string, string[]> = {};
+    for (const ff of crawlStats.feedFailures) {
+      const key = ff.status ? String(ff.status) : 'DNS/기타';
+      (byStatus[key] ||= []).push(`${ff.id}(${ff.sourceType})`);
+    }
+    console.log('   피드 실패 분류:');
+    for (const [st, ids] of Object.entries(byStatus)) {
+      const hint = st === '403' || st === '406' ? '헤더/UA 조정 재시도 대상'
+        : st === '404' ? 'URL 확인/대체 필요' : st === '429' ? '레이트리밋(간격 조정)'
+        : 'DNS/네트워크 — 대체 소스 필요';
+      console.log(`     · ${st} (${ids.length}건): ${ids.join(', ')} → ${hint}`);
+    }
+    // 한국 소스가 지속 실패(406/403)하면 Discord 경고
+    const krFails = crawlStats.feedFailures.filter((f) => f.sourceType === 'kr_press');
+    if (krFails.length) {
+      await notifyDiscord(
+        `⚠️ 중독뉴스: 한국 피드 실패 ${krFails.length}건 — ` +
+        krFails.map((f) => `${f.id}[${f.status ?? '?'}]`).join(', ') +
+        `\n(406/403은 브라우저 UA 재시도 후에도 실패한 것. 소스 URL 점검/대체 필요)`,
+      );
+    }
+  }
+  // v5.4.1 작업5: 한국 콘텐츠 비중 3일 연속 30% 미달 시 Discord 경고
+  try {
+    await ds.query(
+      `CREATE TABLE IF NOT EXISTS crawl_daily (day date PRIMARY KEY, kr_ratio real, total int, created_at timestamp DEFAULT now())`,
+    );
+    await ds.query(
+      `INSERT INTO crawl_daily(day, kr_ratio, total) VALUES (current_date, $1, $2)
+       ON CONFLICT (day) DO UPDATE SET kr_ratio=$1, total=$2, created_at=now()`,
+      [Number(krRatioPct.toFixed(1)), all.length],
+    );
+    const recent: any[] = await ds.query(`SELECT kr_ratio FROM crawl_daily ORDER BY day DESC LIMIT 3`);
+    if (recent.length >= 3 && recent.every((r) => Number(r.kr_ratio) < 30)) {
+      await notifyDiscord(`⚠️ 중독뉴스: 한국 콘텐츠 비중 3일 연속 30% 미달 (${recent.map((r) => r.kr_ratio + '%').join(', ')}). 한국 피드 점검 필요.`);
+    }
+  } catch (e) {
+    console.warn('[kr-ratio] 추적 실패(무시):', (e as Error).message);
   }
   // v5.2 #6: DeepSeek 실제 호출 집계(성공/실패 분리). 기존 apiCallCount는 미호출 dead-code였음.
   console.log(`   DeepSeek 호출: 총 ${deepseekStats.calls}회 (성공 ${deepseekStats.ok} / 실패 ${deepseekStats.fail})`);
