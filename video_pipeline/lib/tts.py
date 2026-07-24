@@ -12,13 +12,15 @@ synth(text, out_mp3) -> marks 시그니처만 유지하면
 
 marks 형식: [ {"word": str(문장/구간 텍스트), "start": float, "end": float} ]
 """
+import os
 import asyncio
 import edge_tts
 from pronounce import for_speech
 
-VOICE = "ko-KR-InJoonNeural"   # 남성. 여성: ko-KR-SunHiNeural
-RATE = "+0%"
-PITCH = "+0Hz"
+# v2: 기본 여성(ko-KR-SunHiNeural). TTS_VOICE 로 재정의 가능(남성 ko-KR-InJoonNeural).
+VOICE = os.environ.get("TTS_VOICE", "ko-KR-SunHiNeural")
+RATE = os.environ.get("TTS_RATE", "+0%")
+PITCH = os.environ.get("TTS_PITCH", "+0Hz")
 
 
 async def _synth_async(text, out_mp3):
