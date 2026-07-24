@@ -18,6 +18,7 @@ images_v2.py — 장면별 배경 이미지 확보 (v2 지시서 1-2).
 """
 import os
 import json
+import time
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -27,6 +28,25 @@ from images import _gradient, CATEGORY_QUERY, W, H
 import images as _images
 
 DEFAULT_QUERY = "abstract calm background soft light"
+
+# 3c: Pexels 429(시간당 한도 초과) 시 대기 후 재시도.
+RATE_WAIT = int(os.environ.get("PEXELS_RETRY_WAIT", "60"))   # 초
+RATE_RETRIES = int(os.environ.get("PEXELS_RETRY_MAX", "3"))  # 총 시도 횟수
+
+
+def _urlopen_json(req, timeout=20):
+    """429 면 RATE_WAIT 초 대기 후 재시도(최대 RATE_RETRIES 회). 그 외 오류는 전파."""
+    for attempt in range(1, RATE_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < RATE_RETRIES:
+                print(f"  [images_v2] Pexels 429(한도 초과) — {RATE_WAIT}s 대기 후 "
+                      f"재시도 {attempt}/{RATE_RETRIES - 1}")
+                time.sleep(RATE_WAIT)
+                continue
+            raise
 
 
 def _load_backend_env(env_path=None):
@@ -62,8 +82,7 @@ def _pexels_scene(query, out_path, api_key, skip_ids, page=1):
         "query": query, "per_page": 5, "page": page, "orientation": "landscape",
     })
     req = urllib.request.Request(url, headers=_images._pexels_headers(api_key))
-    with urllib.request.urlopen(req, timeout=20) as r:
-        data = json.loads(r.read().decode())
+    data = _urlopen_json(req, timeout=20)
     photos = data.get("photos", [])
     if not photos:
         return None, None

@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE / "lib"))
 
+from logutil import force_utf8                         # noqa
 from fetch import fetch_one, fetch_all_ids, _connect   # noqa
 
 VIDEO_DIR = BASE / "video_v2"
@@ -260,6 +261,7 @@ def main():
     ap.add_argument("--private", action="store_true", help="비공개 업로드")
     args = ap.parse_args()
 
+    force_utf8()   # 3a: 콘솔 UTF-8 강제(PYTHONIOENCODING 불필요)
     limit = max(1, min(args.daily_limit, 6))
     state = _load_state()
     cands = _candidates(args.term_id, state)

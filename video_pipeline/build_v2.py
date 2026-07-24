@@ -29,6 +29,7 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE / "lib"))
 
+from logutil import force_utf8, start_logging       # noqa
 from fetch import fetch_one, fetch_all_ids          # noqa
 from script import build_script                     # noqa
 from tts import synth                               # noqa
@@ -46,6 +47,7 @@ DIRS = {
     "subs":    BASE / "subs_v2",
     "images":  BASE / "images",        # images/{id}/{n}.jpg (v1 {id}.jpg 와 공존)
     "video":   BASE / "video_v2",
+    "logs":    BASE / "logs",           # 빌드 로그(UTF-8)
 }
 for d in DIRS.values():
     d.mkdir(exist_ok=True)
@@ -203,7 +205,15 @@ def main():
     ap.add_argument("--all", action="store_true", help="전체 배치")
     ap.add_argument("--limit", type=int, default=0, help="--all 시 앞 N개만")
     ap.add_argument("--resume", action="store_true", help="이미 만든 건 건너뜀")
+    ap.add_argument("--no-log", action="store_true", help="로그 파일 기록 끔(화면만)")
     args = ap.parse_args()
+
+    # 3a·3b: UTF-8 강제 + 화면·UTF-8 로그파일 동시 기록(Tee-Object 인코딩 깨짐 제거)
+    if args.no_log:
+        force_utf8()
+    else:
+        log_path = start_logging(DIRS["logs"], prefix="build_v2")
+        print(f"[로그] {log_path}")
 
     if args.all:
         ids = fetch_all_ids()
