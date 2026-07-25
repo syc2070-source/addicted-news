@@ -23,7 +23,7 @@ import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { summarizeKoreanDeepSeek, deepseekAvailable } from './deepseek_summary';
 import { isIncidentReport } from './addictionFilter';
-import { shouldDelete, Judgment } from './judge_article';
+import { canDelete, Judgment } from './judge_article';
 import { isApply } from './cli_flags';
 
 const DRY_RUN = !isApply();
@@ -58,22 +58,31 @@ type Row = {
   source: string | null; published_at: string | null; created_at: string | Date | null;
 };
 
-type Judged = Judgment & { via: 'deepseek' | 'keyword' };
+type Judged = Judgment & { via: 'deepseek' | 'keyword' | 'failed' };
 
 async function judge(row: Row): Promise<Judged> {
   const content = (row.summary && row.summary.trim()) || row.title || '';
   if (deepseekAvailable) {
+    // 운영 경로: 키가 있으면 DeepSeek 판정만 신뢰. 호출 실패/판정 미상은 'failed' →
+    // 절대 삭제하지 않는다(판정 실패 기사 삭제 금지). 키워드 폴백으로 내려가지 않음.
     try {
       const pack = await summarizeKoreanDeepSeek(row.title || '', content, {
         translate: false,
         category: row.category || '미지정',
       });
-      if (pack) {
+      // 실제 판정값(is_incident/category_fit)이 있을 때만 deepseek 판정으로 인정.
+      // 요약만 오고 판정 미상이면 삭제 근거가 없으므로 실패로 간주(건너뜀).
+      if (pack && (pack.categoryFit !== undefined || pack.isIncident !== undefined)) {
         return { isIncident: pack.isIncident, categoryFit: pack.categoryFit, confidence: pack.confidence, via: 'deepseek' };
       }
-    } catch { /* 폴백 */ }
+      console.warn(`[judge_cleanup] 판정 실패(응답없음/판정미상) → 건너뜀(삭제 안 함) [id=${row.id}] ${String(row.title).slice(0, 40)}`);
+      return { isIncident: undefined, categoryFit: undefined, via: 'failed' };
+    } catch (e) {
+      console.warn(`[judge_cleanup] DeepSeek 예외 → 건너뜀(삭제 안 함) [id=${row.id}]: ${(e as Error).message}`);
+      return { isIncident: undefined, categoryFit: undefined, via: 'failed' };
+    }
   }
-  // 폴백: 키워드 사건사고 판정(딥시크 미가용/실패 시 — 주로 로컬 검증용)
+  // 키 자체가 없을 때만(주로 로컬 검증) 키워드 폴백. 운영(키 있음)에선 여기 오지 않음.
   return {
     isIncident: isIncidentReport(row.title || '', content),
     categoryFit: undefined,
@@ -103,16 +112,24 @@ async function main() {
 
   const toDelete: Array<Row & { judged: Judged }> = [];
   let reviewed = 0;
+  let failedSkips = 0;   // 판정 실패로 삭제하지 않고 건너뛴 수
   for (const row of targets) {
     reviewed++;
     const j = await judge(row);
-    if (shouldDelete(j)) {
+    if (j.via === 'failed') failedSkips++;
+    // 안전장치: 판정 실패('failed')는 절대 삭제하지 않는다(canDelete 가드).
+    // DeepSeek 실제 판정(via='deepseek') 또는 키 없음 로컬 키워드(via='keyword')만 삭제 근거.
+    if (canDelete(j)) {
       toDelete.push({ ...row, judged: j });
       const reason = j.isIncident === true ? 'incident' : 'category_fit=false';
       console.log(`  🤖 삭제대상(${reason}, ${j.via}) [id=${row.id}] ${String(row.title).slice(0, 40)}`);
     }
-    if (reviewed % 50 === 0) console.log(`  …${reviewed}/${targets.length} 심사 (삭제대상 ${toDelete.length})`);
+    if (reviewed % 50 === 0) console.log(`  …${reviewed}/${targets.length} 심사 (삭제대상 ${toDelete.length}, 판정실패 건너뜀 ${failedSkips})`);
     if (deepseekAvailable && DELAY_MS > 0) await sleep(DELAY_MS);
+  }
+  // 대량 판정 실패 = DeepSeek 장애 신호. 안전망이 무의미하게 도는 것을 명확히 경고.
+  if (failedSkips > 0) {
+    console.warn(`⚠️ 판정 실패 ${failedSkips}/${targets.length}건 — 해당 기사는 삭제하지 않고 건너뜀(DeepSeek 상태 점검 필요).`);
   }
 
   const ids = toDelete.map((r) => r.id);
@@ -171,6 +188,7 @@ async function main() {
   console.log('\n================ 결과 ================');
   console.log(`판정 방식: ${deepseekAvailable ? 'DeepSeek' : '키워드 폴백'}`);
   console.log(`재심사: ${reviewed}건`);
+  console.log(`판정 실패(건너뜀, 삭제 안 함): ${failedSkips}건`);
   console.log(`삭제대상: ${toDelete.length}건 (incident ${incidentN} + category_fit=false ${catN})${DRY_RUN ? ' (예정)' : ''}`);
   console.log(`남은 총 기사: ${remaining}건`);
   console.log('=====================================\n');

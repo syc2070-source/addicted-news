@@ -116,7 +116,8 @@ let crawlStats = {
   incidentSkip: 0,      // v5.2 #1: 사건사고 스킵(키워드 1차 거름망)
   judgeIncidentSkip: 0, // v5.4: 딥시크 판정 incident 스킵
   judgeCatSkip: 0,      // v5.4: 딥시크 판정 category_fit=false 스킵
-  gateRejectLowConf: 0, // v5.4: 확신도 부족(medium/low/미상) 거부
+  gateRejectLowConf: 0, // v5.4: 확신도 부족(medium/low) 거부
+  deepseekFailSkip: 0,  // 판정 자체 실패(judgment_missing) — DeepSeek 응답 없음/장애 신호
   blacklistSkip: 0,     // v5.4: 블랙리스트 도메인 즉시 폐기(딥시크 호출 없음)
   quarantined: 0,       // v5.4: rejected_articles 격리 저장
   crossMediaDupSkip: 0, // v5.4.1 3-2: 크로스매체 동일 사건 중복 스킵
@@ -792,6 +793,7 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
           const reason = rejectReason(j) || 'rejected';
           if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
           else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
+          else if (reason === 'judgment_missing') crawlStats.deepseekFailSkip++;
           else crawlStats.gateRejectLowConf++;
           console.log(`  │   🚫 입구 게이트 거부(${reason}): ${shortTitle}`);
           // 격리 저장(rejected_articles) — 감사·프롬프트 개선 소재. 자동 블랙리스트는
@@ -958,6 +960,7 @@ async function finalizeStatoryCandidate(
       const reason = rejectReason(j) || 'rejected';
       if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
       else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
+      else if (reason === 'judgment_missing') crawlStats.deepseekFailSkip++;
       else crawlStats.gateRejectLowConf++;
       console.log(`  │   🚫 입구 게이트 거부(${reason}, statory): ${rawTitle.slice(0, 30)}`);
       rejectedAll.push({
@@ -1282,6 +1285,7 @@ async function main() {
   console.log(`   ├ 🚫 입구게이트 거부(incident): ${crawlStats.judgeIncidentSkip}건`);
   console.log(`   ├ 🚫 입구게이트 거부(category_fit): ${crawlStats.judgeCatSkip}건`);
   console.log(`   ├ 🚫 입구게이트 거부(확신도부족): ${crawlStats.gateRejectLowConf}건`);
+  console.log(`   ├ ⚠️ 판정 실패(DeepSeek 응답없음/장애): ${crawlStats.deepseekFailSkip}건`);
   console.log(`   ├ 📦 격리 저장(rejected_articles): ${crawlStats.quarantined}건`);
   const blSnap = getBlacklistSnapshot();
   console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);
@@ -1338,6 +1342,11 @@ async function main() {
   }
   // v5.2 #6: DeepSeek 실제 호출 집계(성공/실패 분리). 기존 apiCallCount는 미호출 dead-code였음.
   console.log(`   DeepSeek 호출: 총 ${deepseekStats.calls}회 (성공 ${deepseekStats.ok} / 실패 ${deepseekStats.fail})`);
+  // DeepSeek 전멸 감지: 호출은 있었는데 성공 0 → 게이트가 전량 거부됨(원인 로그 위 [deepseek] 참고).
+  if (deepseekStats.calls > 0 && deepseekStats.ok === 0) {
+    console.warn(`   ⛔ 경고: DeepSeek 성공 0/${deepseekStats.calls} — 판정 전멸로 이번 크롤 저장이 막혔을 수 있음. `
+      + `위 "[deepseek]" 로그의 status/code/빈응답 여부로 원인 확인(키·잔액·모델·한도).`);
+  }
   console.log('\n   카테고리별:');
   for (const [cat, count] of Object.entries(categoryStats)) {
     console.log(`     - ${cat}: ${count}개`);

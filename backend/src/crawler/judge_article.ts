@@ -45,3 +45,14 @@ export function rejectReason(j: Judgment): string | null {
 export function shouldDelete(j: Judgment): boolean {
   return j.isIncident === true || j.categoryFit === false;
 }
+
+/**
+ * 삭제 실행 가드(안전장치). DeepSeek 판정이 '실패'한 기사는 어떤 경우에도 삭제하지 않는다.
+ * - via='failed'  : 호출 실패·판정 미상 → 절대 삭제 금지(무조건 false)
+ * - via='deepseek': 실제 판정 → shouldDelete 규칙 적용
+ * - via='keyword' : 키 없음 로컬 폴백 → shouldDelete 규칙 적용(운영에선 사용 안 함)
+ */
+export function canDelete(j: Judgment & { via?: 'deepseek' | 'keyword' | 'failed' }): boolean {
+  if (j.via === 'failed') return false;
+  return shouldDelete(j);
+}

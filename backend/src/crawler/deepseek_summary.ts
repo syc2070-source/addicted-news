@@ -134,8 +134,21 @@ export async function summarizeKoreanDeepSeek(
         temperature: 0.4,
         max_tokens: 900,
       });
-      let text = (r.choices?.[0]?.message?.content || '').trim();
-      if (!text) continue;
+      const choice = r.choices?.[0];
+      let text = (choice?.message?.content || '').trim();
+      // 일부 모델(reasoner 계열)은 content 가 비고 reasoning_content 로 옴 → 폴백
+      if (!text) {
+        const rc = (choice?.message as unknown as { reasoning_content?: unknown })?.reasoning_content;
+        if (typeof rc === 'string' && rc.trim()) text = rc.trim();
+      }
+      if (!text) {
+        // 호출은 됐으나 빈 응답(그동안 조용히 continue 되어 원인 미상이던 지점 — 로깅 추가)
+        console.warn(
+          `[deepseek] 빈 응답 (attempt ${attempt}/2, model=${DEEPSEEK_MODEL}, ` +
+          `finish=${choice?.finish_reason ?? '?'}, translate=${translate}) title="${title.slice(0, 40)}"`,
+        );
+        continue;
+      }
 
       // v5.4: 요약 + 판정(report_type/category_fit)을 JSON에서 추출(한/외국어 공통)
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -168,7 +181,10 @@ export async function summarizeKoreanDeepSeek(
             deepseekStats.ok++;
             return { titleKo, summary, isIncident, categoryFit, confidence };
           }
-        } catch { /* JSON 파싱 실패 → 아래 폴백 */ }
+        } catch (pe) {
+          // 파싱 실패는 호출 실패와 구분해서 로깅(원인 확정용). 아래 텍스트 폴백으로 진행.
+          console.warn(`[deepseek] JSON 판정 파싱 실패 → 텍스트 폴백: ${(pe as Error).message}`);
+        }
       }
 
       // JSON 실패 시: 판정 없이 텍스트를 요약으로(판정 미상 → 저장 스킵 안 함, fail-open)
@@ -181,13 +197,26 @@ export async function summarizeKoreanDeepSeek(
       deepseekStats.ok++;
       return { titleKo: title, summary: text };
     } catch (e) {
+      // 호출 예외를 상태코드·코드까지 남긴다(인증 401 / 잔액 402 / 한도 429 / 서버 5xx 구분).
+      const err = e as {
+        status?: number; code?: string; message?: string;
+        response?: { status?: number; data?: unknown };
+        error?: { code?: string; message?: string };
+      };
+      const status = err?.status ?? err?.response?.status ?? '?';
+      const code = err?.code ?? err?.error?.code ?? '?';
+      console.warn(
+        `[deepseek] 호출 예외 (attempt ${attempt}/2, model=${DEEPSEEK_MODEL}, ` +
+        `status=${status}, code=${code}): ${err?.message ?? String(e)}`,
+      );
       if (attempt === 2) {
-        console.warn('[deepseek summary] 실패:', (e as Error).message);
         deepseekStats.fail++;
         return null;
       }
     }
   }
+  // 두 번 모두 빈 응답 등으로 여기 도달(예외 아님) — 최종 실패 명시.
+  console.warn(`[deepseek] 최종 실패(유효 응답 없음) title="${title.slice(0, 40)}"`);
   deepseekStats.fail++;
   return null;
 }
