@@ -18,7 +18,8 @@ MANUAL = "en_behavioral_manual.json"   # 행동중독 17개 수작업 영어(있
 OUTPUT = "translate_output.json"
 PROGRESS = "translate_progress.json"   # 중간 저장(재개용)
 
-MODEL = "deepseek-chat"
+# 모델 단일 소스: 환경변수 DEEPSEEK_MODEL(하드코딩 제거). 구 deepseek-chat 폐기됨.
+MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 API_BASE = "https://api.deepseek.com"
 MAX_RETRY = 3
 

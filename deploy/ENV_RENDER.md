@@ -14,7 +14,7 @@ Render Web Service → Environment 에 아래 키를 설정하세요.
 | `DB_NAME` | `<설정필요>` (예: postgres) |
 | `ADMIN_PASSWORD` | `<설정필요>` |
 | `DEEPSEEK_API_KEY` | `<설정필요>` |
-| `DEEPSEEK_MODEL` | `<설정필요>` (예: deepseek-chat) |
+| `DEEPSEEK_MODEL` | `<설정필요>` (예: deepseek-v4-flash(또는 deepseek-v4-pro)) |
 | `CORS_ORIGINS` | `<설정필요>` (예: https://addictionnews.net,https://www.addictionnews.net) |
 | `PORT` | `<설정필요>` (Render가 자동 주입 시 생략 가능) |
 

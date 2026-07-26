@@ -5,7 +5,9 @@
 import OpenAI from 'openai';
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+// 모델명 단일 소스: 환경변수 DEEPSEEK_MODEL. 기본값은 현행 모델(구 deepseek-chat 폐기됨).
+// 백엔드는 이 상수를 통해서만 모델을 참조한다(하드코딩 금지).
+export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 export const deepseekAvailable = !!DEEPSEEK_KEY;
 
 const deepseek = deepseekAvailable

@@ -64,7 +64,7 @@ addictionnews.net 에 새 기사가 흐르게 한다.
 | `DB_PASSWORD` | `<설정필요>` | Supabase |
 | `DB_NAME` | `<설정필요>` | Supabase |
 | `DEEPSEEK_API_KEY` | `<설정필요>` | 요약용 |
-| `DEEPSEEK_MODEL` | `deepseek-chat` | |
+| `DEEPSEEK_MODEL` | `deepseek-v4-flash` | |
 | `MAX_FOREIGN_ARTICLES` | `100` | |
 | `ENABLE_IMAGE_EXTRACT` | `true` | og:image 추출 |
 | `STATORY_API_URL` | `<설정필요, 안 쓰면 생략>` | 선택 |

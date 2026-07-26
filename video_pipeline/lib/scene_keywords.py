@@ -57,8 +57,9 @@ def _api_key():
 
 
 def _model():
+    # 모델 단일 소스: 환경변수 → backend/.env → 기본값(구 deepseek-chat 폐기됨)
     return (os.environ.get("DEEPSEEK_MODEL")
-            or _load_env().get("DEEPSEEK_MODEL", "deepseek-chat")).strip() or "deepseek-chat"
+            or _load_env().get("DEEPSEEK_MODEL", "deepseek-v4-flash")).strip() or "deepseek-v4-flash"
 
 
 def _fallback(item, n):

@@ -6,10 +6,10 @@
 //
 // 실행 (backend/ 에서, .env 에 DEEPSEEK_API_KEY 있는 상태):
 //   npx ts-node src/crawler/deepseek_check.ts
-//   (모델 바꿔 확인: DEEPSEEK_MODEL=deepseek-chat npx ts-node ...)
+//   (모델 바꿔 확인: DEEPSEEK_MODEL=deepseek-v4-pro npx ts-node ...)
 // ============================================================
 import 'dotenv/config';
-import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats } from './deepseek_summary';
+import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats, DEEPSEEK_MODEL } from './deepseek_summary';
 
 const SAMPLES: Array<{ label: string; title: string; content: string; category: string }> = [
   {
@@ -41,7 +41,7 @@ const SAMPLES: Array<{ label: string; title: string; content: string; category: 
 async function main() {
   console.log('=== DeepSeek 판정 진단 ===');
   console.log(`DEEPSEEK_API_KEY: ${deepseekAvailable ? '있음' : '없음(설정 필요)'}`);
-  console.log(`DEEPSEEK_MODEL: ${process.env.DEEPSEEK_MODEL || 'deepseek-chat(기본)'}`);
+  console.log(`DEEPSEEK_MODEL: ${DEEPSEEK_MODEL}${process.env.DEEPSEEK_MODEL ? '' : ' (기본값)'}`);
   if (!deepseekAvailable) {
     console.error('\n[X] 키가 없어 진단 불가. backend/.env 의 DEEPSEEK_API_KEY 확인.');
     process.exit(1);
