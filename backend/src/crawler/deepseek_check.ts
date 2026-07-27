@@ -6,7 +6,8 @@
 //
 // 실행 (backend/ 에서, .env 에 DEEPSEEK_API_KEY 있는 상태):
 //   npx ts-node src/crawler/deepseek_check.ts              # 내장 샘플 3건
-//   npx ts-node src/crawler/deepseek_check.ts --batch 20   # 실제 DB 기사 20건 판정 성공률
+//   npx ts-node src/crawler/deepseek_check.ts --batch 20              # 판정 측정(성공률·누락·절단)
+//   npx ts-node src/crawler/deepseek_check.ts --batch 20 --repeat 2   # + 반복 판정 불일치(뒤집힘)
 //   (모델 바꿔 확인: DEEPSEEK_MODEL=deepseek-v4-pro npx ts-node ... )
 //   (응답 원문 전문 보기: DEEPSEEK_RAW_LOG=full npx ts-node ... )
 // ============================================================
@@ -66,9 +67,25 @@ function buildClientConfig(): ClientConfig {
 
 type Row = { id: number; title: string; summary: string | null; category: string | null };
 
-/** 실제 DB 기사 N건을 판정해 성공률을 낸다(판정 필드가 실제로 온 것만 성공). */
+/** --repeat N (기본 1). 같은 집합을 N회 판정해 불일치(뒤집힘)를 센다. */
+function repeatCount(): number {
+  const i = process.argv.indexOf('--repeat');
+  if (i >= 0 && process.argv[i + 1]) return Math.max(1, Number(process.argv[i + 1]) || 1);
+  return 1;
+}
+
+type Verdict = { fit?: boolean; incident?: boolean; conf?: string };
+
+/**
+ * 실제 DB 기사 N건 판정 측정(작업 3).
+ *  (a) 판정 성공률 = 세 필드가 전부 존재한 비율  ← 정의 변경(기존 '하나라도 존재')
+ *  (b) 필드별 누락 건수
+ *  (c) finish_reason=length 건수  ← [deepseek] 절단 경고를 가로채 집계
+ *  --repeat 2 시: 회차 간 판정 뒤집힘(불일치) 건수
+ */
 async function runBatch(n: number) {
-  console.log(`=== 실제 DB 기사 ${n}건 판정 테스트 (model=${DEEPSEEK_MODEL}) ===`);
+  const reps = repeatCount();
+  console.log(`=== 실제 DB 기사 ${n}건 판정 측정 (model=${DEEPSEEK_MODEL}, 반복 ${reps}회) ===`);
   const client = new Client(buildClientConfig());
   await client.connect();
   const { rows } = await client.query<Row>(
@@ -78,26 +95,79 @@ async function runBatch(n: number) {
   if (!rows.length) { console.log('대상 기사가 없습니다(articles 비어 있음).'); return; }
   console.log(`DB에서 ${rows.length}건 로드(최근 id 순)\n`);
 
-  let judged = 0;
+  // (c) 절단 건수: console.warn 의 '절단' 경고를 가로채 집계
+  let lengthCount = 0;
+  const origWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    const s = args.map(String).join(' ');
+    if (s.includes('finish_reason=length') || s.includes('응답 절단')) lengthCount++;
+    origWarn(...(args as []));
+  };
+
+  const perRun: Array<Map<number, Verdict>> = [];
+  const missing = { fit: 0, incident: 0, conf: 0 };
+  let complete = 0, total = 0;
   const fails: string[] = [];
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const content = (r.summary && r.summary.trim()) || r.title || '';
-    const pack = await summarizeKoreanDeepSeek(r.title || '', content, {
-      translate: false, category: r.category || '미지정',
-    });
-    // 성공 = 판정 필드가 실제로 존재(요약만 온 것은 실패로 계산 — 게이트에서 거부되므로)
-    const ok = !!pack && (pack.categoryFit !== undefined || pack.isIncident !== undefined);
-    if (ok) judged++;
-    else fails.push(`id=${r.id} ${String(r.title).slice(0, 30)} — ${pack ? '판정 필드 없음(서술형/파싱 실패)' : 'null(호출 실패)'}`);
-    console.log(`  [${i + 1}/${rows.length}] ${ok ? 'OK  ' : 'FAIL'} id=${r.id} ` +
-      `incident=${pack?.isIncident} fit=${pack?.categoryFit} conf=${pack?.confidence}`);
+
+  for (let run = 1; run <= reps; run++) {
+    const verdicts = new Map<number, Verdict>();
+    console.log(`--- ${run}회차 ---`);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const content = (r.summary && r.summary.trim()) || r.title || '';
+      const pack = await summarizeKoreanDeepSeek(r.title || '', content, {
+        translate: false, category: r.category || '미지정',
+      });
+      total++;
+      const v: Verdict = { fit: pack?.categoryFit, incident: pack?.isIncident, conf: pack?.confidence };
+      verdicts.set(r.id, v);
+      const full = v.fit !== undefined && v.incident !== undefined && v.conf !== undefined;
+      if (full) complete++;
+      else {
+        if (v.fit === undefined) missing.fit++;
+        if (v.incident === undefined) missing.incident++;
+        if (v.conf === undefined) missing.conf++;
+        fails.push(`run${run} id=${r.id} ${String(r.title).slice(0, 28)} — fit=${v.fit} incident=${v.incident} conf=${v.conf}`);
+      }
+      console.log(`  [${i + 1}/${rows.length}] ${full ? 'FULL' : 'MISS'} id=${r.id} ` +
+        `fit=${v.fit} incident=${v.incident} conf=${v.conf}`);
+    }
+    perRun.push(verdicts);
   }
-  const rate = ((judged / rows.length) * 100).toFixed(1);
-  console.log(`\n=== 판정 성공 ${judged}/${rows.length} (${rate}%) ===`);
-  if (fails.length) { console.log('실패 목록:'); fails.forEach((f) => console.log('  - ' + f)); }
-  console.log(`DeepSeek 호출 집계: 총 ${deepseekStats.calls}회 (성공 ${deepseekStats.ok} / 실패 ${deepseekStats.fail})`);
-  if (fails.length) console.log('※ 위 "[deepseek] JSON 추출 실패" 로그의 응답 원문으로 잔여 패턴을 확인하세요.');
+  console.warn = origWarn;
+
+  // 집계
+  const rate = ((complete / total) * 100).toFixed(1);
+  console.log(`\n================ 측정 결과 ================`);
+  console.log(`(a) 판정 성공률(세 필드 전부): ${complete}/${total} (${rate}%)   [합격 ≥95%]`);
+  console.log(`(b) 필드 누락: category_fit ${missing.fit} / is_incident ${missing.incident} / confidence ${missing.conf}`);
+  console.log(`(c) finish_reason=length: ${lengthCount}건   [합격 0건]`);
+
+  let flips = 0;
+  if (reps >= 2) {
+    const flipList: string[] = [];
+    for (const r of rows) {
+      const vs = perRun.map((m) => m.get(r.id)!);
+      const base = vs[0];
+      for (let k = 1; k < vs.length; k++) {
+        const v = vs[k];
+        if (base.fit !== v.fit || base.incident !== v.incident) {
+          flips++;
+          flipList.push(`id=${r.id} ${String(r.title).slice(0, 28)} — ` +
+            `1회차 fit=${base.fit},incident=${base.incident} ↔ ${k + 1}회차 fit=${v.fit},incident=${v.incident}`);
+          break;
+        }
+      }
+    }
+    console.log(`(d) 반복 판정 불일치(뒤집힘): ${flips}/${rows.length}건   [합격 0건]`);
+    if (flipList.length) { console.log('  뒤집힌 기사:'); flipList.forEach((f) => console.log('   - ' + f)); }
+  }
+
+  console.log(`DeepSeek 호출: 총 ${deepseekStats.calls}회 (성공 ${deepseekStats.ok} / 실패 ${deepseekStats.fail})`);
+  const pass = Number(rate) >= 95 && lengthCount === 0 && (reps < 2 || flips === 0);
+  console.log(`\n판정: ${pass ? '✅ 합격' : '❌ 불합격'} (기준: 세 필드 ≥95% / 불일치 0 / length 0)`);
+  console.log('==========================================');
+  if (fails.length) { console.log('누락 상세:'); fails.slice(0, 20).forEach((f) => console.log('  - ' + f)); }
 }
 
 async function main() {
