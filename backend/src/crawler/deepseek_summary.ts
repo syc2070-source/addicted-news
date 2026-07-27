@@ -9,6 +9,11 @@ const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
 // 모델명 단일 소스: 환경변수 DEEPSEEK_MODEL. 기본값은 현행 모델(구 deepseek-chat 폐기됨).
 // 백엔드는 이 상수를 통해서만 모델을 참조한다(하드코딩 금지).
 export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+
+// JSON 절단(finish_reason='length') 방지. 요약 5~8문장 + 판정 필드 + 여유.
+// 기존 900은 부족해 {"titleKo":...,"is_incident":false, 에서 잘리는 사례가 발생했다.
+export const MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS || 2000);
+export const MAX_TOKENS_RETRY = Number(process.env.DEEPSEEK_MAX_TOKENS_RETRY || 3000);
 export const deepseekAvailable = !!DEEPSEEK_KEY;
 
 const deepseek = deepseekAvailable
@@ -158,23 +163,60 @@ export async function summarizeKoreanDeepSeek(
       const user = strictRetry
         ? `${userMsg}\n\n[재요청] 이전 응답이 JSON 이 아니었다. 설명 없이 JSON 객체만 출력하라.`
         : userMsg;
-      const r = await deepseek.chat.completions.create({
+      // 요청 파라미터를 한 곳에서 구성 → 전송 여부를 그대로 로그로 확인 가능.
+      const params = {
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: 'system', content: ensureJsonWord(system) },
-          { role: 'user', content: ensureJsonWord(user) },
+          { role: 'system' as const, content: ensureJsonWord(system) },
+          { role: 'user' as const, content: ensureJsonWord(user) },
         ],
         // 구조화 출력 강제(서술형 응답 차단). 프롬프트에 "JSON" 단어 포함은 ensureJsonWord 로 보장.
-        response_format: { type: 'json_object' },
+        response_format: { type: 'json_object' as const },
         temperature: strictRetry ? 0 : 0.4,
-        max_tokens: 900,
-      });
+        // JSON 절단 방지: 요약 5~8문장 + 판정 필드가 다 들어가야 한다(기존 900은 부족).
+        // 재시도는 더 넉넉히. DEEPSEEK_MAX_TOKENS 로 조정 가능.
+        max_tokens: strictRetry ? MAX_TOKENS_RETRY : MAX_TOKENS,
+      };
+      if (process.env.DEEPSEEK_DEBUG_REQ === '1') {
+        // 실제 전송 body 확인용(프롬프트 본문은 길어서 길이만).
+        console.log('[deepseek][req]', JSON.stringify({
+          model: params.model,
+          response_format: params.response_format,
+          temperature: params.temperature,
+          max_tokens: params.max_tokens,
+          system_len: params.messages[0].content.length,
+          user_len: params.messages[1].content.length,
+          system_has_json_word: /json/i.test(params.messages[0].content),
+        }));
+      }
+      const r = await deepseek.chat.completions.create(params);
       const choice = r.choices?.[0];
       let text = (choice?.message?.content || '').trim();
-      // 일부 모델(reasoner 계열)은 content 가 비고 reasoning_content 로 옴 → 폴백
+
+      // [수정] reasoning_content 는 '추론 산문'이라 요약/판정이 아니다.
+      // 이전 구현은 content 가 비면 이 산문을 그대로 text 로 썼고, 그 결과
+      // "We are asked..." 같은 영어 추론이 응답 본문처럼 취급됐다.
+      // → JSON 이 들어있을 때만 사용하고, 산문이면 버린다(빈 응답 취급 → 강화 재시도).
       if (!text) {
         const rc = (choice?.message as unknown as { reasoning_content?: unknown })?.reasoning_content;
-        if (typeof rc === 'string' && rc.trim()) text = rc.trim();
+        if (typeof rc === 'string' && rc.trim() && extractJsonObject(rc)) {
+          text = rc.trim();
+        } else if (typeof rc === 'string' && rc.trim()) {
+          console.warn(
+            `[deepseek] content 비어 있고 reasoning_content 는 산문 → 폐기(재시도) ` +
+            `title="${title.slice(0, 30)}" rc="${rc.slice(0, 120)}..."`,
+          );
+        }
+      }
+
+      // 토큰 상한으로 JSON 이 잘린 경우를 명시적으로 감지(파싱 실패의 실제 원인).
+      if (choice?.finish_reason === 'length') {
+        console.warn(
+          `[deepseek] 응답 절단(finish_reason=length, max_tokens=${params.max_tokens}, ` +
+          `attempt ${attempt}/2) title="${title.slice(0, 30)}" — 토큰 상한 상향 필요 시 ` +
+          `DEEPSEEK_MAX_TOKENS 조정`,
+        );
+        if (attempt === 1) { strictRetry = true; continue; }   // 더 넉넉한 상한으로 재시도
       }
       if (!text) {
         // 호출은 됐으나 빈 응답(그동안 조용히 continue 되어 원인 미상이던 지점 — 로깅 추가)
