@@ -1,0 +1,24 @@
+.box {
+  width: 100%;
+  background: var(--color-neutral-300);
+  border: 1px solid var(--color-divider);
+  overflow: hidden;
+}
+.img { width: 100%; height: 100%; object-fit: cover; }
+
+.fallback {
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  padding: 14px 16px;
+  background: var(--color-surface);
+}
+.fbCat {
+  font-family: var(--font-heading);
+  font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--color-accent-700);
+}
+.fbTitle {
+  font-family: var(--font-heading);
+  font-size: 18px; line-height: 1.2;
+  color: var(--color-text);
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
