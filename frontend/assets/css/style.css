@@ -1,5 +1,13 @@
 /* frontend/assets/css/style.css */
 /* v2.3 - TOP 뉴스 가로 레이아웃 */
+/* 색상 일원화(2026-07): 주황/빨강 → 블루 계열. 색 조정은 아래 :root 한 곳에서. */
+
+:root {
+  --color-primary: #16324f;       /* 진네이비 — 주 색(내비 라인·섹션 헤더·헤더 블록·버튼) */
+  --color-primary-dark: #0f2438;  /* 진네이비 hover */
+  --color-accent: #4a90d9;        /* 밝은 블루 — 활성 메뉴·순위 번호·링크 포인트 */
+  --color-accent-soft: #dbe8f5;   /* 연블루 — 옅은 배경(태그·카드) */
+}
 
 * {
   margin: 0;
@@ -44,7 +52,7 @@ a {
 }
 
 .header-links a:hover {
-  color: #c00;
+  color: var(--color-accent);
 }
 
 .header-logo {
@@ -82,9 +90,9 @@ a {
 }
 
 .header-sub-links a:hover {
-  background: #c00;
+  background: var(--color-primary);
   color: #fff;
-  border-color: #c00;
+  border-color: var(--color-primary);
 }
 
 .nav-main {
@@ -92,7 +100,7 @@ a {
   justify-content: center;
   gap: 5px;
   padding: 8px 0;
-  border-top: 2px solid #333;
+  border-top: 2px solid var(--color-primary);
   border-bottom: 1px solid #ddd;
 }
 
@@ -107,7 +115,7 @@ a {
 
 .nav-main a:hover,
 .nav-main a.active {
-  background: #c00;
+  background: var(--color-accent);
   color: #fff;
 }
 
@@ -160,7 +168,7 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ff9800;
+  background: var(--color-primary);
   padding: 8px 12px;
 }
 
@@ -199,7 +207,7 @@ a {
 .sidebar-rank {
   font-size: 15px;
   font-weight: 700;
-  color: #c00;
+  color: var(--color-accent);
   width: 20px;
   flex-shrink: 0;
 }
@@ -225,7 +233,7 @@ a {
 }
 
 .sidebar-item-title:hover {
-  color: #c00;
+  color: var(--color-accent);
 }
 
 .sidebar-item-meta {
@@ -257,7 +265,7 @@ a {
   align-items: center;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 2px solid #c00;
+  border-bottom: 2px solid var(--color-primary);
 }
 
 .section-title {
@@ -272,14 +280,14 @@ a {
 }
 
 .more-link:hover {
-  color: #c00;
+  color: var(--color-accent);
 }
 
 /* ========================================
    TOP 뉴스 - 가로 레이아웃 (1:3 비율 - 이미지:내용)
    ======================================== */
 .top-news-section {
-  background: #e3f2fd;
+  background: var(--color-accent-soft);
 }
 
 .top-news-container {
@@ -343,7 +351,7 @@ a {
 }
 
 .top-news-title:hover {
-  color: #c00;
+  color: var(--color-accent);
 }
 
 .top-news-meta {
@@ -365,7 +373,7 @@ a {
 
 .top-news-more {
   font-size: 13px;
-  color: #c00;
+  color: var(--color-accent);
   text-decoration: none;
   font-weight: 500;
   align-self: flex-start;
@@ -427,7 +435,7 @@ a {
 }
 
 .article-title:hover {
-  color: #c00;
+  color: var(--color-accent);
 }
 
 .article-meta {
@@ -481,14 +489,14 @@ a {
 }
 
 .btn-source {
-  background: #c00;
+  background: var(--color-primary);
   border: none;
   color: #fff;
   text-decoration: none;
 }
 
 .btn-source:hover {
-  background: #a00;
+  background: var(--color-primary-dark);
 }
 
 /* ========================================
@@ -507,7 +515,7 @@ a {
   color: #333;
   padding-bottom: 10px;
   margin-bottom: 5px;
-  border-bottom: 3px solid #c00;
+  border-bottom: 3px solid var(--color-primary);
 }
 
 .special-page-desc {
@@ -563,7 +571,7 @@ a {
 }
 
 .full-article-title:hover {
-  color: #c00;
+  color: var(--color-accent);
 }
 
 .full-article-meta {
@@ -602,6 +610,12 @@ a {
   padding: 15px;
   margin-top: 20px;
   font-size: 12px;
+}
+
+.footer-publisher {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #ccc;
 }
 
 /* ========================================
@@ -691,12 +705,12 @@ a {
 .enc-term-link {
   color: inherit;
   text-decoration: none;
-  border-bottom: 1px dotted #8a6d3b;
+  border-bottom: 1px dotted var(--color-accent);
   cursor: pointer;
 }
 .enc-term-link:hover {
   border-bottom-style: solid;
-  background: rgba(138, 109, 59, 0.08);
+  background: rgba(74, 144, 217, 0.10);
 }
 
 /* 중독백과 한/영 토글 */
@@ -758,7 +772,7 @@ a {
   color: #888;
 }
 .article-observatory-note a {
-  color: #2563eb;
+  color: var(--color-accent);
   text-decoration: none;
 }
 .article-observatory-note a:hover { text-decoration: underline; }

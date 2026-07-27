@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>기획기사 - 중독뉴스</title>
+  <title>리포트 - 중독뉴스</title>
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
@@ -29,18 +29,16 @@
       <a href="category.html?cat=게임·디지털중독">게임·디지털중독</a>
       <a href="category.html?cat=중독사회와 회복">중독사회와 회복</a>
       <a href="encyclopedia.html">중독백과</a>
-      <a href="reports.html">리포트</a>
+      <a href="reports.html" class="active">리포트</a>
     </nav>
   </header>
 
   <!-- 메인 콘텐츠 -->
   <main class="main-content">
     <div class="special-page">
-      <h1 class="special-page-title">기획기사</h1>
-      <p class="special-page-desc">중독 문제를 심층적으로 다루는 기획 시리즈입니다.</p>
-      <div id="feature-articles" class="special-articles-list">
-        <!-- 기획기사 로드 -->
-      </div>
+      <h1 class="special-page-title">리포트</h1>
+      <p class="special-page-desc">스태토리 랩 리포트가 준비 중입니다.</p>
+      <div class="no-articles">데이터·통계 기반 심층 리포트를 이 자리에서 제공할 예정입니다.</div>
     </div>
   </main>
 
@@ -57,9 +55,8 @@
   </footer>
 
   <script src="assets/js/config.js"></script>
-  <script src="assets/js/main.js"></script>
   <script>
-    document.getElementById('current-date').textContent = 
+    document.getElementById('current-date').textContent =
       new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   </script>
 </body>
