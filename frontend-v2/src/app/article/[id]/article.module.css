@@ -1,0 +1,13 @@
+.article { max-width: 760px; margin: 0 auto; }
+.cat { font-family: var(--font-heading); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-accent-700); }
+.title { font-size: 38px; line-height: 1.14; margin: 6px 0 10px; }
+.orig { font-size: 14px; color: var(--color-neutral-600); margin: 0 0 8px; }
+.meta { display: flex; gap: 14px; font-size: 13px; color: var(--color-neutral-600); border-top: 1px solid var(--color-divider); border-bottom: 1px solid var(--color-divider); padding: 10px 0; margin-bottom: 20px; }
+.hero { width: 100%; margin-bottom: 20px; }
+.summary { font-size: 16px; line-height: 1.75; }
+.summary p { margin: 0 0 var(--space-4); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 20px 0; }
+.sourceRow { display: flex; gap: 10px; flex-wrap: wrap; margin: 24px 0 12px; }
+.disclaimer { font-size: 12px; color: var(--color-neutral-600); border-top: 1px solid var(--color-divider); padding-top: 12px; }
+
+@media (max-width: 640px) { .title { font-size: 28px; } }
