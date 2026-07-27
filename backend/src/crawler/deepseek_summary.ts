@@ -4,6 +4,7 @@
 // ============================================================
 import OpenAI from 'openai';
 import { extractJsonObject } from './json_extract';
+import { JUDGE_SYSTEM, JUDGE_RETRY_SYSTEM, JUDGE_JSON_SCHEMA, buildJudgeUser } from './judge_prompt';
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
 // 모델명 단일 소스: 환경변수 DEEPSEEK_MODEL. 기본값은 현행 모델(구 deepseek-chat 폐기됨).
@@ -114,7 +115,7 @@ export type DeepSeekPack = {
  * translate=true 이면 제목도 한국어로 번역해 함께 반환.
  * 실패 시 null
  */
-export async function summarizeKoreanDeepSeek(
+async function summarizeCombined(
   title: string,
   content: string,
   opts?: { translate?: boolean; category?: string },
@@ -321,4 +322,152 @@ function isTitleEcho(line: string, title: string): boolean {
   const b = norm(title);
   if (!a || !b) return false;
   return a === b || (a.length > 12 && (b.includes(a) || a.includes(b)));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// v5.4.2 — 판정 전용 호출(요약과 분리). 작업 1-2·1-3·2-1.
+//  · 출력이 3필드뿐이라 누락·절단 여지가 거의 없다.
+//  · temperature 0 고정(판정 일관성). 요약 호출은 기존 값 유지.
+//  · 3필드 검증 → 하나라도 없으면 강화 지시로 1회 재요청 → 그래도 없으면 undefined
+//    (judgment_missing → 입구 게이트 fail-closed. 새 폴백 경로 추가 금지 원칙).
+// ══════════════════════════════════════════════════════════════════
+
+export const JUDGE_MAX_TOKENS = Number(process.env.DEEPSEEK_JUDGE_MAX_TOKENS || 200);
+/** 작업 1-1: DeepSeek 의 json_schema 지원이 '불명'이라 기본 비활성.
+ *  데스크탑에서 DEEPSEEK_JSON_SCHEMA=1 로 켜서 지원 여부를 실측할 수 있다. */
+const USE_JSON_SCHEMA = process.env.DEEPSEEK_JSON_SCHEMA === '1';
+
+export type JudgeFields = {
+  categoryFit?: boolean;
+  isIncident?: boolean;
+  confidence?: Confidence;
+};
+
+function toBool(v: unknown): boolean | undefined {
+  if (v === true || v === 'true') return true;
+  if (v === false || v === 'false') return false;
+  return undefined;
+}
+
+function parseJudge(obj: Record<string, unknown>): JudgeFields {
+  const conf = String(obj.confidence ?? '').toLowerCase();
+  return {
+    categoryFit: toBool(obj.category_fit),
+    isIncident: toBool(obj.is_incident),
+    confidence: conf === 'high' ? 'high' : conf === 'medium' ? 'medium' : conf === 'low' ? 'low' : undefined,
+  };
+}
+
+export function judgeComplete(j: JudgeFields): boolean {
+  return j.categoryFit !== undefined && j.isIncident !== undefined && j.confidence !== undefined;
+}
+
+/** 판정 3필드만 요청. 누락 시 1회 재요청. 최종 미완성이면 부분(또는 빈) 결과 반환. */
+export async function judgeArticleFields(
+  title: string,
+  body: string,
+  category: string,
+): Promise<JudgeFields> {
+  if (!deepseekAvailable || !deepseek) return {};
+  let out: JudgeFields = {};
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const strict = attempt === 2;
+    try {
+      deepseekStats.calls++;
+      const params: Record<string, unknown> = {
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: 'system', content: ensureJsonWord(strict ? `${JUDGE_RETRY_SYSTEM}\n\n${JUDGE_SYSTEM}` : JUDGE_SYSTEM) },
+          {
+            role: 'user',
+            content: ensureJsonWord(
+              strict
+                ? `${buildJudgeUser(title, body, category)}\n\n[재요청] 이전 응답에 필드가 빠졌다. 세 필드를 모두 채워라.`
+                : buildJudgeUser(title, body, category),
+            ),
+          },
+        ],
+        response_format: USE_JSON_SCHEMA
+          ? { type: 'json_schema', json_schema: JUDGE_JSON_SCHEMA }
+          : { type: 'json_object' },
+        temperature: 0,            // 작업 2-1: 판정은 항상 0(일관성)
+        max_tokens: JUDGE_MAX_TOKENS,
+      };
+      if (process.env.DEEPSEEK_DEBUG_REQ === '1') {
+        console.log('[deepseek][judge-req]', JSON.stringify({
+          model: params.model, response_format: params.response_format,
+          temperature: params.temperature, max_tokens: params.max_tokens, attempt,
+        }));
+      }
+      const r = await (deepseek.chat.completions.create as unknown as
+        (p: unknown) => Promise<{ choices?: Array<{ finish_reason?: string; message?: { content?: string } }> }>)(params);
+      const choice = r.choices?.[0];
+      const text = (choice?.message?.content || '').trim();
+      if (choice?.finish_reason === 'length') {
+        console.warn(`[deepseek][judge] 응답 절단(max_tokens=${JUDGE_MAX_TOKENS}) title="${title.slice(0, 30)}"`);
+      }
+      const obj = text ? extractJsonObject(text, ['category_fit', 'is_incident', 'confidence']) : null;
+      if (obj) {
+        const j = parseJudge(obj);
+        // 부분 결과라도 채워진 필드는 보존(재요청이 나머지를 채울 수 있게)
+        out = {
+          categoryFit: out.categoryFit ?? j.categoryFit,
+          isIncident: out.isIncident ?? j.isIncident,
+          confidence: out.confidence ?? j.confidence,
+        };
+        if (judgeComplete(out)) { deepseekStats.ok++; return out; }
+        console.warn(
+          `[deepseek][judge] 필드 누락(attempt ${attempt}/2) ` +
+          `fit=${out.categoryFit} incident=${out.isIncident} conf=${out.confidence} title="${title.slice(0, 30)}"`,
+        );
+      } else {
+        const raw = process.env.DEEPSEEK_RAW_LOG === 'full' ? text : text.slice(0, 300);
+        console.warn(`[deepseek][judge] JSON 추출 실패(attempt ${attempt}/2) title="${title.slice(0, 30)}"\n${raw}`);
+      }
+    } catch (e) {
+      const err = e as { status?: number; code?: string; message?: string };
+      console.warn(`[deepseek][judge] 호출 예외(attempt ${attempt}/2, status=${err?.status ?? '?'}): ${err?.message ?? String(e)}`);
+      if (attempt === 2) deepseekStats.fail++;
+    }
+  }
+  return out;   // 미완성 → 게이트에서 judgment_missing 으로 거부(fail-closed)
+}
+
+/**
+ * 요약 + 판정. v5.4.2 부터 판정은 '전용 호출'이 권위를 가진다(요약이 판정 필드를
+ * 밀어내던 구조를 분리). 전용 판정이 실패하면 결합 호출에서 온 값으로 보완하고,
+ * 그래도 미완성이면 undefined 로 남겨 입구 게이트가 거부한다.
+ * DEEPSEEK_SPLIT_JUDGE=0 이면 기존(결합) 동작으로 되돌린다.
+ */
+export async function summarizeKoreanDeepSeek(
+  title: string,
+  content: string,
+  opts?: { translate?: boolean; category?: string },
+): Promise<DeepSeekPack | null> {
+  const pack = await summarizeCombined(title, content, opts);
+  if (!pack) return null;
+  if (process.env.DEEPSEEK_SPLIT_JUDGE === '0') return pack;
+
+  // 판정 근거는 요약문(없으면 원문)을 쓴다 — 길이가 짧아 누락 여지가 작다.
+  const body = (pack.summary && pack.summary.trim()) || content || title;
+  const dedicated = await judgeArticleFields(title, body, opts?.category || '미지정');
+
+  // 전용 판정이 '권위'다. 미완성이어도 결합 호출 값으로 메우지 않는다.
+  //  - 결합 호출은 temperature 0.4 라 판정이 흔들리던 원인(작업2)이고,
+  //  - 빈 자리를 메우는 것은 새 폴백 경로 추가(금지). 미완성 → judgment_missing → 게이트 거부.
+  if (!judgeComplete(dedicated)) {
+    console.warn(
+      `[deepseek][judge] 최종 미완성 → judgment_missing(게이트 거부) ` +
+      `fit=${dedicated.categoryFit} incident=${dedicated.isIncident} conf=${dedicated.confidence} ` +
+      `title="${title.slice(0, 30)}"`,
+    );
+  }
+  return {
+    titleKo: pack.titleKo,
+    summary: pack.summary,
+    categoryFit: dedicated.categoryFit,
+    isIncident: dedicated.isIncident,
+    confidence: dedicated.confidence,
+  };
 }
