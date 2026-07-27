@@ -64,7 +64,12 @@ const JUDGE_JSON_INSTRUCTION =
   'confidence: 판정 확신도 "high"|"medium"|"low"(조금이라도 애매하면 high 를 주지 말 것).\n' +
   '반드시 아래 JSON만 출력(다른 텍스트 금지): ' +
   '{"titleKo":"제목(외국어는 한국어 번역, 한국어는 원제)","summary":"한국어 한 문단 요약",' +
-  '"is_incident":true|false,"category_fit":true|false,"confidence":"high|medium|low"}';
+  '"is_incident":true|false,"category_fit":true|false,"confidence":"high|medium|low"}\n' +
+  // v4-flash 대응: 서술형(산문)으로 답하는 케이스 차단.
+  '출력 형식 규칙(엄수): 오직 JSON 객체 하나만 출력한다. ' +
+  '설명·서문·맺음말·머리말·주석·코드펜스(```)를 절대 붙이지 말 것. ' +
+  '응답의 첫 글자는 "{" 이고 마지막 글자는 "}" 여야 한다. ' +
+  '판정이 어려워도 산문으로 답하지 말고, 위 JSON 스키마에 confidence:"low" 로 채워 출력할 것.';
 
 const SUMMARY_SYSTEM_KO = SUMMARY_SYSTEM_KO_BASE + JUDGE_JSON_INSTRUCTION;
 
@@ -72,6 +77,23 @@ const SUMMARY_SYSTEM_TRANSLATE =
   SUMMARY_SYSTEM_KO_BASE +
   ' 원문이 외국어(영어·일본어 등)이면 반드시 한국어로 번역·요약하라.' +
   JUDGE_JSON_INSTRUCTION;
+
+// 재시도용 강화 지시(1차에서 JSON 이 없을 때만 사용).
+const STRICT_RETRY_SYSTEM =
+  '너는 JSON 생성기다. 오직 유효한 JSON 객체 하나만 출력한다. ' +
+  '어떤 설명도, 코드펜스도, 서문도 출력하지 않는다. 첫 글자 "{", 마지막 글자 "}". ' +
+  '스키마: {"titleKo":string,"summary":string,"is_incident":boolean,' +
+  '"category_fit":boolean,"confidence":"high"|"medium"|"low"}';
+
+/**
+ * response_format:{type:"json_object"} 사용 시 프롬프트에 "json" 단어가 포함되어야 한다는
+ * 제약(OpenAI 호환 JSON 모드 공통)에 대비. 이 세션에서는 DeepSeek 공식 문서 접근이
+ * 차단되어 원문 확인 불가 → 제약이 있든 없든 안전하도록 단어 포함을 보장한다.
+ * (있으면 필수 충족, 없으면 무해)
+ */
+function ensureJsonWord(text: string): string {
+  return /json/i.test(text) ? text : `${text}\n\n출력은 JSON 형식으로만 한다.`;
+}
 
 export type Confidence = 'high' | 'medium' | 'low';
 export type DeepSeekPack = {
@@ -125,16 +147,26 @@ export async function summarizeKoreanDeepSeek(
       `아래는 기사 제목만 제공된 경우다. 제목이 시사하는 주제를 2~3문장으로 신중히 요약(구체적 사실 창작 금지)하고 성격을 판정하라.\n\n${catLine}제목: ${title}${jsonTail}`;
   }
 
+  // 1차에서 JSON 이 안 나오면(서술형 응답) 2차는 강화 지시 + temperature 0 으로 재요청.
+  let strictRetry = false;
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       deepseekStats.calls++;
+      const baseSystem = translate ? SUMMARY_SYSTEM_TRANSLATE : SUMMARY_SYSTEM_KO;
+      const system = strictRetry ? `${STRICT_RETRY_SYSTEM}\n\n${baseSystem}` : baseSystem;
+      const user = strictRetry
+        ? `${userMsg}\n\n[재요청] 이전 응답이 JSON 이 아니었다. 설명 없이 JSON 객체만 출력하라.`
+        : userMsg;
       const r = await deepseek.chat.completions.create({
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: 'system', content: translate ? SUMMARY_SYSTEM_TRANSLATE : SUMMARY_SYSTEM_KO },
-          { role: 'user', content: userMsg },
+          { role: 'system', content: ensureJsonWord(system) },
+          { role: 'user', content: ensureJsonWord(user) },
         ],
-        temperature: 0.4,
+        // 구조화 출력 강제(서술형 응답 차단). 프롬프트에 "JSON" 단어 포함은 ensureJsonWord 로 보장.
+        response_format: { type: 'json_object' },
+        temperature: strictRetry ? 0 : 0.4,
         max_tokens: 900,
       });
       const choice = r.choices?.[0];
@@ -150,6 +182,7 @@ export async function summarizeKoreanDeepSeek(
           `[deepseek] 빈 응답 (attempt ${attempt}/2, model=${DEEPSEEK_MODEL}, ` +
           `finish=${choice?.finish_reason ?? '?'}, translate=${translate}) title="${title.slice(0, 40)}"`,
         );
+        strictRetry = true;
         continue;
       }
 
@@ -190,13 +223,18 @@ export async function summarizeKoreanDeepSeek(
           console.warn(`[deepseek] JSON 판정 파싱 실패 → 텍스트 폴백: ${(pe as Error).message}`);
         }
       } else {
-        // 관대한 추출까지 실패 = 진짜 형식 이탈. 원문 앞부분을 남겨 패턴을 확정한다.
+        // 관대한 추출까지 실패 = 서술형(산문) 응답. 원문 앞부분을 남겨 패턴을 확정한다.
         // (DEEPSEEK_RAW_LOG=full 이면 전문, 기본은 400자)
         const raw = process.env.DEEPSEEK_RAW_LOG === 'full' ? text : text.slice(0, 400);
         console.warn(
-          `[deepseek] JSON 추출 실패(model=${DEEPSEEK_MODEL}) title="${title.slice(0, 30)}"\n` +
+          `[deepseek] JSON 추출 실패(attempt ${attempt}/2, model=${DEEPSEEK_MODEL}) title="${title.slice(0, 30)}"\n` +
           `---- 응답 원문 ----\n${raw}\n------------------`,
         );
+        // 1차 실패면 강화 지시로 1회 재시도(요약 텍스트 폴백으로 새지 않게).
+        if (attempt === 1) {
+          strictRetry = true;
+          continue;
+        }
       }
 
       // JSON 실패 시: 판정 없이 텍스트를 요약으로.
