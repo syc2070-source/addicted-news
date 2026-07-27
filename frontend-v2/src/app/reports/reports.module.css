@@ -1,0 +1,9 @@
+.wrap { display: grid; place-items: center; min-height: 320px; padding: 40px 0; }
+.card {
+  max-width: 480px; width: 100%; text-align: center;
+  padding: 40px 32px; background: var(--color-bg);
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.title { font-size: 32px; margin: 4px 0; }
+.body { font-size: 15px; color: var(--color-neutral-800); margin: 0; }
+.sub { font-size: 13px; color: var(--color-neutral-600); margin: 0; }
