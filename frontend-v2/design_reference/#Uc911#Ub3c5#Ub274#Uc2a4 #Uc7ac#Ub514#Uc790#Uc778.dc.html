@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/industry-1960c651-1efc-4c93-8b28-e290f5e98141/styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<script src="_ds/industry-1960c651-1efc-4c93-8b28-e290f5e98141/_ds_bundle.js"></script>
+<style>
+:root{
+  --font-heading:"Barlow Condensed","Noto Sans KR",system-ui,sans-serif;
+  --font-body:"Barlow","Noto Sans KR",system-ui,sans-serif;
+}
+body{margin:0;background:var(--color-neutral-200);font-family:var(--font-body);word-break:keep-all;text-wrap:pretty}
+a{color:var(--color-accent-700);text-decoration:none}
+a:hover{color:var(--color-accent-900);text-decoration:underline}
+</style>
+</helmet>
+
+<section style="padding:64px 56px 96px;display:flex;flex-direction:column;gap:36px">
+  <header style="display:flex;flex-direction:column;gap:10px;max-width:1100px">
+    <div style="font-family:var(--font-heading);font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--color-accent-700)">Turn 1 · 중독뉴스 Redesign</div>
+    <h1 style="margin:0;font-size:46px">전문지 뉴스 포털 재구성 — 레이아웃 2안</h1>
+    <p style="margin:0;font-size:16px;max-width:820px;color:var(--color-neutral-700)">데스크톱 1440px 기준 정적 시안. 두 안 모두 “최신 뉴스를 빠르게 훑기”를 1순위로 두되, <a href="#1a">1a</a>는 지면형 모듈 그리드로 위계를 세우고 <a href="#1b">1b</a>는 시간순 브리핑 피드로 속도를 세웁니다. 아래 사이트 구조는 두 안이 공유합니다.</p>
+  </header>
+
+  <div class="blueprint" style="background:var(--color-bg);padding:28px 32px;max-width:1440px">
+    <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:8px;margin-bottom:20px">
+      <h2 style="margin:0;font-size:26px">사이트 구조 (IA)</h2>
+      <span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600)">1 depth 6 · 2 depth 21</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--color-divider)">
+      <div style="background:var(--color-bg);padding:14px 16px">
+        <div style="font-family:var(--font-heading);font-size:19px;margin-bottom:8px">종합</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--color-neutral-700)"><span>오늘의 헤드라인</span><span>속보 브리핑</span><span>포토·영상</span><span>주간 다이제스트</span></div>
+      </div>
+      <div style="background:var(--color-bg);padding:14px 16px">
+        <div style="font-family:var(--font-heading);font-size:19px;margin-bottom:8px">중독정책</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--color-neutral-700)"><span>법·제도</span><span>예산·사업</span><span>지자체</span><span>국제 동향</span></div>
+      </div>
+      <div style="background:var(--color-bg);padding:14px 16px">
+        <div style="font-family:var(--font-heading);font-size:19px;margin-bottom:8px">알코올·약물</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--color-neutral-700)"><span>알코올</span><span>마약류</span><span>처방·의료용</span><span>치료·재활</span></div>
+      </div>
+      <div style="background:var(--color-bg);padding:14px 16px">
+        <div style="font-family:var(--font-heading);font-size:19px;margin-bottom:8px">도박·게임</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--color-neutral-700)"><span>도박중독</span><span>게임·디지털</span><span>청소년·학교</span><span>플랫폼 규제</span></div>
+      </div>
+      <div style="background:var(--color-bg);padding:14px 16px">
+        <div style="font-family:var(--font-heading);font-size:19px;margin-bottom:8px">중독사회와 회복</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--color-neutral-700)"><span>회복 수기</span><span>가족·보호자</span><span>지원기관 찾기</span><span>라파뉴스</span></div>
+      </div>
+      <div style="background:var(--color-accent-900);padding:14px 16px;color:var(--color-bg)">
+        <div style="font-family:var(--font-heading);font-size:19px;margin-bottom:8px">중독백과 · 오피니언</div>
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;color:color-mix(in srgb, #f2f2f3 78%, transparent)"><span>용어 사전 A–Z</span><span>영상 백과</span><span>칼럼·기고</span><span>편집국에서</span><span>신설</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:14px;width:1440px;flex:none">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="font-family:var(--font-heading);font-size:15px;letter-spacing:.1em;background:var(--color-accent);color:var(--color-bg);padding:3px 12px">1a</span>
+        <h3 style="margin:0;font-size:24px">지면형 모듈 그리드 — “한 화면에 오늘 전부”</h3>
+        <span style="font-size:13px;color:var(--color-neutral-700)">위계 강한 리드 기사 + 카테고리별 4열 모듈. 스크롤 없이 헤드라인 20건 이상 스캔.</span>
+      </div>
+
+      <div style="background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md)">
+
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:22px 32px 16px;gap:24px">
+          <div>
+            <div style="font-family:var(--font-heading);font-size:44px;line-height:1;letter-spacing:.02em">중독뉴스</div>
+            <div style="font-family:var(--font-heading);font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--color-accent-700);margin-top:6px">Addiction News</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+            <div style="display:flex;gap:16px;font-size:12px;color:var(--color-neutral-600)"><span>2026년 7월 26일 일요일</span><span>제 412호</span><span>발행 라파중독연구소</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="input" style="width:230px;height:34px;display:flex;align-items:center;padding:0 10px;font-size:13px;color:var(--color-neutral-600);border:1px solid var(--color-divider);background:transparent">기사·용어 검색</div>
+              <a class="btn btn-secondary" href="#1a" style="height:34px">중독백과</a>
+              <a class="btn btn-primary" href="#1a" style="height:34px">뉴스레터 구독</a>
+            </div>
+          </div>
+        </div>
+
+        <nav style="background:var(--color-accent-900);color:var(--color-bg);display:flex;align-items:stretch;padding:0 32px">
+          <div style="display:flex;gap:0">
+            <span style="font-family:var(--font-heading);font-size:17px;letter-spacing:.02em;padding:12px 18px;background:var(--color-accent);color:var(--color-bg)">종합</span>
+            <span style="font-family:var(--font-heading);font-size:17px;padding:12px 18px;color:color-mix(in srgb, #f2f2f3 88%, transparent)">중독정책</span>
+            <span style="font-family:var(--font-heading);font-size:17px;padding:12px 18px;color:color-mix(in srgb, #f2f2f3 88%, transparent)">알코올·약물</span>
+            <span style="font-family:var(--font-heading);font-size:17px;padding:12px 18px;color:color-mix(in srgb, #f2f2f3 88%, transparent)">도박중독</span>
+            <span style="font-family:var(--font-heading);font-size:17px;padding:12px 18px;color:color-mix(in srgb, #f2f2f3 88%, transparent)">게임·디지털</span>
+            <span style="font-family:var(--font-heading);font-size:17px;padding:12px 18px;color:color-mix(in srgb, #f2f2f3 88%, transparent)">중독사회와 회복</span>
+            <span style="font-family:var(--font-heading);font-size:17px;padding:12px 18px;color:color-mix(in srgb, #f2f2f3 88%, transparent)">오피니언</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:color-mix(in srgb, #f2f2f3 65%, transparent)"><span>전문가 등록</span><span>제보</span></div>
+        </nav>
+
+        <div style="display:grid;grid-template-columns:1fr 340px;gap:0;border-top:1px solid var(--color-divider)">
+
+          <div style="padding:26px 32px 32px;border-right:1px solid var(--color-divider);display:flex;flex-direction:column;gap:28px">
+
+            <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:28px">
+              <article style="display:flex;flex-direction:column;gap:12px">
+                <figure class="blueprint duotone" style="height:268px;background:var(--color-neutral-300);display:flex;align-items:center;justify-content:center">
+                  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  <span style="font-family:var(--font-heading);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-neutral-600)">Lead photo 16:9</span>
+                </figure>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span class="tag tag-accent" style="font-family:var(--font-heading);font-size:12px;letter-spacing:.1em;white-space:nowrap">TOP NEWS</span>
+                  <span style="font-family:var(--font-heading);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700)">중독정책</span>
+                </div>
+                <h2 style="margin:0;font-size:38px;line-height:1.14">복지부, 마약류 중독 치료보호기관 지정 요건 전면 개편안 공개</h2>
+                <p style="margin:0;font-size:15px;line-height:1.6;color:var(--color-neutral-700)">치료보호 예산 집행률이 3년 연속 60%를 밑돈 데 따른 조치. 지정 병원 인력 기준을 완화하는 대신 사후 성과평가를 도입하는 방안이 포함됐다. 학계는 “회복 연속성보다 지정 숫자에 초점이 맞춰졌다”고 지적한다.</p>
+                <div style="display:flex;gap:12px;font-size:12px;color:var(--color-neutral-600);border-top:1px solid var(--color-divider);padding-top:8px"><span>2026-07-26</span><span>경향신문 인용</span><span>정리 편집국</span></div>
+              </article>
+
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px">
+                  <h4 style="margin:0;font-size:20px">속보 브리핑</h4>
+                  <a href="#1a" style="font-family:var(--font-heading);font-size:13px">더보기</a>
+                </div>
+                <div style="display:flex;flex-direction:column">
+                  <div style="display:grid;grid-template-columns:46px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:13px;color:var(--color-accent-700)">14:20</span><span style="font-size:14px;line-height:1.42">국무조정실, 마약류대책협의회 하반기 시행계획 의결</span></div>
+                  <div style="display:grid;grid-template-columns:46px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:13px;color:var(--color-accent-700)">13:05</span><span style="font-size:14px;line-height:1.42">사행산업통합감독위, 온라인 도박 광고 모니터링 인력 2배 증원</span></div>
+                  <div style="display:grid;grid-template-columns:46px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:13px;color:var(--color-accent-700)">11:40</span><span style="font-size:14px;line-height:1.42">청소년 게임 이용장애 실태조사, 표본 1만 2천명으로 확대</span></div>
+                  <div style="display:grid;grid-template-columns:46px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:13px;color:var(--color-accent-700)">10:12</span><span style="font-size:14px;line-height:1.42">WHO, 알코올 사용장애 진료지침 개정 초안 회원국 회람</span></div>
+                  <div style="display:grid;grid-template-columns:46px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:13px;color:var(--color-accent-700)">09:30</span><span style="font-size:14px;line-height:1.42">단주친목 전국대회 8월 개최… 온라인 참여 병행</span></div>
+                  <div style="display:grid;grid-template-columns:46px 1fr;gap:10px;padding:10px 0"><span style="font-family:var(--font-heading);font-size:13px;color:var(--color-accent-700)">08:15</span><span style="font-size:14px;line-height:1.42">충북 중독관리통합지원센터, 농촌 지역 방문상담 시범사업</span></div>
+                </div>
+                <div class="blueprint" style="padding:14px 16px;margin-top:4px">
+                  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  <div style="font-family:var(--font-heading);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700);margin-bottom:6px">오늘의 키워드</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px">
+                    <span class="tag tag-outline" style="font-size:12px">치료보호</span>
+                    <span class="tag tag-outline" style="font-size:12px">불법 온라인도박</span>
+                    <span class="tag tag-outline" style="font-size:12px">케타민</span>
+                    <span class="tag tag-outline" style="font-size:12px">회복지원주택</span>
+                    <span class="tag tag-outline" style="font-size:12px">게임이용장애</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--color-divider);border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider)">
+              <section style="background:var(--color-bg);padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px"><h4 style="margin:0;font-size:19px">중독정책</h4><a href="#1a" style="font-size:12px">더보기</a></div>
+                <figure class="duotone" style="height:96px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center"><span style="font-size:11px;color:var(--color-neutral-600)">4:3</span></figure>
+                <div style="font-size:14.5px;line-height:1.4;font-weight:500">중독예방·치유 3차 기본계획, 부처 간 성과지표 통합 착수</div>
+                <div style="font-size:11.5px;color:var(--color-neutral-600)">2026-07-26 · 이뉴스투데이</div>
+                <div style="height:1px;background:var(--color-divider)"></div>
+                <div style="font-size:14px;line-height:1.4">지자체 중독관리센터 47곳, 인력 정원 미달 상태 지속</div>
+                <div style="font-size:14px;line-height:1.4">국회 보건복지위, 도박중독 예방부담금 인상안 상정</div>
+              </section>
+              <section style="background:var(--color-bg);padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px"><h4 style="margin:0;font-size:19px">알코올·약물</h4><a href="#1a" style="font-size:12px">더보기</a></div>
+                <figure class="duotone" style="height:96px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center"><span style="font-size:11px;color:var(--color-neutral-600)">4:3</span></figure>
+                <div style="font-size:14.5px;line-height:1.4;font-weight:500">의료용 마약류 처방 이상 패턴, 빅데이터 감시 대상 6종 추가</div>
+                <div style="font-size:11.5px;color:var(--color-neutral-600)">2026-07-26 · 청년의사</div>
+                <div style="height:1px;background:var(--color-divider)"></div>
+                <div style="font-size:14px;line-height:1.4">알코올 사용장애 조기개입(SBIRT) 1차의료 확대 시범</div>
+                <div style="font-size:14px;line-height:1.4">청소년 니코틴 파우치 유입 경로 조사 결과 공개</div>
+              </section>
+              <section style="background:var(--color-bg);padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px"><h4 style="margin:0;font-size:19px">도박중독</h4><a href="#1a" style="font-size:12px">더보기</a></div>
+                <figure class="duotone" style="height:96px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center"><span style="font-size:11px;color:var(--color-neutral-600)">4:3</span></figure>
+                <div style="font-size:14.5px;line-height:1.4;font-weight:500">불법 스포츠도박 사이트 차단 8만 건… 우회 접속은 더 늘었다</div>
+                <div style="font-size:11.5px;color:var(--color-neutral-600)">2026-07-26 · Google News</div>
+                <div style="height:1px;background:var(--color-divider)"></div>
+                <div style="font-size:14px;line-height:1.4">군 장병 도박 실태조사, 첫 전수 표본 도입</div>
+                <div style="font-size:14px;line-height:1.4">회복자 자조모임 “빚 상담과 치료 연계가 관건”</div>
+              </section>
+              <section style="background:var(--color-bg);padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px"><h4 style="margin:0;font-size:19px">게임·디지털</h4><a href="#1a" style="font-size:12px">더보기</a></div>
+                <figure class="duotone" style="height:96px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center"><span style="font-size:11px;color:var(--color-neutral-600)">4:3</span></figure>
+                <div style="font-size:14.5px;line-height:1.4;font-weight:500">숏폼 과사용 척도 국내 표준화 연구, 신뢰도 검증 단계</div>
+                <div style="font-size:11.5px;color:var(--color-neutral-600)">2026-07-26 · 전자신문</div>
+                <div style="height:1px;background:var(--color-divider)"></div>
+                <div style="font-size:14px;line-height:1.4">학교 스마트기기 관리 지침 개정, 2학기부터 적용</div>
+                <div style="font-size:14px;line-height:1.4">게임이용장애 질병코드 국내 도입 논의 재점화</div>
+              </section>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:28px">
+              <section style="display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px">
+                  <h4 style="margin:0;font-size:21px">기획기사</h4>
+                  <span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600)">연속기획 · 회복의 조건</span>
+                </div>
+                <article class="blueprint" style="display:grid;grid-template-columns:184px 1fr;gap:16px;padding:16px">
+                  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  <figure class="duotone" style="height:118px;background:var(--color-neutral-300);border:1px solid var(--color-divider)"></figure>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700)">기획 ① 퇴원 이후 90일</span>
+                    <div style="font-family:var(--font-heading);font-size:23px;line-height:1.2">병원을 나온 다음 날, 회복은 어디서 이어지는가</div>
+                    <p style="margin:0;font-size:13.5px;line-height:1.55;color:var(--color-neutral-700)">치료보호 종료자 312명의 6개월 추적 자료를 재분석했다. 주거와 일자리가 확보된 집단의 재입원율은 그렇지 않은 집단의 절반이었다.</p>
+                    <div style="font-size:11.5px;color:var(--color-neutral-600)">2026-07-24 · 데이터 분석 편집국</div>
+                  </div>
+                </article>
+                <article class="blueprint" style="display:grid;grid-template-columns:184px 1fr;gap:16px;padding:16px">
+                  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  <figure class="duotone" style="height:118px;background:var(--color-neutral-300);border:1px solid var(--color-divider)"></figure>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700)">기획 ② 가족이라는 변수</span>
+                    <div style="font-family:var(--font-heading);font-size:23px;line-height:1.2">보호자 교육은 왜 3회기에서 멈추는가</div>
+                    <p style="margin:0;font-size:13.5px;line-height:1.55;color:var(--color-neutral-700)">전국 중독관리통합지원센터 가족교육 프로그램 이수율을 지역별로 비교했다. 야간·주말 회기 여부가 완주율을 갈랐다.</p>
+                    <div style="font-size:11.5px;color:var(--color-neutral-600)">2026-07-22 · 기획취재팀</div>
+                  </div>
+                </article>
+              </section>
+
+              <section style="display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px">
+                  <h4 style="margin:0;font-size:21px">오피니언 · 칼럼</h4>
+                  <span class="tag tag-accent" style="font-size:11px">신설</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;gap:12px;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--color-divider)">
+                    <div class="duotone" style="width:44px;height:44px;background:var(--color-neutral-300);border:1px solid var(--color-divider);flex:none"></div>
+                    <div><div style="font-size:14.5px;line-height:1.4;font-weight:500">단속의 성과지표가 회복의 성과지표를 대신할 수 없다</div><div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:4px">정 · 중독의학 전문의</div></div>
+                  </div>
+                  <div style="display:flex;gap:12px;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--color-divider)">
+                    <div class="duotone" style="width:44px;height:44px;background:var(--color-neutral-300);border:1px solid var(--color-divider);flex:none"></div>
+                    <div><div style="font-size:14.5px;line-height:1.4;font-weight:500">회복 당사자의 언어를 기사에 어떻게 담을 것인가</div><div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:4px">김 · 회복 활동가</div></div>
+                  </div>
+                  <div style="display:flex;gap:12px;align-items:flex-start">
+                    <div class="duotone" style="width:44px;height:44px;background:var(--color-neutral-300);border:1px solid var(--color-divider);flex:none"></div>
+                    <div><div style="font-size:14.5px;line-height:1.4;font-weight:500">편집국에서 — 낙인을 재생산하지 않는 보도 원칙 4가지</div><div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:4px">편집국</div></div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <aside style="padding:26px 24px 32px;display:flex;flex-direction:column;gap:26px;background:color-mix(in srgb, var(--color-surface) 60%, var(--color-bg))">
+            <section class="blueprint" style="padding:16px;background:var(--color-bg)">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+                <h4 style="margin:0;font-size:19px">오늘의 중독백과</h4>
+                <span style="font-family:var(--font-heading);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-600)">영상 04:12</span>
+              </div>
+              <figure class="duotone" style="height:156px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center">
+                <span style="width:0;height:0;border-left:22px solid var(--color-accent-900);border-top:14px solid transparent;border-bottom:14px solid transparent;margin-left:6px"></span>
+              </figure>
+              <div style="font-family:var(--font-heading);font-size:24px;margin-top:10px">케타민 Ketamine</div>
+              <p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:var(--color-neutral-700)">해리성 마취제. 치료저항성 우울증 임상 적용과 오락적 남용이 동시에 늘고 있는 물질. 내성·해리 증상과 방광 손상이 주요 위험으로 보고된다.</p>
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap"><span class="tag tag-neutral" style="font-size:11px">해리성</span><span class="tag tag-neutral" style="font-size:11px">의료용</span><span class="tag tag-neutral" style="font-size:11px">남용</span></div>
+              <a class="btn btn-secondary btn-block" href="#1a" style="margin-top:12px">용어 사전 A–Z</a>
+            </section>
+
+            <section>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px;margin-bottom:8px">
+                <h4 style="margin:0;font-size:19px">중독이슈 랭킹</h4>
+                <span style="font-size:11px;color:var(--color-neutral-600)">최근 24시간</span>
+              </div>
+              <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column">
+                <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent)">1</span><span style="font-size:13.5px;line-height:1.4">치료보호기관 지정 요건 개편안 전문</span></li>
+                <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent)">2</span><span style="font-size:13.5px;line-height:1.4">청소년 도박 첫 경험 연령 13.9세</span></li>
+                <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent)">3</span><span style="font-size:13.5px;line-height:1.4">회복지원주택 입주 대기 1년 넘겨</span></li>
+                <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent)">4</span><span style="font-size:13.5px;line-height:1.4">비대면 진료 향정신성약물 처방 논쟁</span></li>
+                <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent)">5</span><span style="font-size:13.5px;line-height:1.4">단주 3년 당사자 인터뷰 “말할 곳”</span></li>
+                <li style="display:grid;grid-template-columns:22px 1fr;gap:8px;padding:9px 0"><span style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent)">6</span><span style="font-size:13.5px;line-height:1.4">알코올 광고 규제 개정안 국회 발의</span></li>
+              </ol>
+            </section>
+
+            <section>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px;margin-bottom:8px">
+                <h4 style="margin:0;font-size:19px">라파뉴스</h4>
+                <span style="font-size:11px;color:var(--color-neutral-600)">라파공동체 소식</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:9px;font-size:13.5px;line-height:1.45">
+                <div style="display:flex;gap:8px"><span style="color:var(--color-accent-700);font-family:var(--font-heading);font-size:12px;flex:none;padding-top:2px">07.25</span><span>하반기 회복 아카데미 수강생 모집 (8월 12일 개강)</span></div>
+                <div style="display:flex;gap:8px"><span style="color:var(--color-accent-700);font-family:var(--font-heading);font-size:12px;flex:none;padding-top:2px">07.23</span><span>가족 집단상담 프로그램 3기 후기 모음</span></div>
+                <div style="display:flex;gap:8px"><span style="color:var(--color-accent-700);font-family:var(--font-heading);font-size:12px;flex:none;padding-top:2px">07.19</span><span>옥천 공동체 여름 봉사 일정 안내</span></div>
+              </div>
+            </section>
+
+            <section class="blueprint" style="padding:16px;background:var(--color-accent-900);color:var(--color-bg)">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="font-family:var(--font-heading);font-size:20px">도움이 필요하십니까</div>
+              <p style="margin:6px 0 12px;font-size:13px;line-height:1.5;color:color-mix(in srgb, #f2f2f3 80%, transparent)">가까운 중독관리통합지원센터와 치료보호기관을 지역으로 찾아볼 수 있습니다.</p>
+              <a class="btn btn-primary btn-block" href="#1a">지원기관 찾기</a>
+            </section>
+          </aside>
+        </div>
+
+        <footer style="border-top:1px solid var(--color-divider);padding:22px 32px 26px;display:flex;justify-content:space-between;align-items:flex-start;gap:32px;background:color-mix(in srgb, var(--color-surface) 70%, var(--color-bg))">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="font-family:var(--font-heading);font-size:22px;letter-spacing:.02em">중독뉴스 <span style="font-size:12px;letter-spacing:.28em;color:var(--color-neutral-600)">ADDICTION NEWS</span></div>
+            <div style="font-size:12.5px;color:var(--color-neutral-700)">발행처 · 라파중독연구소 &nbsp;|&nbsp; 충북 옥천군 안남면 지수2길 13-7</div>
+            <div style="font-size:12.5px;color:var(--color-neutral-600)">© 2026 중독뉴스 · 함께 보기: 중독사회 · statory</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:24px;font-size:12.5px;color:var(--color-neutral-700)">
+            <div style="display:flex;flex-direction:column;gap:5px"><span style="font-family:var(--font-heading);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text)">편집</span><span>편집 원칙</span><span>보도 가이드</span><span>제보하기</span></div>
+            <div style="display:flex;flex-direction:column;gap:5px"><span style="font-family:var(--font-heading);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text)">자료</span><span>중독백과</span><span>통계 아카이브</span><span>주간 다이제스트</span></div>
+            <div style="display:flex;flex-direction:column;gap:5px"><span style="font-family:var(--font-heading);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-text)">연구소</span><span>라파중독연구소</span><span>후원</span><span>문의</span></div>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:14px;width:1440px;flex:none">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="font-family:var(--font-heading);font-size:15px;letter-spacing:.1em;background:var(--color-accent-900);color:var(--color-bg);padding:3px 12px">1b</span>
+        <h3 style="margin:0;font-size:24px">브리핑 타임라인 — “오늘 들어온 순서대로”</h3>
+        <span style="font-size:13px;color:var(--color-neutral-700)">좌측 고정 카테고리 레일 + 시간순 피드. 반복 방문자의 “새로 뭐 올라왔나”에 최적화.</span>
+      </div>
+
+      <div style="background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md)">
+
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--color-divider);background:var(--color-accent-900);color:var(--color-bg)">
+          <div style="display:flex;align-items:baseline;gap:14px">
+            <span style="font-family:var(--font-heading);font-size:30px;letter-spacing:.02em">중독뉴스</span>
+            <span style="font-family:var(--font-heading);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:color-mix(in srgb, #f2f2f3 70%, transparent)">Addiction News</span>
+            <span style="font-size:12px;color:color-mix(in srgb, #f2f2f3 60%, transparent)">라파중독연구소 발행</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:280px;height:32px;display:flex;align-items:center;padding:0 10px;font-size:13px;border:1px solid color-mix(in srgb, #f2f2f3 30%, transparent);color:color-mix(in srgb, #f2f2f3 60%, transparent)">기사·용어·기관 검색</div>
+            <a class="btn btn-primary" href="#1b" style="height:32px">구독</a>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:216px 1fr 344px">
+
+          <nav style="border-right:1px solid var(--color-divider);padding:22px 0 32px">
+            <div style="font-family:var(--font-heading);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 20px 10px">섹션</div>
+            <div style="display:flex;flex-direction:column">
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid var(--color-accent);background:color-mix(in srgb, var(--color-accent) 12%, transparent)">종합 브리핑</span>
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid transparent;display:flex;justify-content:space-between">중독정책 <span style="font-family:var(--font-body);font-size:11px;color:var(--color-neutral-600)">12</span></span>
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid transparent;display:flex;justify-content:space-between">알코올·약물 <span style="font-family:var(--font-body);font-size:11px;color:var(--color-neutral-600)">9</span></span>
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid transparent;display:flex;justify-content:space-between">도박중독 <span style="font-family:var(--font-body);font-size:11px;color:var(--color-neutral-600)">7</span></span>
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid transparent;display:flex;justify-content:space-between">게임·디지털 <span style="font-family:var(--font-body);font-size:11px;color:var(--color-neutral-600)">6</span></span>
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid transparent;display:flex;justify-content:space-between">중독사회와 회복 <span style="font-family:var(--font-body);font-size:11px;color:var(--color-neutral-600)">8</span></span>
+              <span style="font-family:var(--font-heading);font-size:18px;padding:9px 20px;border-left:3px solid transparent">오피니언</span>
+            </div>
+            <div style="height:1px;background:var(--color-divider);margin:18px 20px"></div>
+            <div style="font-family:var(--font-heading);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-neutral-600);padding:0 20px 10px">자료실</div>
+            <div style="display:flex;flex-direction:column;font-size:13.5px;color:var(--color-neutral-700)">
+              <span style="padding:7px 20px">중독백과 사전</span>
+              <span style="padding:7px 20px">통계 아카이브</span>
+              <span style="padding:7px 20px">지원기관 찾기</span>
+              <span style="padding:7px 20px">기획 연속물</span>
+            </div>
+            <div class="blueprint" style="margin:22px 20px 0;padding:14px">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="font-family:var(--font-heading);font-size:17px;line-height:1.2">주간 다이제스트</div>
+              <p style="margin:6px 0 10px;font-size:12.5px;line-height:1.5;color:var(--color-neutral-700)">한 주의 정책·연구·현장을 금요일 아침 한 통으로.</p>
+              <a class="btn btn-primary btn-block" href="#1b">메일 등록</a>
+            </div>
+          </nav>
+
+          <div style="padding:22px 28px 34px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:8px">
+              <div style="display:flex;align-items:baseline;gap:12px">
+                <h3 style="margin:0;font-size:26px">7월 26일 브리핑</h3>
+                <span style="font-size:12.5px;color:var(--color-neutral-600)">업데이트 14:20 · 오늘 42건</span>
+              </div>
+              <div class="seg" style="display:flex;border:1px solid var(--color-divider)">
+                <span class="seg-opt" style="font-family:var(--font-heading);font-size:13px;padding:5px 12px;background:var(--color-accent);color:var(--color-bg)">최신순</span>
+                <span class="seg-opt" style="font-family:var(--font-heading);font-size:13px;padding:5px 12px">많이 본</span>
+                <span class="seg-opt" style="font-family:var(--font-heading);font-size:13px;padding:5px 12px">전문가 추천</span>
+              </div>
+            </div>
+
+            <article class="blueprint" style="display:grid;grid-template-columns:1fr 300px;gap:20px;padding:18px">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span class="tag tag-accent" style="font-family:var(--font-heading);font-size:12px;letter-spacing:.1em;white-space:nowrap">TOP NEWS</span>
+                  <span style="font-size:12px;color:var(--color-neutral-600)">14:20 · 중독정책 · 경향신문 인용</span>
+                </div>
+                <h2 style="margin:0;font-size:33px;line-height:1.16">복지부, 마약류 중독 치료보호기관 지정 요건 전면 개편안 공개</h2>
+                <p style="margin:0;font-size:14.5px;line-height:1.6;color:var(--color-neutral-700)">지정 병원 인력 기준을 완화하는 대신 사후 성과평가를 도입한다. 치료보호 예산 집행률이 3년 연속 60%를 밑돈 데 따른 조치로, 학계는 회복 연속성 지표가 빠졌다고 지적한다.</p>
+                <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag tag-outline" style="font-size:11.5px">치료보호</span><span class="tag tag-outline" style="font-size:11.5px">지정요건</span><span class="tag tag-outline" style="font-size:11.5px">예산집행률</span></div>
+              </div>
+              <figure class="duotone" style="height:172px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center"><span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-neutral-600)">Photo</span></figure>
+            </article>
+
+            <div style="display:flex;flex-direction:column">
+              <div style="display:grid;grid-template-columns:70px 1fr 96px;gap:16px;padding:14px 0;border-top:1px solid var(--color-divider);align-items:start">
+                <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">13:05</div>
+                <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:17px;line-height:1.35;font-weight:500">사행산업통합감독위, 온라인 도박 광고 모니터링 인력 2배 증원</div><div style="font-size:12px;color:var(--color-neutral-600)">도박중독 · 이뉴스투데이 · 3분 분량</div></div>
+                <div class="duotone" style="height:58px;background:var(--color-neutral-300);border:1px solid var(--color-divider)"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:70px 1fr 96px;gap:16px;padding:14px 0;border-top:1px solid var(--color-divider);align-items:start">
+                <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">12:40</div>
+                <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:17px;line-height:1.35;font-weight:500">의료용 마약류 처방 이상 패턴, 빅데이터 감시 대상 6종 추가</div><div style="font-size:12px;color:var(--color-neutral-600)">알코올·약물 · 청년의사</div></div>
+                <div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:70px 1fr 96px;gap:16px;padding:14px 0;border-top:1px solid var(--color-divider);align-items:start">
+                <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">11:40</div>
+                <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:17px;line-height:1.35;font-weight:500">청소년 게임 이용장애 실태조사, 표본 1만 2천명으로 확대</div><div style="font-size:12px;color:var(--color-neutral-600)">게임·디지털 · 전자신문</div></div>
+                <div class="duotone" style="height:58px;background:var(--color-neutral-300);border:1px solid var(--color-divider)"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:70px 1fr 96px;gap:16px;padding:14px 0;border-top:1px solid var(--color-divider);align-items:start">
+                <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">10:12</div>
+                <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:17px;line-height:1.35;font-weight:500">WHO, 알코올 사용장애 진료지침 개정 초안 회원국 회람</div><div style="font-size:12px;color:var(--color-neutral-600)">국제 · 자체 번역</div></div>
+                <div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:70px 1fr 96px;gap:16px;padding:14px 0;border-top:1px solid var(--color-divider);align-items:start">
+                <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">09:30</div>
+                <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:17px;line-height:1.35;font-weight:500">단주친목 전국대회 8월 개최… 온라인 참여 병행</div><div style="font-size:12px;color:var(--color-neutral-600)">중독사회와 회복 · 라파뉴스</div></div>
+                <div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:70px 1fr 96px;gap:16px;padding:14px 0;border-top:1px solid var(--color-divider);align-items:start">
+                <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">08:15</div>
+                <div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:17px;line-height:1.35;font-weight:500">충북 중독관리통합지원센터, 농촌 지역 방문상담 시범사업</div><div style="font-size:12px;color:var(--color-neutral-600)">지자체 · 충청타임즈</div></div>
+                <div class="duotone" style="height:58px;background:var(--color-neutral-300);border:1px solid var(--color-divider)"></div>
+              </div>
+            </div>
+
+            <section style="border-top:1px solid var(--color-divider);padding-top:18px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <h4 style="margin:0;font-size:21px">기획기사 — 회복의 조건</h4>
+                <a href="#1b" style="font-family:var(--font-heading);font-size:13px">연속물 전체</a>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                <article style="display:flex;flex-direction:column;gap:8px">
+                  <figure class="blueprint duotone" style="height:132px;background:var(--color-neutral-300)">
+                    <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  </figure>
+                  <span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700);margin-top:4px">기획 ① 퇴원 이후 90일</span>
+                  <div style="font-family:var(--font-heading);font-size:22px;line-height:1.2">병원을 나온 다음 날, 회복은 어디서 이어지는가</div>
+                  <p style="margin:0;font-size:13.5px;line-height:1.55;color:var(--color-neutral-700)">치료보호 종료자 312명의 6개월 추적 자료 재분석.</p>
+                </article>
+                <article style="display:flex;flex-direction:column;gap:8px">
+                  <figure class="blueprint duotone" style="height:132px;background:var(--color-neutral-300)">
+                    <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+                  </figure>
+                  <span style="font-family:var(--font-heading);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent-700);margin-top:4px">기획 ② 가족이라는 변수</span>
+                  <div style="font-family:var(--font-heading);font-size:22px;line-height:1.2">보호자 교육은 왜 3회기에서 멈추는가</div>
+                  <p style="margin:0;font-size:13.5px;line-height:1.55;color:var(--color-neutral-700)">전국 가족교육 프로그램 이수율 지역별 비교.</p>
+                </article>
+              </div>
+            </section>
+
+            <section style="border-top:1px solid var(--color-divider);padding-top:18px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+                <h4 style="margin:0;font-size:21px">오피니언 · 칼럼</h4>
+                <span class="tag tag-accent" style="font-size:11px">신설</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--color-divider)">
+                <div style="background:var(--color-bg);padding:14px 16px;display:flex;flex-direction:column;gap:6px"><div style="font-size:15px;line-height:1.4;font-weight:500">단속의 성과지표가 회복의 성과지표를 대신할 수 없다</div><div style="font-size:11.5px;color:var(--color-neutral-600)">정 · 중독의학 전문의</div></div>
+                <div style="background:var(--color-bg);padding:14px 16px;display:flex;flex-direction:column;gap:6px"><div style="font-size:15px;line-height:1.4;font-weight:500">회복 당사자의 언어를 기사에 어떻게 담을 것인가</div><div style="font-size:11.5px;color:var(--color-neutral-600)">김 · 회복 활동가</div></div>
+                <div style="background:var(--color-bg);padding:14px 16px;display:flex;flex-direction:column;gap:6px"><div style="font-size:15px;line-height:1.4;font-weight:500">편집국에서 — 낙인을 재생산하지 않는 보도 원칙 4가지</div><div style="font-size:11.5px;color:var(--color-neutral-600)">편집국</div></div>
+              </div>
+            </section>
+          </div>
+
+          <aside style="border-left:1px solid var(--color-divider);padding:22px 22px 34px;display:flex;flex-direction:column;gap:24px">
+            <section class="blueprint" style="padding:14px">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+                <h4 style="margin:0;font-size:18px">오늘의 중독백과</h4>
+                <span style="font-family:var(--font-heading);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-neutral-600)">04:12</span>
+              </div>
+              <figure class="duotone" style="height:150px;background:var(--color-neutral-300);border:1px solid var(--color-divider);display:flex;align-items:center;justify-content:center">
+                <span style="width:0;height:0;border-left:22px solid var(--color-accent-900);border-top:14px solid transparent;border-bottom:14px solid transparent;margin-left:6px"></span>
+              </figure>
+              <div style="font-family:var(--font-heading);font-size:23px;margin-top:9px">케타민 Ketamine</div>
+              <p style="margin:6px 0 0;font-size:12.5px;line-height:1.55;color:var(--color-neutral-700)">해리성 마취제. 치료저항성 우울증 임상 적용과 오락적 남용이 동시에 늘고 있다.</p>
+              <a class="btn btn-secondary btn-block" href="#1b" style="margin-top:10px">용어 사전 A–Z</a>
+            </section>
+
+            <section>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px;margin-bottom:6px">
+                <h4 style="margin:0;font-size:18px">중독이슈 랭킹</h4>
+                <span style="font-size:11px;color:var(--color-neutral-600)">24시간</span>
+              </div>
+              <ol style="margin:0;padding:0;list-style:none">
+                <li style="display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:14px;color:var(--color-accent)">1</span><span style="font-size:13px;line-height:1.4">치료보호기관 지정 요건 개편안 전문</span></li>
+                <li style="display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:14px;color:var(--color-accent)">2</span><span style="font-size:13px;line-height:1.4">청소년 도박 첫 경험 연령 13.9세</span></li>
+                <li style="display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:14px;color:var(--color-accent)">3</span><span style="font-size:13px;line-height:1.4">회복지원주택 입주 대기 1년 넘겨</span></li>
+                <li style="display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-divider)"><span style="font-family:var(--font-heading);font-size:14px;color:var(--color-accent)">4</span><span style="font-size:13px;line-height:1.4">비대면 진료 향정신성약물 처방 논쟁</span></li>
+                <li style="display:grid;grid-template-columns:20px 1fr;gap:8px;padding:8px 0"><span style="font-family:var(--font-heading);font-size:14px;color:var(--color-accent)">5</span><span style="font-size:13px;line-height:1.4">단주 3년 당사자 인터뷰 “말할 곳”</span></li>
+              </ol>
+            </section>
+
+            <section>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--color-text);padding-bottom:6px;margin-bottom:8px">
+                <h4 style="margin:0;font-size:18px">라파뉴스</h4>
+                <span style="font-size:11px;color:var(--color-neutral-600)">라파공동체</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:9px;font-size:13px;line-height:1.45">
+                <div style="display:flex;gap:8px"><span style="color:var(--color-accent-700);font-family:var(--font-heading);font-size:12px;flex:none;padding-top:2px">07.25</span><span>하반기 회복 아카데미 수강생 모집</span></div>
+                <div style="display:flex;gap:8px"><span style="color:var(--color-accent-700);font-family:var(--font-heading);font-size:12px;flex:none;padding-top:2px">07.23</span><span>가족 집단상담 3기 후기 모음</span></div>
+                <div style="display:flex;gap:8px"><span style="color:var(--color-accent-700);font-family:var(--font-heading);font-size:12px;flex:none;padding-top:2px">07.19</span><span>옥천 공동체 여름 봉사 일정</span></div>
+              </div>
+            </section>
+
+            <section class="blueprint" style="padding:14px;background:var(--color-accent-900);color:var(--color-bg)">
+              <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <div style="font-family:var(--font-heading);font-size:19px">지원기관 찾기</div>
+              <p style="margin:6px 0 10px;font-size:12.5px;line-height:1.5;color:color-mix(in srgb, #f2f2f3 80%, transparent)">지역을 선택하면 중독관리통합지원센터·치료보호기관을 바로 안내합니다.</p>
+              <a class="btn btn-primary btn-block" href="#1b">지역으로 검색</a>
+            </section>
+          </aside>
+        </div>
+
+        <footer style="border-top:1px solid var(--color-divider);padding:20px 28px 24px;display:flex;justify-content:space-between;align-items:flex-start;gap:32px">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="font-family:var(--font-heading);font-size:20px">중독뉴스 <span style="font-size:11px;letter-spacing:.26em;color:var(--color-neutral-600)">ADDICTION NEWS</span></div>
+            <div style="font-size:12.5px;color:var(--color-neutral-700)">발행처 · 라파중독연구소 &nbsp;|&nbsp; 충북 옥천군 안남면 지수2길 13-7</div>
+            <div style="font-size:12.5px;color:var(--color-neutral-600)">© 2026 중독뉴스 · 함께 보기: 중독사회 · statory</div>
+          </div>
+          <div style="display:flex;gap:26px;font-size:12.5px;color:var(--color-neutral-700)">
+            <span>편집 원칙</span><span>보도 가이드</span><span>제보하기</span><span>후원</span><span>문의</span>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+</section>
+
+</x-dc>
+</body>
+</html>
