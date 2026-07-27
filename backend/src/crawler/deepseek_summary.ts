@@ -3,6 +3,7 @@
 // 외국어 → 한국어 번역+요약 통합. env: DEEPSEEK_API_KEY
 // ============================================================
 import OpenAI from 'openai';
+import { extractJsonObject } from './json_extract';
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
 // 모델명 단일 소스: 환경변수 DEEPSEEK_MODEL. 기본값은 현행 모델(구 deepseek-chat 폐기됨).
@@ -153,10 +154,11 @@ export async function summarizeKoreanDeepSeek(
       }
 
       // v5.4: 요약 + 판정(report_type/category_fit)을 JSON에서 추출(한/외국어 공통)
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
+      // v4-flash 대응: 코드펜스·앞뒤 설명문·복수 오브젝트를 관대하게 처리(json_extract).
+      const extracted = extractJsonObject(text);
+      if (extracted) {
         try {
-          const parsed = JSON.parse(jsonMatch[0]) as {
+          const parsed = extracted as {
             titleKo?: unknown; summary?: unknown; is_incident?: unknown;
             report_type?: unknown; category_fit?: unknown; confidence?: unknown;
           };
@@ -187,9 +189,19 @@ export async function summarizeKoreanDeepSeek(
           // 파싱 실패는 호출 실패와 구분해서 로깅(원인 확정용). 아래 텍스트 폴백으로 진행.
           console.warn(`[deepseek] JSON 판정 파싱 실패 → 텍스트 폴백: ${(pe as Error).message}`);
         }
+      } else {
+        // 관대한 추출까지 실패 = 진짜 형식 이탈. 원문 앞부분을 남겨 패턴을 확정한다.
+        // (DEEPSEEK_RAW_LOG=full 이면 전문, 기본은 400자)
+        const raw = process.env.DEEPSEEK_RAW_LOG === 'full' ? text : text.slice(0, 400);
+        console.warn(
+          `[deepseek] JSON 추출 실패(model=${DEEPSEEK_MODEL}) title="${title.slice(0, 30)}"\n` +
+          `---- 응답 원문 ----\n${raw}\n------------------`,
+        );
       }
 
-      // JSON 실패 시: 판정 없이 텍스트를 요약으로(판정 미상 → 저장 스킵 안 함, fail-open)
+      // JSON 실패 시: 판정 없이 텍스트를 요약으로.
+      // ※ 판정 미상(undefined) → 입구 게이트 passesIngestionGate()가 반드시 거부(fail-closed).
+      //    요약만 남기는 이유는 격리(rejected_articles) 기록의 가독성 때문.
       text = text.replace(/\n{2,}/g, '\n').trim();
       const firstLine = text.split('\n')[0].trim();
       if (!translate && isTitleEcho(firstLine, title)) {

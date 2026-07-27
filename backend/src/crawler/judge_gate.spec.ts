@@ -53,3 +53,30 @@ describe('입구 게이트 (passesIngestionGate, 정밀도 우선)', () => {
     expect(rejectReason({})).toBe('judgment_missing');
   });
 });
+
+describe('입구 게이트 — 판정 실패는 절대 통과 못 함(fail-closed)', () => {
+  // DeepSeek JSON 파싱 실패 시 pack 의 판정 필드는 전부 undefined 로 온다.
+  const parseFailed = { categoryFit: undefined, isIncident: undefined, confidence: undefined };
+  it('파싱 실패(전 필드 undefined) → 거부 + judgment_missing', () => {
+    expect(passesIngestionGate(parseFailed)).toBe(false);
+    expect(rejectReason(parseFailed)).toBe('judgment_missing');
+  });
+  it('요약만 오고 판정 없음 → 거부', () => {
+    expect(passesIngestionGate({ confidence: 'high' })).toBe(false);   // categoryFit 없음
+    expect(passesIngestionGate({ categoryFit: true })).toBe(false);    // confidence 없음
+    expect(passesIngestionGate({ categoryFit: true, isIncident: false })).toBe(false);
+  });
+});
+
+describe('키워드 사건사고 veto — 모델 오판 차단', () => {
+  const modelSaysFine = { categoryFit: true, isIncident: false, confidence: 'high' as const };
+  it('모델이 통과시켜도 키워드가 사건사고면 거부', () => {
+    expect(passesIngestionGate(modelSaysFine)).toBe(true);              // veto 없으면 통과
+    expect(passesIngestionGate(modelSaysFine, true)).toBe(false);       // veto 시 거부
+    expect(rejectReason(modelSaysFine, true)).toBe('keyword_incident');
+  });
+  it('키워드가 사건사고 아니면 기존 규칙 그대로', () => {
+    expect(passesIngestionGate(modelSaysFine, false)).toBe(true);
+    expect(rejectReason(modelSaysFine, false)).toBeNull();
+  });
+});

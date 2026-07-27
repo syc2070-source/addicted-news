@@ -38,6 +38,33 @@ const SAMPLES: Array<{ label: string; title: string; content: string; category: 
   },
 ];
 
+// --n 20 처럼 반복 횟수를 주면 SAMPLES 를 순환하며 N건 연속 판정 후 성공률을 낸다.
+function repeatCount(): number {
+  const i = process.argv.indexOf('--n');
+  if (i >= 0 && process.argv[i + 1]) return Math.max(1, Number(process.argv[i + 1]) || 1);
+  return 0;
+}
+
+async function runBatch(n: number) {
+  console.log(`=== v4-flash 연속 판정 테스트 ${n}건 (model=${process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash(기본)'}) ===`);
+  let judged = 0;
+  const fails: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const s = SAMPLES[i % SAMPLES.length];
+    const pack = await summarizeKoreanDeepSeek(s.title, s.content, { translate: false, category: s.category });
+    const ok = !!pack && (pack.categoryFit !== undefined || pack.isIncident !== undefined);
+    if (ok) judged++;
+    else fails.push(`${i + 1}. ${s.title.slice(0, 24)} — ${pack ? '판정 필드 없음(파싱 실패)' : 'null(호출 실패)'}`);
+    console.log(`  [${i + 1}/${n}] ${ok ? 'OK ' : 'FAIL'} ` +
+      `is_incident=${pack?.isIncident} category_fit=${pack?.categoryFit} confidence=${pack?.confidence}`);
+  }
+  const rate = ((judged / n) * 100).toFixed(1);
+  console.log(`\n=== 결과: 판정 성공 ${judged}/${n} (${rate}%) ===`);
+  if (fails.length) { console.log('실패 목록:'); fails.forEach((f) => console.log('  - ' + f)); }
+  console.log(`DeepSeek 호출 집계: 총 ${deepseekStats.calls}회 (성공 ${deepseekStats.ok} / 실패 ${deepseekStats.fail})`);
+  console.log('※ 실패가 있으면 위 "[deepseek] JSON 추출 실패" 로그의 응답 원문으로 패턴을 확정하세요.');
+}
+
 async function main() {
   console.log('=== DeepSeek 판정 진단 ===');
   console.log(`DEEPSEEK_API_KEY: ${deepseekAvailable ? '있음' : '없음(설정 필요)'}`);
@@ -46,6 +73,9 @@ async function main() {
     console.error('\n[X] 키가 없어 진단 불가. backend/.env 의 DEEPSEEK_API_KEY 확인.');
     process.exit(1);
   }
+
+  const n = repeatCount();
+  if (n > 0) { await runBatch(n); return; }
 
   for (const s of SAMPLES) {
     console.log(`\n──── ${s.label} ────`);

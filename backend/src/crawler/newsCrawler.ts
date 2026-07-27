@@ -789,9 +789,12 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       //  진입 = category_fit=true AND is_incident=false AND confidence=high. 그 외 전부 거부.
       if (deepseekAvailable) {
         const j = { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence };
-        if (!passesIngestionGate(j)) {
-          const reason = rejectReason(j) || 'rejected';
-          if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
+        // 키워드 거름망이 사건사고로 보면 모델 판정과 무관하게 거부(모델 오판 차단)
+        const kwIncident = isIncidentReport(rawTitle, rawContent || '');
+        if (!passesIngestionGate(j, kwIncident)) {
+          const reason = rejectReason(j, kwIncident) || 'rejected';
+          if (reason === 'keyword_incident') crawlStats.judgeIncidentSkip++;
+          else if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
           else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
           else if (reason === 'judgment_missing') crawlStats.deepseekFailSkip++;
           else crawlStats.gateRejectLowConf++;
@@ -956,9 +959,11 @@ async function finalizeStatoryCandidate(
   // v5.4 2-2: 입구 게이트(정밀도 우선). DeepSeek 가용 시에만 엄격 적용.
   if (deepseekAvailable) {
     const j = { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence };
-    if (!passesIngestionGate(j)) {
-      const reason = rejectReason(j) || 'rejected';
-      if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
+    const kwIncident = isIncidentReport(rawTitle, rawContent || '');
+    if (!passesIngestionGate(j, kwIncident)) {
+      const reason = rejectReason(j, kwIncident) || 'rejected';
+      if (reason === 'keyword_incident') crawlStats.judgeIncidentSkip++;
+      else if (j.isIncident === true) crawlStats.judgeIncidentSkip++;
       else if (j.categoryFit === false) crawlStats.judgeCatSkip++;
       else if (reason === 'judgment_missing') crawlStats.deepseekFailSkip++;
       else crawlStats.gateRejectLowConf++;

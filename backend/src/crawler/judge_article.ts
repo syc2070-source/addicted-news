@@ -22,15 +22,20 @@ export function judgmentFromPack(p: {
 /**
  * 입구 게이트(정밀도 우선): DB 진입 허용 조건.
  * category_fit=true AND is_incident=false AND confidence=high 인 경우에만 진입.
- * (medium/low 확신도·미상 전부 거부)
+ * (medium/low 확신도·미상 전부 거부 — 판정 실패는 여기서 자동으로 fail-closed)
+ *
+ * keywordIncident: 키워드 1차 거름망(isIncidentReport) 결과. true면 모델이 뭐라 하든 거부.
+ *   모델 오판(사건 기사를 is_incident=false 로 판정)이 통과하던 구멍을 막는다.
  */
-export function passesIngestionGate(j: Judgment): boolean {
+export function passesIngestionGate(j: Judgment, keywordIncident = false): boolean {
+  if (keywordIncident) return false;
   return j.categoryFit === true && j.isIncident === false && j.confidence === 'high';
 }
 
 /** 게이트 거부 사유(통과면 null). rejected_articles.reject_reason 에 기록. */
-export function rejectReason(j: Judgment): string | null {
-  if (passesIngestionGate(j)) return null;
+export function rejectReason(j: Judgment, keywordIncident = false): string | null {
+  if (passesIngestionGate(j, keywordIncident)) return null;
+  if (keywordIncident) return 'keyword_incident';
   if (j.isIncident === true) return 'is_incident';
   if (j.categoryFit === false) return 'category_fit_false';
   if (j.categoryFit === undefined || j.isIncident === undefined) return 'judgment_missing';
