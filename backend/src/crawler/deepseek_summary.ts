@@ -332,7 +332,8 @@ function isTitleEcho(line: string, title: string): boolean {
 //    (judgment_missing → 입구 게이트 fail-closed. 새 폴백 경로 추가 금지 원칙).
 // ══════════════════════════════════════════════════════════════════
 
-export const JUDGE_MAX_TOKENS = Number(process.env.DEEPSEEK_JUDGE_MAX_TOKENS || 200);
+// 200 은 부족했다(실측: finish_reason=length 20/20, 크론 판정 실패 26건) → 800.
+export const JUDGE_MAX_TOKENS = Number(process.env.DEEPSEEK_JUDGE_MAX_TOKENS || 800);
 /** 작업 1-1: DeepSeek 의 json_schema 지원이 '불명'이라 기본 비활성.
  *  데스크탑에서 DEEPSEEK_JSON_SCHEMA=1 로 켜서 지원 여부를 실측할 수 있다. */
 const USE_JSON_SCHEMA = process.env.DEEPSEEK_JSON_SCHEMA === '1';
