@@ -338,6 +338,10 @@ export const JUDGE_MAX_TOKENS = Number(process.env.DEEPSEEK_JUDGE_MAX_TOKENS || 
  *  데스크탑에서 DEEPSEEK_JSON_SCHEMA=1 로 켜서 지원 여부를 실측할 수 있다. */
 const USE_JSON_SCHEMA = process.env.DEEPSEEK_JSON_SCHEMA === '1';
 
+/** v4 는 thinking 기본 활성(effort=high). 판정 호출에서는 끈다(절단·temperature 무시 원인).
+ *  DEEPSEEK_JUDGE_THINKING=on 이면 다시 켤 수 있다(비교 측정용). */
+const THINKING_DISABLED = process.env.DEEPSEEK_JUDGE_THINKING !== 'on';
+
 export type JudgeFields = {
   categoryFit?: boolean;
   isIncident?: boolean;
@@ -392,13 +396,20 @@ export async function judgeArticleFields(
         response_format: USE_JSON_SCHEMA
           ? { type: 'json_schema', json_schema: JUDGE_JSON_SCHEMA }
           : { type: 'json_object' },
-        temperature: 0,            // 작업 2-1: 판정은 항상 0(일관성)
+        temperature: 0,            // 추론이 꺼지면 유효해진다(thinking 모드에선 무시됨)
         max_tokens: JUDGE_MAX_TOKENS,
+        // v4 모델은 thinking 이 기본 활성(effort=high)이라 추론이 max_tokens 를 소진해
+        // JSON 이 절단되고, temperature 도 무시된다 → 판정 호출에서는 끈다.
+        // ※ Python SDK 의 extra_body 는 '본문 최상위에 병합'하는 장치다.
+        //   openai-node 에는 extra_body 가 없고 body 객체가 그대로 직렬화되므로
+        //   여기서는 최상위에 넣어야 실제 전송된다(전송 body 로그로 확인).
+        ...(THINKING_DISABLED ? { thinking: { type: 'disabled' } } : {}),
       };
       if (process.env.DEEPSEEK_DEBUG_REQ === '1') {
         console.log('[deepseek][judge-req]', JSON.stringify({
           model: params.model, response_format: params.response_format,
-          temperature: params.temperature, max_tokens: params.max_tokens, attempt,
+          temperature: params.temperature, max_tokens: params.max_tokens,
+          thinking: params.thinking ?? '(미전송)', attempt,
         }));
       }
       const r = await (deepseek.chat.completions.create as unknown as
