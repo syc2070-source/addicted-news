@@ -15,6 +15,7 @@ import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extr
 import { isValidArticleImageUrl } from './image_validation';
 import { matchesAddictionKeywords, isIncidentReport, normalize } from './addictionFilter';
 import { passesIngestionGate, rejectReason } from './judge_article';
+import { isKoreanOutput, describeLangCheck } from './lang_output';
 import { isBlacklistedDomain, getBlacklistSnapshot, normalizeHost, evaluateAutoBlacklistFromDb } from './domain_blacklist';
 import { notifyDiscord } from './notifier';
 import { decodeEntities, crossMediaSimilarity } from './text_utils';
@@ -118,6 +119,8 @@ let crawlStats = {
   judgeCatSkip: 0,      // v5.4: 딥시크 판정 category_fit=false 스킵
   gateRejectLowConf: 0, // v5.4: 확신도 부족(medium/low) 거부
   deepseekFailSkip: 0,  // 판정 자체 실패(judgment_missing) — DeepSeek 응답 없음/장애 신호
+  langRetry: 0,         // LANG-GUARD-1: 비한국어 산출물 감지 → 한국어 강제 재생성 시도
+  langRejectSkip: 0,    // LANG-GUARD-1: 재생성 후에도 비한국어 → non_korean_output 격리
   blacklistSkip: 0,     // v5.4: 블랙리스트 도메인 즉시 폐기(딥시크 호출 없음)
   quarantined: 0,       // v5.4: rejected_articles 격리 저장
   crossMediaDupSkip: 0, // v5.4.1 3-2: 크로스매체 동일 사건 중복 스킵
@@ -836,10 +839,44 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
         ? normalizeCategory(pack.suggestedCategory)
         : classifyCategory(titleKo, summaryKo + ' ' + keywordsKo.join(' '), normalizeCategory(conf.category));
 
+      // ── LANG-GUARD-1 1-2: 최종 산출물 언어 가드(저장 직전, 게이트 통과 후) ──
+      // 원인(LLM이 원문 언어로 응답 / 요약 실패로 원문이 그대로 실림)과 무관하게
+      // '최종 title·summary'를 검사하므로 두 경로를 동시에 막는다.
+      let finalTitle = titleKo;
+      let finalSummary = summaryKo;
+      let langCheck = isKoreanOutput(finalTitle, finalSummary);
+      if (!langCheck.ok) {
+        console.log(`  │   🌐 비한국어 산출물 감지(${describeLangCheck(langCheck)}) → 한국어 강제 재생성`);
+        crawlStats.langRetry++;
+        // 새 호출 유형을 만들지 않고 기존 요약 호출을 한국어 강제로 1회만 재실행.
+        const re = await summarizeKoreanDeepSeek(rawTitle, rawContent, {
+          translate: isForeign, category: provCategory, forceKorean: true,
+        });
+        if (re && re.titleKo.trim() && re.summary.trim()) {
+          finalTitle = isForeign ? re.titleKo.trim() : rawTitle;
+          finalSummary = re.summary;
+          langCheck = isKoreanOutput(finalTitle, finalSummary);
+        }
+        if (!langCheck.ok) {
+          // fail-closed: 원문을 그대로 싣는 폴백 금지. 격리 후 폐기.
+          crawlStats.langRejectSkip++;
+          console.log(`  │   🚫 비한국어 산출물 격리(${describeLangCheck(langCheck)}): ${shortTitle}`);
+          rejectedAll.push({
+            title: finalTitle || rawTitle, originalTitle: rawTitle, summary: finalSummary || null,
+            category: provCategory, source: conf.sourceName, sourceUrl, googleUrl, publishedAt,
+            lang, sourceType: conf.sourceType,
+            rejectReason: 'non_korean_output',
+            confidence: pack.confidence ?? null,
+            domain: normalizeHost(sourceUrl) || normalizeHost(googleUrl || undefined) || null,
+          });
+          continue;
+        }
+      }
+
       const imageUrl = await getArticleImage(it, sourceUrl, ogImageHint);
 
       out.push({
-        title: titleKo, originalTitle: rawTitle, teaser: teaserKo, summary: summaryKo,
+        title: finalTitle, originalTitle: rawTitle, teaser: teaserKo, summary: finalSummary,
         keywords: keywordsKo, category: finalCategory, region: conf.region, source: conf.sourceName,
         sourceUrl, googleUrl, imageUrl, origin: 'crawler', isTop: false, isFeature: false,
         publishedAt, lang, isForeign, blocked: false, blockedReason: null,
@@ -1000,12 +1037,42 @@ async function finalizeStatoryCandidate(
         partial.category,
       );
 
+  // ── LANG-GUARD-1 1-2: statory 경로도 동일하게 최종 산출물 언어 검사 ──
+  let finalTitle = titleKo;
+  let finalSummary = summaryKo;
+  let langCheck = isKoreanOutput(finalTitle, finalSummary);
+  if (!langCheck.ok) {
+    console.log(`  │   🌐 비한국어 산출물 감지(statory, ${describeLangCheck(langCheck)}) → 한국어 강제 재생성`);
+    crawlStats.langRetry++;
+    const re = await summarizeKoreanDeepSeek(rawTitle, rawContent, {
+      translate: isForeign, category: provCategory, forceKorean: true,
+    });
+    if (re && re.titleKo.trim() && re.summary.trim()) {
+      finalTitle = isForeign ? re.titleKo.trim() : rawTitle;
+      finalSummary = re.summary;
+      langCheck = isKoreanOutput(finalTitle, finalSummary);
+    }
+    if (!langCheck.ok) {
+      crawlStats.langRejectSkip++;
+      console.log(`  │   🚫 비한국어 산출물 격리(statory, ${describeLangCheck(langCheck)})`);
+      rejectedAll.push({
+        title: finalTitle || rawTitle, originalTitle: rawTitle, summary: finalSummary || null,
+        category: provCategory, source: partial.source, sourceUrl: partial.sourceUrl,
+        googleUrl: partial.googleUrl, publishedAt: partial.publishedAt, lang,
+        sourceType: partial.sourceType, rejectReason: 'non_korean_output',
+        confidence: pack.confidence ?? null,
+        domain: normalizeHost(partial.sourceUrl) || null,
+      });
+      return null;   // fail-closed
+    }
+  }
+
   return {
     ...partial,
-    title: titleKo,
+    title: finalTitle,
     originalTitle: rawTitle,
     teaser: teaserKo,
-    summary: summaryKo,
+    summary: finalSummary,
     keywords: keywordsKo,
     category: finalCategory,
     lang,
@@ -1291,6 +1358,7 @@ async function main() {
   console.log(`   ├ 🚫 입구게이트 거부(category_fit): ${crawlStats.judgeCatSkip}건`);
   console.log(`   ├ 🚫 입구게이트 거부(확신도부족): ${crawlStats.gateRejectLowConf}건`);
   console.log(`   ├ ⚠️ 판정 실패(DeepSeek 응답없음/장애): ${crawlStats.deepseekFailSkip}건`);
+  console.log(`   ├ 🌐 비한국어 산출물: 재생성 ${crawlStats.langRetry}건 / 격리 ${crawlStats.langRejectSkip}건`);
   console.log(`   ├ 📦 격리 저장(rejected_articles): ${crawlStats.quarantined}건`);
   const blSnap = getBlacklistSnapshot();
   console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);

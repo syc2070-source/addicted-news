@@ -25,7 +25,16 @@ const deepseek = deepseekAvailable
 // 성공/실패를 분리 집계한다. (기존 apiCallCount는 미호출 dead-code였음)
 export const deepseekStats = { calls: 0, ok: 0, fail: 0 };
 
+// LANG-GUARD-1 작업1-3: 한국어 출력 지시를 프롬프트 맨 앞에 명시(보조 수단).
+// ※ 방어선은 저장 직전 가드(lang_output)이며, 이 문구만으로 갈음하지 않는다.
+const KOREAN_ONLY_RULE =
+  '[언어 규칙 — 최우선] titleKo 와 summary 는 반드시 한국어로 작성한다. ' +
+  '원문이 중국어·일본어·영어 등 어떤 언어이든, 산출물은 한국어여야 한다. ' +
+  '원문 문장을 그대로 옮기거나 원문 언어로 답하지 말 것. 고유명사는 한국어 표기하되 ' +
+  '필요하면 괄호로 원어를 병기한다. ';
+
 const SUMMARY_SYSTEM_KO_BASE =
+  KOREAN_ONLY_RULE +
   '너는 중독(도박·약물·알코올·행동중독 등) 전문 뉴스 큐레이터다. ' +
   '독자가 원문 기사에 가지 않고도 내용을 충분히 파악할 수 있도록, 한국어로 충실한 요약을 쓴다. ' +
   '중독 뉴스 원문에는 도박 광고 등 유해 요소가 많아, 요약만으로 이해가 끝나는 것이 독자에게 이롭다. ' +
@@ -84,6 +93,12 @@ const SUMMARY_SYSTEM_TRANSLATE =
   ' 원문이 외국어(영어·일본어 등)이면 반드시 한국어로 번역·요약하라.' +
   JUDGE_JSON_INSTRUCTION;
 
+// LANG-GUARD-1 1-2: 언어 가드 불합격 후 1회 재생성용 강화 지시.
+const KOREAN_RETRY_SYSTEM =
+  '[치명적 제약] 직전 산출물이 한국어가 아니어서 폐기됐다. 이번에는 titleKo 와 summary 를 ' +
+  '100% 한국어로 작성한다. 중국어·일본어·영어 문장을 그대로 쓰면 다시 폐기된다. ' +
+  '한자(漢字)로만 이루어진 제목·요약을 출력하지 말 것. 한국어 문장으로 옮겨 쓸 것.';
+
 // 재시도용 강화 지시(1차에서 JSON 이 없을 때만 사용).
 const STRICT_RETRY_SYSTEM =
   '너는 JSON 생성기다. 오직 유효한 JSON 객체 하나만 출력한다. ' +
@@ -118,7 +133,7 @@ export type DeepSeekPack = {
 async function summarizeCombined(
   title: string,
   content: string,
-  opts?: { translate?: boolean; category?: string },
+  opts?: { translate?: boolean; category?: string; forceKorean?: boolean },
 ): Promise<DeepSeekPack | null> {
   if (!deepseekAvailable || !deepseek) return null;
   const body = (content || '').trim();
@@ -159,11 +174,16 @@ async function summarizeCombined(
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       deepseekStats.calls++;
-      const baseSystem = translate ? SUMMARY_SYSTEM_TRANSLATE : SUMMARY_SYSTEM_KO;
+      const baseSystem0 = translate ? SUMMARY_SYSTEM_TRANSLATE : SUMMARY_SYSTEM_KO;
+      // LANG-GUARD-1 1-2: 언어 가드 불합격 후 재생성 시 한국어 강제 지시를 앞세운다.
+      const baseSystem = opts?.forceKorean ? `${KOREAN_RETRY_SYSTEM}\n\n${baseSystem0}` : baseSystem0;
       const system = strictRetry ? `${STRICT_RETRY_SYSTEM}\n\n${baseSystem}` : baseSystem;
-      const user = strictRetry
-        ? `${userMsg}\n\n[재요청] 이전 응답이 JSON 이 아니었다. 설명 없이 JSON 객체만 출력하라.`
+      const userBase = opts?.forceKorean
+        ? `${userMsg}\n\n[재요청] 이전 산출물이 한국어가 아니었다. titleKo 와 summary 를 반드시 한국어로만 작성하라.`
         : userMsg;
+      const user = strictRetry
+        ? `${userBase}\n\n[재요청] 이전 응답이 JSON 이 아니었다. 설명 없이 JSON 객체만 출력하라.`
+        : userBase;
       // 요청 파라미터를 한 곳에서 구성 → 전송 여부를 그대로 로그로 확인 가능.
       const params = {
         model: DEEPSEEK_MODEL,
@@ -455,7 +475,7 @@ export async function judgeArticleFields(
 export async function summarizeKoreanDeepSeek(
   title: string,
   content: string,
-  opts?: { translate?: boolean; category?: string },
+  opts?: { translate?: boolean; category?: string; forceKorean?: boolean },
 ): Promise<DeepSeekPack | null> {
   const pack = await summarizeCombined(title, content, opts);
   if (!pack) return null;
