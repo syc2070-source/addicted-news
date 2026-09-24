@@ -19,7 +19,7 @@ if %SILENT_MODE%==0 (
     echo.
 )
 
-cd /d C:\addicted-news\backend
+cd /d D:\addicted-news\backend
 
 if not exist logs mkdir logs
 
@@ -34,6 +34,7 @@ if %SILENT_MODE%==0 (
 )
 
 call npm run crawl:once >> "%RUNLOG%" 2>&1
+set "CRAWL_EXIT=%ERRORLEVEL%"
 
 echo [%date% %time%] Crawler finished>> "%RUNLOG%"
 echo.>> "%RUNLOG%"
@@ -51,3 +52,4 @@ if %SILENT_MODE%==0 (
     echo.
     pause
 )
+exit /b %CRAWL_EXIT%

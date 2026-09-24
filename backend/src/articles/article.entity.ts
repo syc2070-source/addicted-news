@@ -18,6 +18,11 @@ export class Article {
   @Column({ type: 'text', nullable: true })
   summary: string | null;
 
+  // Excluded from ordinary API/duplicate-check SELECTs until the owner applies v5.5.
+  // The desktop exporter reads the complete row explicitly.
+  @Column({ name: 'raw_body', type: 'text', nullable: true, select: false })
+  rawBody: string | null;
+
   @Column({ type: 'varchar', length: 100 })
   category: string;
 

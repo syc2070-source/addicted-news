@@ -19,6 +19,8 @@ import { isKoreanOutput, describeLangCheck } from './lang_output';
 import { isBlacklistedDomain, getBlacklistSnapshot, normalizeHost, evaluateAutoBlacklistFromDb } from './domain_blacklist';
 import { notifyDiscord } from './notifier';
 import { decodeEntities, crossMediaSimilarity } from './text_utils';
+import { crawlerConnectionOptions } from './crawler_db';
+import { insertArticleWithRawBody, RawBodyWriteState } from './raw_body_store';
 
 type RssItem = {
   title?: string;
@@ -39,6 +41,7 @@ type Candidate = {
   originalTitle: string | null;
   teaser: string | null;
   summary: string;
+  rawBody: string | null;
   keywords: string[];
   category: CategoryName;
   region: string;
@@ -157,17 +160,7 @@ async function rateLimitedDelay() {
 }
 
 // ---------- DB ----------
-const ds = new DataSource({
-  type: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT || 5432),
-  username: process.env.DB_USER || 'postgres',
-  password: String(process.env.DB_PASSWORD ?? ''),
-  database: process.env.DB_NAME || 'addiction_news',
-  entities: [Article, RejectedArticle],
-  synchronize: false,
-  logging: false,
-});
+const ds = new DataSource(crawlerConnectionOptions(process.env));
 
 // ---------- Daily Lock ----------
 async function hasRunToday(): Promise<boolean> {
@@ -877,6 +870,7 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
 
       out.push({
         title: finalTitle, originalTitle: rawTitle, teaser: teaserKo, summary: finalSummary,
+        rawBody: rawContent.slice(0, 6000) || null,
         keywords: keywordsKo, category: finalCategory, region: conf.region, source: conf.sourceName,
         sourceUrl, googleUrl, imageUrl, origin: 'crawler', isTop: false, isFeature: false,
         publishedAt, lang, isForeign, blocked: false, blockedReason: null,
@@ -947,6 +941,8 @@ function statoryItemToCandidate(item: Record<string, unknown>, query: string): C
     originalTitle: titleRaw.trim() || title,
     teaser: null,
     summary: abstract,
+    // Statory search supplies an abstract, not the original article body.
+    rawBody: null,
     keywords: query ? [query] : [],
     category: '중독사회와 회복',
     region,
@@ -1167,6 +1163,7 @@ async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
 // ---------- Save ----------
 async function saveCandidates(list: Candidate[]) {
   const repo = ds.getRepository(Article);
+  const rawBodyState: RawBodyWriteState = { unavailable: false };
   let inserted = 0, dup = 0, withImage = 0;
 
   console.log(`\n💾 Saving to DB (${list.length} candidates)...`);
@@ -1190,13 +1187,14 @@ async function saveCandidates(list: Candidate[]) {
     try {
       const ent = repo.create({
         title: c.title, originalTitle: c.originalTitle, teaser: c.teaser, summary: c.summary,
+        rawBody: c.rawBody,
         category: c.category, region: c.region, source: c.source, sourceUrl: c.sourceUrl,
         googleUrl: c.googleUrl, imageUrl: c.imageUrl, origin: c.origin, isTop: c.isTop,
         isFeature: c.isFeature, publishedAt: c.publishedAt, lang: c.lang, isForeign: c.isForeign,
         keywords: safeKeywords, blocked: c.blocked, blockedReason: c.blockedReason,
         sourceType: c.sourceType, outletId: c.outletId,
       });
-      await repo.save(ent);
+      await insertArticleWithRawBody(repo, ent, rawBodyState);
       inserted++;
       if (c.imageUrl) withImage++;
       if (inserted % 20 === 0) console.log(`  ├─ ${inserted} saved...`);
@@ -1204,13 +1202,14 @@ async function saveCandidates(list: Candidate[]) {
       try {
         const ent = repo.create({
           title: c.title, originalTitle: c.originalTitle, teaser: c.teaser, summary: c.summary,
+          rawBody: c.rawBody,
           category: c.category, region: c.region, source: c.source, sourceUrl: c.sourceUrl,
           googleUrl: c.googleUrl, imageUrl: c.imageUrl, origin: c.origin, isTop: c.isTop,
           isFeature: c.isFeature, publishedAt: c.publishedAt, lang: c.lang, isForeign: c.isForeign,
           keywords: null, blocked: c.blocked, blockedReason: c.blockedReason,
           sourceType: c.sourceType, outletId: c.outletId,
         });
-        await repo.save(ent);
+        await insertArticleWithRawBody(repo, ent, rawBodyState);
         inserted++;
         if (c.imageUrl) withImage++;
       } catch {}
