@@ -1,0 +1,53 @@
+ENC-FIX-1 지시서 (2026-10-09 · 중독백과 업로더 수리 · 실행자 = 데스크탑 Claude Code · 폴더 D:\addicted-news)
+
+[위치판]
+중독백과 = 영상 172편을 YouTube 채널 「중독이야기」(UCNLL7-k2it9ngjN9BUma4Og) 재생목록 「중독백과」에 비공개로 올리는 중 · 정본 = D:\addicted-news\video_pipeline (v2 · Git) · D:\video_pipeline 은 v1 보관(손대지 않음)
+자동 기계 = Windows 작업 「중독백과 자동 업로드」 매일 14:10 → powershell -File "D:\addicted-news\.publisher-runtime\data\run_youtube_publisher.ps1" -PipelineRoot "D:\addicted-news\video_pipeline" → venv python(.publisher-runtime\venv\Scripts\python.exe) → video_pipeline\release\upload_youtube.py · 상태 = .publisher-runtime\data\logs\status.json
+SOC-0(10-09) 실측: 10-07·10-08 = ps1 의 Write-PublisherLog 가 빈 문자열을 받아 「'Message' 매개 변수가 빈 문자열」 크래시(python 은 올렸는지 기록만 36→44) · 10-09 = 대조 단계에서 「원격 46 vs 기록 44 · addiction·blackout 표식 영상 제목/재생시간/개수 모호」 → 종료 2 · 올린 수 0 · 누적 44/172
+옛 작업 「\중독백과 업로드」(매일 14:00 · python upload_youtube.py · 0x80070002 파일 없음) = 오너 「제거」 답 받음(10-09 16:42)
+저장소 main 6cb6f9c(08-02) · 미추적 파일 있음(article_id.* · frontend-v2/ · 루트 lock · 영상 로그) — 이 판에서 건드리지 않음
+
+[목표]
+① 중독백과는 교육이다 — 172편이 다 올라가면 오너 「공개」 답으로 한꺼번에 공개한다(ENC-YT4). 그때까지는 비공개로만 쌓는다.
+② 자동 기계는 날마다 혼자 돌고, 실패는 status.json 이 말한다 — 한두 편의 충돌이 나머지 128편을 막지 않는다.
+③ 지우지 않는다 — YouTube 의 중복 영상도, 옛 작업도 기록·백업 뒤 오너 답으로만 없앤다.
+항목마다 〔①〕〔②〕〔③〕.
+
+[규율]
+- 오너에게 묻지 말고 끝까지 계속 진행. 막히면 3번 시도 뒤 「미측」 으로 적고 다음으로. 「미측 ≠ 0」.
+- 열쇠·토큰 값(YouTube client_secret · refresh token · DeepSeek 키 등) 화면·보고서 출력 0 · .env*·token.json·client_secret*.json 은 열지 않음(있는지 Test-Path 만).
+- YouTube 쪽 쓰기는 「새 비공개 업로드」만. 공개 전환 0 · 삭제 0 · 제목·설명 수정 0 · 재생목록 빼기 0. DB(Supabase) 쓰기 0.
+- 파일 지움 0. 옛 작업 제거는 ■3 에 적힌 대로 XML 백업 뒤에만.
+- git add 는 바꾼 파일 이름을 하나씩(git add -A 금지 · 미추적 파일 그대로). rebase·force push 0.
+- 이 판은 Render·Vercel 배포가 필요 없음(영상 기계는 데스크탑에서 돎) → 세 커밋 전부 머리에 [skip ci] [skip render].
+
+■0 시작 〔②〕
+ⓐ 지시서 전문을 docs/reports/202610/ENC-FIX-1_instruction.txt 로 저장(폴더 없으면 만듦). git fetch origin → git checkout main → git pull --ff-only → HEAD 해시 기록(6cb6f9c 가 아니면 보고서 첫 줄) → git checkout -b claude/enc-fix-1 → 커밋 ⓐ 「docs(enc-fix-1): instruction [skip ci] [skip render]」 → git push -u origin claude/enc-fix-1.
+ⓑ 실측: git check-ignore -v .publisher-runtime\data\run_youtube_publisher.ps1 (추적 여부) · video_pipeline 안 시험 틀(pytest/unittest 파일 수) · upload_youtube.py 의 dry-run 옵션 이름 · 대조(reconcile) 코드 위치와 「모호」 판정 조건 · 로컬 기록 파일(올린 영상 ↔ YouTube videoId 대응표) 위치와 꼴 · 하루 한도(uploadLimitExceeded) 처리 코드 · 10-07·10-08·10-09 로그 세 개의 마지막 30줄. 표로 보고서에.
+
+■1 ps1 빈 줄 크래시 〔②〕
+Write-PublisherLog 의 Message 매개변수가 빈 문자열을 받아들이게([AllowEmptyString()] 또는 빈 줄은 건너뜀) 고침 · python 출력을 한 줄씩 넘기는 자리에서 $null·공백 줄도 안전하게. ps1 의 다른 자리에 같은 꼴(Mandatory string 에 빈 값)이 있으면 함께. 수정한 ps1 을 그 자리(작업이 가리키는 경로)에 그대로 두고, ⓑ 에서 미추적이면 같은 내용을 video_pipeline\release\run_youtube_publisher.ps1 로도 복사해 Git 에 올림(둘이 같다는 것을 fc /b 로 확인). 작업 자체(경로·시각)는 바꾸지 않음.
+
+■2 대조 규칙(upload_youtube.py) 〔②〕〔③〕
+표식(enc-id) 하나에 원격 영상이:
+  - 정확히 하나 → 로컬 기록에 videoId 적어 「올린 것」으로 맞춤(새로 안 올림)
+  - 여럿 → 재생시간이 로컬 파일과 ±2초 안에 맞는 것 중 가장 먼저 올라간 것을 정본으로 기록하고, 나머지는 기록 파일의 duplicates 목록에 (videoId · 제목 · 올린 날짜) 로만 적음 — 삭제·비공개 전환·재생목록 조작 0
+  - 하나도 재생시간이 안 맞음 → 그 표식만 needs_review 로 적고 건너뜀
+핵심: 충돌이 몇 편이든 run 전체를 멈추지 않고 나머지 업로드를 계속한다. 종료 코드 = 올리기를 진행했으면 0(충돌·한도는 status.json 의 conflicts / limit 항목에), 올리기 자체를 못 했을 때만 2. 하루 한도(uploadLimitExceeded)는 지금처럼 곱게 멈추고 status.json 에 limit 로 적음 — 이미 그렇게 돼 있으면 손대지 않음.
+시험: 시험 틀이 있으면 대조 규칙 세 갈래(하나/여럿/없음) + 「충돌이 있어도 다음 편 계속」 4건 추가 · 없으면 video_pipeline\tests\test_reconcile.py 를 unittest 로 만들어 python -m unittest 로 통과. 기존 시험도 전부 통과.
+
+■3 옛 작업 제거(오너 「제거」 답 10-09 16:42) 〔③〕
+ⓐ 백업: schtasks /Query /TN "\중독백과 업로드" /XML > docs\reports\202610\removed_task_중독백과_업로드_1009.xml (UTF-16 이면 그대로 둠). 그 XML 안에 비밀 값이 없는지 눈으로 확인(없음이 정상).
+ⓑ 제거: schtasks /Delete /TN "\중독백과 업로드" /F. 「액세스가 거부」 면 관리자 권한으로 한 번 더: Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-Command','schtasks /Delete /TN "\중독백과 업로드" /F' (UAC 창은 오너가 「예」). 그래도 안 되면 schtasks /Change /TN "\중독백과 업로드" /DISABLE 로 끄고 「제거 미완 · 비활성」 으로 적음.
+ⓒ 확인: schtasks /Query /TN "\중독백과 업로드" 가 「찾을 수 없습니다」 · 「중독백과 자동 업로드」(14:10) 는 그대로 Ready.
+
+■4 실제로 돌려 보기 〔①〕〔②〕
+ⓐ dry-run: 고친 upload_youtube.py 를 ⓑ 에서 찾은 dry-run 옵션으로 한 번 → 대조 결과(addiction·blackout 이 어느 갈래로 갔는지 · duplicates 몇 편 · 올릴 후보 몇 편) 기록. 원격 쓰기 0 인지 로그로 확인.
+ⓑ 진짜 한 번: schtasks /Run /TN "중독백과 자동 업로드" (작업 경로 그대로 타는 것이 끝까지 검증) → 최대 40분 동안 2분마다 status.json 읽기 → 끝나면 result · 올린 수 · 누적/172 · conflicts · limit · exit_code 기록. 한도에 걸려 0~몇 편만 올라가도 정상(한도는 날마다 풀림). 크래시(ps1 오류 · exit 2)면 원인 적고 ■1·■2 로 돌아가 고친 뒤 한 번 더.
+ⓒ YouTube Studio 는 열지 않음(읽기도 API 로만). 중복으로 적힌 영상 목록(videoId · 제목 · 날짜)은 보고서에 — 지울지는 오너 「제거」 답(ENC-YT4 때 한꺼번에).
+
+■5 보고서 〔②〕
+docs/reports/202610/ENC-FIX-1_<MMDD>.txt — 첫 줄 = 경보 한 줄 · ■0 실측 표 · ■1~■4 결과 · 바뀐 파일 · 미측(까닭) · 다음 판 후보 열 줄 안 · 마지막 줄 「ENC-FIX-1 끝」. 커밋 ⓑ 「fix(video): publisher log empty line + reconcile continue (ENC-FIX-1) [skip ci] [skip render]」 → push 가지 → git checkout main → git merge --ff-only claude/enc-fix-1 → git push origin main → 커밋 ⓒ 「docs(enc-fix-1): report [skip ci] [skip render]」 → git push origin main(따로). 끝나면 보고서 전문을 화면에 출력.
+
+[하지 않는 것]
+YouTube 공개 전환·삭제·메타 수정 · DB 쓰기 · 작업 「중독백과 자동 업로드」 변경 · D:\video_pipeline(v1) · 포털 코드(backend·frontend) · 미추적 파일 add · .env·token 열기 · 파일 지움 · rebase·force push · Render·Vercel 배포.
