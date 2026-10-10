@@ -1,0 +1,54 @@
+NEWS-Q2 지시서 (2026-10-10 · 중독뉴스 수집 넓히기 · 분야 설정 꼴 · 실행자 = 데스크탑 Claude Code · 폴더 D:\addicted-news)
+
+[위치판]
+저장소 D:\addicted-news · main = 0f876b9(NEWS-Q1 보고서) · 배포 코드 7b592c0 · API https://addicted-news-backend.onrender.com · 수집 cron KST 12:00(`0 3 * * *` · crawl:prod · 40분) · 정리 cron 일 03:00 KST(judge_cleanup --apply · soft 삭제) · DB Supabase addiction-news(articles 3,420 · 열 deleted_at·kind 섰음 · 묶음 d775dc44 적용 10-10 16:03)
+NEWS-Q1 실측: 표본 100 = sourceUrl 79% news.google.com · ko 86/en 14 · 세계 14% · 보도→수집 중앙값 2일·최대 10일 · publishedAt 날짜만 · 10-10 12:00·16:35 실행 로그 = 세계 피드 14 실패(402 1 · 403 4 · 404 4~5 · DNS 4~6 · Politico Europe·Middle East Eye·Mail & Guardian·Nation Nigeria·us-drugfree XML) · 한국 피드 동아일보·프레시안 실패 · 「한국 콘텐츠 비중 3일 연속 30% 미달」 경보 · DeepSeek 73회 → 저장 1(나머지 = 기존 기사 중복으로 추정 · 중복 확인이 호출 뒤) · 방송 RSS 9채널(kbs_docu_insight 404 간헐) · 소스 = backend/data/*_rss.json + sourceConfig.ts 고정 목록(구글뉴스 KR 5 · 전문 3) + broadcast_youtube_rss.json
+오너 원칙(10-10): 모든 자료 학습 · 중독은 분야 하나 · 세 사이트 한 체계 → 수집기는 분야 설정만 다른 한 기계
+
+[목표]
+① 중독뉴스는 최신성이다 — 세계 중독 보도를 날마다 충분히(하루 수십 건) 모아 정확한 출처·시각으로 보여 준다.
+② 운영 사이트는 재작성하지 않고 측정한 뒤 깨진 것만 고친다.
+③ 수집기는 분야 무관 기계 + 「분야 = 중독」 설정이다 — 코드에 중독이 박히지 않고, 모은 것은 11월 Statory 서재 입구에 출처·종류·시각이 정확하게 들어간다.
+항목마다 〔①〕〔②〕〔③〕.
+
+[규율]
+- 오너에게 묻지 말고 끝까지. 3번 시도 뒤 「미측」. 오너 액션 0(묶음 SQL 적용 · Render 화면 변경은 보고서에 적어 오너가 뒤에).
+- 열쇠 값 0 · .env* 0 · DB 직접 접속 0(공개 API 로만 읽음) · 스키마는 코드로 바꾸지 않고 묶음 SQL(`docs/governance/sql/APPLY_<YYYYMMDD>_news_bundle2.sql` · IF NOT EXISTS · 확인표 첫 줄 묶음 판 sha256 앞 8자리 · 끝 열 ok) · 새 열을 쓰는 코드는 열 확인 뒤에만 켜짐.
+- 기존 행 데이터 변경은 ■3 의 원문 URL 해석(google_url 보존 · 되돌릴 수 있음)과 묶음 SQL 안의 파생 채우기만. 그 밖 0. 하드 삭제 0 · 지우기 0 · 미추적 add 0 · rebase/force 0.
+- 커밋 ⓐ 지시서 [skip ci] [skip render] → ⓑ 코드(혼자 push · 배포) → ⓒ 보고서 [skip ci] [skip render].
+
+■0 시작 〔②〕
+지시서 → docs/reports/202610/NEWS-Q2_instruction.txt · main pull --ff-only · HEAD · git checkout -b claude/news-q2 · 커밋 ⓐ · push. 실측 표: 코드에서 「중독」·「addiction」 글자가 박힌 자리 수(src · grep) · 수집 흐름(피드 읽기 → 후보 → DeepSeek → 저장)에서 중복 확인이 어디 있는지 · DeepSeek 호출 1회 단가(코드의 모델명) · 구글뉴스 RSS 링크 꼴.
+
+■1 분야 설정 파일 〔③〕
+`backend/data/field_profiles/addiction.json` 하나에: 핵심어(ko/en) · 관문 기준(카테고리 목록 · 사건·사고 처리 = 보관 · 확신도 문턱) · 구글뉴스 검색어 목록 · 기관 뉴스룸 목록 · 방송 채널 목록(지금 json 을 여기로 옮기거나 가리킴) · 「최신」 기준 72시간. 수집기·관문·공개 API 는 `FIELD_PROFILE`(기본 addiction)로 이 파일을 읽음. 코드 안 고정 목록(sourceConfig.ts 의 구글뉴스 5·전문 3)은 설정 파일로 옮기고 코드엔 분야 글자 0(■0 셈 → 0 보고). 시험: 설정 없음/다른 분야 이름으로 읽기.
+
+■2 중복 확인을 DeepSeek 앞으로 〔①〕〔②〕
+후보마다 정규화 URL(■3 원문 URL 기준 · 쿼리 꼬리·utm 제거) + 정규화 제목으로 DB 조회 → 있으면 호출 0 · 「중복 건너뜀 N」 로그 · 하루 DeepSeek 상한 상수(기본 400 · 넘으면 그날 중단·로그). 시험: 중복이면 호출 안 함.
+
+■3 원문 URL 해석 〔③〕
+구글뉴스 링크는 저장 전에 원문 주소로 풀어 source_url = 원문 · google_url = 구글 링크 그대로 · outlet 은 원문 도메인/피드에서(못 풀면 구글 링크 유지 + 「해석 실패」 표시). 기존 행: 실행마다 구글 링크 행을 오래된 순으로 최대 100건 풀어 갱신(google_url 보존 · 실패 행은 재시도 3회 뒤 표시) — 며칠에 걸쳐 저절로 끝남. 시험: 해석 성공/실패/보존.
+
+■4 피드 건강 〔①〕
+죽은 피드 14+2 마다 현재 RSS 주소를 찾아 교체(매체 사이트에서 실측 · 없으면 「대체 없음」 표시하고 비활성) · 요청 헤더(브라우저 UA · Accept) · 403 재시도 · 깨진 XML 관용 파싱(us-drugfree) · 실행마다 피드 건강 표(성공/실패 수 · 실패 피드 이름) 를 run 로그와 ■8 집계에. 시험: UA 헤더 · 비활성 피드 건너뜀.
+
+■5 소스 넓히기(설정 파일에만 추가) 〔①〕
+ⓐ 구글뉴스 검색 피드 ko/en 각 10개쯤(도박·온라인 도박·마약·펜타닐·알코올·금주·게임 중독·스마트폰 중독·흡연·전자담배·도파민·회복 / gambling addiction·opioid·fentanyl·alcohol policy·gaming disorder·smartphone addiction·tobacco·vaping·harm reduction·recovery) ⓑ 기관 뉴스룸·보도자료(WHO · NIDA · NIAAA · SAMHSA · UNODC · EUDA · 복지부 · 식약처 · 도박문제예방치유원 — RSS 있으면 RSS · 없으면 공지 목록 HTML 파서 하나 · 둘 다 없으면 미측) ⓒ 학술 뉴스(ScienceDaily addiction · EurekAlert) · 출처 등급 칸(기관 > 학술 > 언론 > 집계기) 을 저장 행에. 첫 실행 읽기 전용으로 소스별 후보 수 표.
+
+■6 관문 두 층 〔①〕〔③〕
+tier = publish(지금 기준) / archive(관련은 있으나 확신 낮음 · 사건·사고 · 분류 불일치 중 중독 핵심어 있음) / reject(무관). archive 는 공개 목록·검색·분류·top 에 안 보임(`?tier=archive` 로만) · 11월 서재 입구는 publish+archive 다 읽음 · rejected_articles 는 지금처럼. tier 열은 묶음 SQL(■9) · 열 없으면 publish 만 저장(옛 동작). 시험: 세 갈래 · 공개 제외.
+
+■7 보도 시각·「최신」 〔③〕
+`published_ts timestamptz`(묶음 SQL · 기존 행은 publishedAt 날짜에서 파생 채움) · 수집기는 피드의 시각을 넣고 없으면 수집 시각 · 공개 API 에 「최신 = 72시간 안」 표시 칸(지우지 않음 · 설정 파일 값). 방송 게시 시각도 이 열.
+
+■8 집계·건강 〔②〕
+`crawl_runs` 표(묶음 SQL · 실행 시각 · 소스별 읽음/후보/중복/호출/저장/보관/거절 · 피드 실패 목록 · 비용 추정)에 실행마다 한 행 · `GET /api/health` 에 마지막 실행 요약(숫자만) · 관리자 화면 기사 삭제 → soft(deleted_at) · YouTube RSS 재시도 = 실패 채널은 다음 실행 맨 앞 + 6→10회.
+
+■9 묶음 SQL 2 〔②〕
+`APPLY_<날>_news_bundle2.sql`: tier text NOT NULL DEFAULT 'publish' · published_ts timestamptz NULL(+ 기존 행 파생 UPDATE) · crawl_runs 표 · 확인표(묶음 판 · 열 셋 · 표 · 파생 수) · 되풀이 안전. 코드는 열 확인 뒤에만. 보고서에 「오너 적용 → 웹 재시작」 줄.
+
+■10 시험·배포·보고 〔②〕
+jest 전량(102 → N) · nest build · 커밋 ⓑ → push 가지 → main ff-merge → push main(혼자) → health commit 폴링 25분 → 다음 12:00 cron 을 기다리지 않고 읽기 전용 모드로 소스별 후보 수 표 · 전/후 표(피드 성공 수 · 소스 수 · 구글 링크 비율은 다음 날부터) → 보고서 docs/reports/202610/NEWS-Q2_<MMDD>.txt(첫 줄 경보 · ■0~■9 · 묶음 SQL 경로·판 번호 · 미측 · 다음 판 후보 · 오너가 뒤에 할 것 두 줄 = 묶음 SQL 적용 · Render cron 하루 2회 `0 3,15 * * *` 는 오너 선택) · 「NEWS-Q2 끝」 → 커밋 ⓒ → push.
+
+[하지 않는 것]
+하드 삭제 · 보존 정책 · 기존 행 데이터 변경(■3·묶음 파생 외) · frontend·frontend-v2 · 업로더 · Statory 랩 수집 코드 합치기(ECO-LINK1 뒤) · Render 대시보드 · 방송 지난 회차 되짚기(YouTube API 열쇠 = 뒤) · 미추적 add · .env · rebase/force.
