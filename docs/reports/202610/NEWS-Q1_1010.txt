@@ -1,0 +1,149 @@
+[경보] 배포 확인(7b592c0 · 2026-10-10 10:40:45 KST) · / 404→200 · cleanup 은 이제 기사를 지우지 않음 — 단 묶음 SQL(APPLY_20261010_news_bundle.sql, 판 d775dc44) 오너 적용 전까지 주간 judge_cleanup 은 「후보 목록만·삭제 0」(안전망이 숨기기도 못 함) · 출처 79%가 news.google.com 링크(NEWS-Q2 1순위)
+
+NEWS-Q1 보고서 · 2026-10-10 · 가지 claude/news-q1 → main · 실행 = 데스크탑 Claude Code
+
+━━ ■0 시작 〔②〕 ━━
+ⓐ 시작 HEAD = c989058 (ENC-FIX-1 보고서 커밋 · origin/main 과 같음). 커밋 ⓐ 7c68f62(지시서) → ⓑ 7b592c0(코드) → ⓒ 이 보고서.
+ⓑ ENC-FIX-1 잔일
+| 파일 | 대조 | 처리 |
+|---|---|---|
+| video_pipeline/lib/fetch.py | release\lib\fetch.py 와 fc /b 「no differences」 | 커밋 |
+| video_pipeline/existing_uploads.audit.json | release 사본과 fc /b 「no differences」 | 커밋 |
+| video_pipeline/install_youtube_publisher_task.ps1 | release 사본 없음(설치기 자체) · 비밀 값 없음(변수 이름만) | 커밋 |
+| video_pipeline/publisher-requirements.lock.txt | release 사본 없음 · 내용 그대로 | 커밋 |
+| run_youtube_publisher.ps1 `-u` | `@('-I','-B','-u',$UploaderPath)` · Git 원본 = 런타임 사본 SHA-256 473ABAD62C31… 동일(fc /b 동일) · 구문 오류 0 · 작업 변경 0 | 커밋 · 오늘 14:10 실행부터 적용 |
+
+ⓒ 실측 표
+| 항목 | 실측 |
+|---|---|
+| Render 설정 근거 | backend/render.yaml(머리에 「초안 — 실제 배포는 대시보드」). 대시보드 실제 값은 열쇠 없이 볼 수 없어 미측 |
+| 웹 | yaml 이름 addicted-news-api(실제 URL = addicted-news-backend.onrender.com) · rootDir backend · build `npm install && npm run build` · start `npm run start:prod` · healthCheckPath `/` (그런데 / 는 404 였음 → 대시보드 값이 다를 가능성, 손대지 않음) |
+| 수집 cron | addicted-news-crawler · `0 3 * * *`(KST 12:00) · `npm run crawl:prod` · CRAWL_TIMEOUT 40분 |
+| 정리 cron | addicted-news-judge-cleanup · `0 18 * * 6`(일 03:00 KST) · `node dist/crawler/judge_cleanup.js --apply` · JUDGE_DAYS=14 |
+| cleanup 삭제 기준(전) | 최근 14일 저장분 · restored_manual 제외 · DeepSeek 판정 is_incident=true 또는 category_fit=false → `DELETE FROM articles`(하드) |
+| AI 실패 분기(전) | 키 있음: 호출 실패·판정 미상은 이미 건너뜀(v5.4) · **키 없음: 키워드 isIncidentReport 가 삭제 근거** |
+| 백업 꼴(전) | deploy/judge_backup.json 이어붙이기 = Render 인스턴스 로컬 파일(휘발) → 백업 아님 |
+| 다른 하드 삭제 | incident_cleanup.ts(키워드, **DRY_RUN=true 가 아니면 기본 삭제**) · lang_cleanup.ts(--apply) — 둘 다 수동 도구, cron 없음 · admin 화면의 기사 삭제(사람, 인증) |
+| articles 열 | deleted_at 없음 · kind 없음 · 있음: blocked/blocked_reason · judge_status · source_type(varchar32) · outlet_id · origin · source · source_url · google_url · raw_body(select:false) |
+| 공개 API | 전역 접두사 없음. /articles/latest · latest-paged · category/:key(+/paged) · search?q= · top · featured · rapha · issue · :id — 전부 blocked=false. health 없음 · AppController 가 AppModule 에 등록되지 않아 / 404 |
+| 수집기 소스 꼴 | backend/data/world_press_rss.json(60) · kr_press_rss.json · specialty_press_rss.json (feeds[]: rss_url·outlet_id·region_id·lang_primary…) + sourceConfig.ts 안 고정 목록(구글 뉴스 KR 5 · 전문 3) |
+
+━━ ■1 cleanup fail-closed (P0) 〔①〕 ━━
+| 규칙 | 구현 |
+|---|---|
+| AI 실패·시간초과·빈 응답 | via='failed' → 건너뜀 · 후보도 아님 · 경고 로그 |
+| 휴리스틱 | via='keyword' → 「후보 표시」만(basis=heuristic, deletable=no). canDelete 는 이제 deepseek 판정만 true |
+| 삭제 | soft 만: `UPDATE articles SET deleted_at = now() … AND deleted_at IS NULL` |
+| 열 없음 | information_schema 로 확인 → 없으면 mode=candidates_only, 쓰기 SQL 0 (--apply 라도) |
+| 하드 삭제 | `CLEANUP_HARD_DELETE=1` 일 때만(기본 0, 이 판에서 켜지 않음) · incident_cleanup·lang_cleanup 의 DELETE 도 같은 깃발 뒤로 · 30일 뒤 하드 삭제 0 |
+| 후보 목록 | 매 실행 Render 로그에 `[cleanup-candidate] id= basis=ai/heuristic reason= deletable= title=` · soft 삭제는 행이 DB 에 남으므로 로컬 백업 불필요(하드 깃발 경로에만 옛 로컬 백업 유지) |
+| 공개 API | deleted_at 열이 있으면 목록·검색·상세 전부 deleted_at IS NULL 만 · 없으면 그 조건 안 씀(쿼리 실패 방지) · 엔티티 열은 select/insert/update 제외 |
+시험(새 13 + 바뀐 1): AI 실패→삭제 0 · 휴리스틱만→삭제 0 · AI 삭제→deleted_at 만(DELETE 없음) · 열 없음→삭제 0·후보 로그 · DRY RUN→삭제 0·숨긴 기사 제외 · 하드 깃발 기본 꺼짐 · 정책/모드 표 · 공개 API deleted_at 숨김(7 조회 전부) · 열 없으면 조건 없음 · 판정 가드 keyword→false.
+묶음 SQL: docs/governance/sql/APPLY_20261010_news_bundle.sql · BEGIN/COMMIT · ADD COLUMN IF NOT EXISTS deleted_at timestamptz NULL / kind text NOT NULL DEFAULT 'article' · 방송 행만 kind='broadcast' · 확인표 5줄(첫 줄 bundle = d775dc44 · 끝 열 ok) · 묶음 판 = BUNDLE BODY 의 sha256 앞 8자리 d775dc44.
+주의: 웹 서비스는 열 존재를 시작할 때 한 번 확인 → SQL 적용 뒤 다음 배포/재시작부터 숨김이 켜짐. judge_cleanup·수집기는 실행마다 확인.
+
+━━ ■2 health 〔②〕 ━━
+| | 전(10:16) | 후(10:41) |
+|---|---|---|
+| GET / | 404 `Cannot GET /` | 200 `addicted-news api ok` |
+| GET /api/health | 404 | 200 `{"ok":true,"commit":"7b592c0692d86283beaa4ec75001b652b4ea02ed","startedAt":"2026-10-10T01:40:29.261Z"}` |
+DB·인증·비밀 0 · Render healthCheckPath 손대지 않음 · 시험 2(키 3개만 · commit 대체값 local).
+
+━━ ■3 품질 표본(읽기만) 〔①〕〔③〕 ━━
+측정 2026-10-10 10:18 KST · GET /articles/latest?limit=100 · id 5133–5345 · 저장 09-23~10-09 · 배포 뒤 같은 100건 재확인(id 범위·종류·언어 동일).
+| 항목 | 값 |
+|---|---|
+| 중복 | 정규화 제목 0 · 같은 sourceUrl 0 |
+| 언어(lang) | ko 86 · en 14 (표시 제목은 100% 한글 · 원제 기준 외국어 13 → 1건 어긋남) |
+| 세계/한국 | 한국 86 : 세계 14 (region kr 87 · oceania 5 · north_america 3 · asia_pacific 2 · europe 2 · mea 1) |
+| 분류 | 중독정책 29 · 알코올·약물 27 · 도박 20 · 게임·디지털 18 · 중독사회와 회복 6 |
+| raw_body | 공개 API 비노출(select:false) → 미측 · teaser/summary 100% · 이미지 15% |
+| 원문 링크 | **sourceUrl 79/100 이 news.google.com 링크**(출처 「Google News (KR)」 79) · HEAD 20건: 200 19 · 401 1(wsj 유료벽) — 단 15건은 구글 응답이라 원문 생존 실측은 5건뿐 |
+| 보도→수집 | 중앙값 2일 · p90 7일 · 최대 10일 · 미래 0 · publishedAt 은 날짜만(T00:00Z) |
+| 종류·출처 | aggregator 80 · world_press 13 · kr_press 7 |
+| DeepSeek 관문 7일 | Render 로그·rejected_articles 는 열쇠/DB 없이 못 봄 → 미측. 참고: 로컬 1회(09-24) 호출 286·저장 13·관문 거부 115(incident 20·category_fit 66·확신도 29) |
+고칠 것 후보 → 맨 아래 「다음 판 후보」에 합침.
+
+━━ ■4 방송 추적 〔①〕〔③〕 ━━
+ⓐ channel_id (2026-10-10 채널 페이지 소스 externalId · RSS <title> 로 재확인)
+| 프로그램 | 채널 | channel_id | 비고 |
+|---|---|---|---|
+| MBC PD수첩 | MBC PD수첩 | UCawCv9kO2UXbTtsK4EammRQ | @MBCPDnote(핸들 주소는 404, /channel 로 확인) |
+| MBC 스트레이트 | 탐사기획 스트레이트 | UCSnghwknYf04dRFBtOtY8xA | |
+| SBS 그것이 알고 싶다 | 그것이 알고싶다 | UC_U34UlsS9Mp5ZgvsEA7irw | |
+| SBS 스페셜 | 달리 [SBS DALI] - SBS 공식 교양 채널 | UCPx-7AKiN1Z_qEVKhLQ5pAw | 전용 채널 없음 → 공용 교양 채널 |
+| KBS 추적60분 | KBS 추적60분 | UCy-6oZwPwrR_W-zYnqLD8dg | |
+| KBS 시사기획 창 | KBS시사 | UCEb31RoX5RnfYENmnyokN8A | 공용(사사건건 등 함께) |
+| KBS 다큐인사이트 | KBS 다큐 | UC4LW3sOslC14Vn5bcoNUBkg | 공용 |
+| EBS 다큐프라임 | EBSDocumentary (EBS 다큐) | UCFCtZJTuJhE18k8IXwmXTYQ | 공용 |
+| 뉴스타파 | 뉴스타파 Newstapa | UCeFUGS2VCOb6DO3BiUgvwNA | |
+등록: backend/data/broadcast_youtube_rss.json(9) → RSS https://www.youtube.com/feeds/videos.xml?channel_id=<id> · 열쇠 0 · 종류 broadcast · 프로그램 이름.
+ⓑ 관문: 제목+설명에 지시서 핵심어 14개 중 하나 → 그때만 DeepSeek(입구 게이트와 같은 기준 high·fit·비사건) → 저장: 제목 · 프로그램(source) · 게시 날짜(KST, published_at 기존 규약=날짜만 — 정확한 게시 시각은 raw_body 첫 줄) · 영상 URL(source_url) · 설명 요지(summary=DeepSeek 요약, 없으면 설명 앞 300자) · source_type=broadcast. 키워드 사건사고 거름망은 방송에 쓰지 않음(탐사 방송이 막힘) · DeepSeek 없음/판정 없음 → 저장 안 함 · 거부분은 rejected_articles 에 domain 비우고 격리(youtube.com 이 기사용 자동 블랙리스트에 섞이지 않게) · 중복은 영상 URL 로만 · 기사 통계(한국 비중)에 섞지 않음 · 낱말 「재활용」 은 「재활」 로 치지 않음(핵심어 목록 자체는 그대로).
+ⓒ 길: kind 열 없음 → **기존 열 source_type='broadcast' 로 구분**(지금 바로 동작). 묶음 SQL 로 kind 추가 · 적용 뒤 수집기가 방송 행 kind='broadcast' 를 맞춤(열 확인 뒤에만).
+ⓓ 공개 목록·검색·분류·top 등 기본 = 기사만(source_type NULL 포함 · 배포 뒤 top 의 NULL 행 1636 보임 확인) · `?kind=broadcast` 면 방송만(latest·latest-paged·category·search). 프런트 변경 0.
+ⓔ 첫 실행 = 읽기 전용 모드(`npx ts-node src/crawler/broadcast.ts`, DB·DeepSeek 없음) 2회(10:3x · 10:4x). YouTube RSS 가 같은 주소에 404/500 을 섞어 내어 회당 1~2채널 실패 · 두 회를 합치면 9채널 모두 읽힘.
+| 채널 | 읽음 | 핵심어 통과 | 통과 제목(요지) |
+|---|---|---|---|
+| PD수첩 | 15 | 0 | — |
+| 스트레이트 | 15 | 0 | — |
+| 그것이 알고 싶다 | 15 | 2 | 「우연한 고백과 세 명의 용의자」·「영도 청학동 살인 사건」(설명 속 게임) |
+| SBS 스페셜(달리) | 15 | 0 | — |
+| 추적60분 | 15 | 3 | 「그들의 폰에는 스토커가 산다」 본편·예고 · 「비면식 스토킹」(설명 속 「온라인 게임 방송」) |
+| 시사기획 창(KBS시사) | 15 | 4 | 교도소 「우표」 도박 2 · 국정감사 2 |
+| 다큐인사이트(KBS 다큐) | 15 | 2 | 자영업 창업 · 페니실린(약물) |
+| EBS 다큐프라임 | 15 | 0(1회차 「재활」=재활용 오탐 → 고친 뒤 0) | — |
+| 뉴스타파 | 15 | 0 | — |
+| 합계 | 135 | 11 | 대부분 DeepSeek 관문에서 걸러질 꼴(중독 편 아님) |
+PD수첩 2026-08-11 「도박소년이 된 내 아들」: 실제 영상 PRjJ-Pz7Ep8(채널 UCawCv9kO2UXbTtsK4EammRQ, 제목 「[PD수첩] "도박소년이 된 내 아들" - 2026년 8월 11일 밤 10시 20분 방송」) → 핵심어 「도박」 통과. 단 RSS 는 최근 15개만 주므로 지금 피드 창 밖(소급 수집 안 됨). DeepSeek 판정은 로컬에서 열쇠 없이 못 돌려 미측.
+운영 첫 수집(12:00 KST cron) 결과: 13:16 KST 까지 5분마다 공개 API 확인 → 방송 저장 0건 · 같은 시각 기사도 새로 0건(최신 id 5345 · total 3419 그대로). cron 이 돌았는지·채널별 핵심어 통과·DeepSeek 판정 수는 Render 로그를 볼 수 없어 미측(미측 ≠ 0). 읽기 전용 표 꼴로는 중독 편이 피드 창에 없어 0건이 맞는 결과일 수 있음.
+ⓕ 시험 9건: RSS 파싱(Atom→ID·제목·설명·시각·URL·썸네일) · 아홉 채널 주소(열쇠 없음) · 핵심어 통과/탈락(PD수첩 제목 통과·재활용 탈락) · DeepSeek 결정(핵심어 탈락은 호출 안 함 · 없음/판정 없음 저장 안 함 · 게이트 기준) · 저장 행(source_type=broadcast · 프로그램 · URL · KST 날짜 · 요지 · 원자료 시각) · KST 경계·요지 정리 + 공개 목록 방송 제외/전용 조회(articles.service.spec).
+
+━━ ■5 로컬 .bat 〔②〕 ━━
+| 파일 | 전 | 후 |
+|---|---|---|
+| run-crawler.bat | cd /d D:\addicted-news\backend | cd /d "%~dp0backend" |
+| setup-schedule.bat | /tr "C:\addicted-news\run-crawler.bat silent" (+안내 줄) | /tr "%~dp0run-crawler.bat silent" |
+| start.bat | cd /d C:\addicted-news\backend · \frontend | cd /d "%~dp0backend" · "%~dp0frontend" |
+내용 그대로(CRLF 유지). 실행 확인 = 공백 있는 임시 사본 폴더에서 다른 폴더를 현재 위치로 두고: run-crawler → 가짜 npm 이 「사본\backend」 에서 불림·로그 생성 · start 의 cd 두 줄 → 사본\backend·\frontend · setup 의 등록 줄 → /tr 이 사본의 run-crawler.bat 을 가리킴. 진짜 실행은 안 함(수집기=운영 DB, 작업 등록=스케줄러 변경). 참고: 옛 setup 은 C:\ 를 가리켜 이 PC 에서 고장이었음. 경로에 공백이 생기면 /tr 따옴표가 깨지는 것은 옛 꼴과 같음.
+
+━━ ■6 배포·전후 ━━
+push main 10:39:36 → health commit = 7b592c0 확인 10:40:45 KST(2번째 시도).
+| | 전 | 후 |
+|---|---|---|
+| / | 404 | 200 |
+| /api/health | 404 | 200 · commit 7b592c0 |
+| /articles/latest 100 | id 5133–5345 · aggregator 80/world 13/kr 7 · ko 86/en 14 | 같음 |
+| ?kind=broadcast | (매개변수 무시 → 기사 목록) | 방송만: 0건(첫 cron 전) → 방송만: 0건(12:00 cron 뒤 13:16 KST 까지) |
+| latest-paged total | 미측(전) | 3419 |
+| 방송 통과 | — | 핵심어 11/135(읽기 전용) · DeepSeek 통과 저장 0 · 판정 수 미측(Render 로그) |
+| 시험 | jest 79 통과 | jest 102 통과 · nest build 통과 · tsc 오류 0 |
+
+━━ 바뀐 파일(커밋 ⓑ 7b592c0) ━━
+backend: src/app.controller.ts · app.controller.spec.ts · app.service.ts · app.module.ts · articles/article.entity.ts · articles.controller.ts · articles.service.ts · articles.service.spec.ts(새) · crawler/broadcast.ts(새) · broadcast.spec.ts(새) · cleanup_policy.ts(새) · schema_probe.ts(새) · judge_cleanup.ts · judge_cleanup.spec.ts(새) · judge_article.ts · judge_gate.spec.ts · incident_cleanup.ts · lang_cleanup.ts · newsCrawler.ts · sourceConfig.ts · data/broadcast_youtube_rss.json(새)
+root: run-crawler.bat · setup-schedule.bat · start.bat
+docs: docs/governance/sql/APPLY_20261010_news_bundle.sql(새)
+video_pipeline(잔일): lib/fetch.py · existing_uploads.audit.json · install_youtube_publisher_task.ps1 · publisher-requirements.lock.txt · run_youtube_publisher.ps1(-u)
+Git 밖: .publisher-runtime\data\run_youtube_publisher.ps1(-u, Git 과 동일)
+그대로 둔 것: .gitignore · video_pipeline/.gitignore · video_pipeline/README.md(수정됨·미커밋) · article_id.* · frontend-v2/ · 루트 package-lock.json · build_all_log.txt · Render 설정 · 작업 스케줄러 · DB 데이터 · 지운 것 0.
+
+━━ 미측 ━━
+- Render 대시보드 실제 설정(healthCheckPath 등): 열쇠 없음 → render.yaml(초안)만 읽음.
+- DeepSeek 관문 통과/거절 7일: Render 로그·rejected_articles 접근 불가(열쇠·DB 직접 접속 금지).
+- raw_body 있음 비율: 공개 API 비노출.
+- 방송 DeepSeek 판정: 로컬은 열쇠가 .env 안이라 못 돌림 · 운영 12:00 cron 은 방송·기사 모두 새 저장 0건이고 cron 실행 여부·판정 수는 Render 로그 접근 불가 → 미측(위 ■4ⓔ).
+- 「도박소년이 된 내 아들」 RSS 수집: 피드 창(최근 15개) 밖.
+- 묶음 SQL 적용 뒤 동작(soft 삭제·숨김·kind): 열이 아직 없어 운영 확인 불가 — 시험으로만 확인.
+
+━━ 다음 판 후보(NEWS-Q2~) ━━
+1. 묶음 SQL d775dc44 오너 적용 → 웹 재시작 → 주간 cleanup 이 soft 삭제로 돌아오는지 첫 일요일(10-11 03:00 KST 뒤는 아직 후보만) 확인.
+2. sourceUrl 79% news.google.com · 출처 이름 「Google News (KR)」 79 → 원문 URL·매체명 해석(서재 카드 출처 정확성 ③).
+3. 세계 보도 14% · MAX_FOREIGN 100 인데 14건 → 세계 수집 약함(①).
+4. publishedAt 날짜만(varchar/T00:00Z) → 보도 시각 timestamptz(방송 게시 시각도 이 열로).
+5. 보도→수집 p90 7일·최대 10일 → 최신성 기준(예: 72시간) 오너 정의 필요.
+6. YouTube RSS 404/500 섞임 → 재시도 6회로도 하루 1~2채널 빠질 수 있음: 재시도 늘림 또는 실패 채널만 다음 실행 앞쪽으로.
+7. 방송 핵심어 오탐(설명 속 「게임」·「도박」 일반어) → DeepSeek 비용 주 수십 건 수준인지 cron 로그로 확인 후 제목 우선 규칙 검토(오너 결정).
+8. admin 화면의 기사 삭제도 하드 삭제 → soft 로 맞출지(사람 판단 경로).
+9. 관문 통과/거절·raw_body 비율을 Render 밖에서 볼 집계(crawl_daily 확장 또는 health 에 숫자만).
+10. render.yaml(초안)과 대시보드 실제 값 맞추기(서비스 이름 addicted-news-api ↔ addicted-news-backend · healthCheckPath).
+
+NEWS-Q1 끝
