@@ -1,0 +1,153 @@
+[경보] 배포 확인(84123fa · 2026-10-10 17:33:33 KST) · 구글뉴스 원문 해석이 그동안 0%였던 원인(요청 배열 두 겹 → 400) 고침(로컬 5/5) · DeepSeek 앞 중복 확인 · 기사 소스 82 → 101(활성 · 방송 9 별도) · 코드 속 분야 글자 174 → 0 · 단 보관층·보도 시각·출처 등급·기존 행 원문 해석·crawl_runs 는 묶음 SQL 2(fc15ba1b) 오너 적용 뒤부터 켜짐 · 새 수집기 본체는 DB·열쇠 금지로 로컬 실행 못 함 → 첫 실전 = 10-11 12:00 KST cron
+
+NEWS-Q2 보고서 · 2026-10-10 · 가지 claude/news-q2 → main · 실행 = 데스크탑 Claude Code
+
+━━ ■0 시작 〔②〕 ━━
+ⓐ 시작 HEAD = 0f876b9(NEWS-Q1 보고서 · origin/main 과 같음) · 커밋 ⓐ 97554b7(지시서) → ⓑ 84123fa(코드) → ⓒ 이 보고서.
+ⓑ 실측 표
+| 항목 | 실측 |
+|---|---|
+| 코드 속 분야 글자(「중독」·「addiction」, 대소문자 무시, src·시험 파일 제외) | 174곳 · 24파일(newsCrawler 63 · sourceConfig 31 · deepseek_summary 15 · judge_prompt 9 · addictionFilter 9 · articles.service 7 · …) |
+| 수집 흐름 | 피드 읽기 → 세션 안 제목 중복 → 스니펫 핵심어 → (필요 시) 원문 추출 → 구글 링크 해석 → 블랙리스트 → 핵심어 관문 → 본문 길이 → **DeepSeek(요약+판정 2회)** → 언어 가드 → 저장 직전 **DB 중복 확인(isDuplicateInDb)** |
+| 중복 확인 자리 | DB 중복은 DeepSeek **뒤**(저장 직전)에만 → 어제 저장·거부한 기사도 날마다 다시 DeepSeek(오너 로그: 73회 → 저장 1) |
+| DeepSeek 단가 | 모델 deepseek-v4-flash(DEEPSEEK_MODEL 기본) · 공개 가격 입력 $0.14/M · 출력 $0.28/M(3자 출처, 공식 표 미확인) · 기사 1건 ≈ 요약 1 + 판정 1 = 2회 · 입력 ≈ 4~6천 토큰 · 출력 ≈ 0.5~1천 토큰 → 기사당 ≈ $0.001(추정 · 이제 실제 토큰은 실행마다 로그·crawl_runs 에) |
+| 구글뉴스 RSS 링크 꼴 | https://news.google.com/rss/articles/CBMi…?oc=5 (원문 주소를 담은 id) · <source>매체명</source> 칸 있음 · 옛 해석기는 batchexecute f.req 를 두 겹 배열로 보내 **400 → 구글 링크 그대로 저장**(표본 79%의 원인). 세 겹으로 고치면 5/5 원문(로컬 실측) |
+| 피드(로컬, 옛 방식 = 기본 UA → 403/406 뒤에만 브라우저 UA) | 82개 중 71 성공 · 11 실패(402 1 · 404 4 · 403 2 · DNS 1 · XML 2 · 시간초과 1) + 0건 피드 2 · 멈춘 피드 3(CNN 2023 · Xinhua 2018 · WHO 2026-02) |
+
+━━ ■1 분야 설정 파일 〔③〕 ━━
+backend/data/field_profiles/addiction.json(새) · 기본 이름 = data/field_profiles/DEFAULT("addiction") · 환경변수 FIELD_PROFILE 로 바꿈.
+| 칸 | 내용 |
+|---|---|
+| keywords | strong/negative(옛 data/addiction_keywords.json 그대로 — 그 파일은 더 읽지 않음·지우지 않음) · core 21 · 광고 감점 · 중복 불용어(분야 상용어 33) · 사건 패턴 18 · 정책 맥락 63 |
+| categories | 분류 5 · 기본 · slug 지도(공개 API) · 별칭 · 분류별 낱말 · 핵심어 필요 분류 |
+| gate | publish 기준(fit·비사건·high) · 사건·사고 = archive · 확신 낮음 = archive · 분류 불일치(애매)+핵심어 = archive · 하루 DeepSeek 상한 400 |
+| prompts | 요약 규칙 · 판정 기준 · 판정 절차 · 스키마 이름 — 옛 문자열과 **바이트 단위로 같음**(요약·번역·판정 3개 비교 true) |
+| sources | 신문 피드 파일 이름 · 구글뉴스 26 · 전문 3 · 기관 9 · 학술 2 · 방송(파일·핵심어 14·오탐 낱말) · Statory 검색어 |
+| 그 밖 | 「최신」 72시간 · 사이트 이름·알림 머리 · DB 이름 기본값 · 점검 표본 · 백과 파일·링크 제외어 · Statory scenario |
+코드 쪽: field_profile.ts(읽기·검증·기본값) · field_filter.ts(옛 addictionFilter 본체, 낱말은 설정에서 — 옛 파일은 export * 한 줄 호환) · sourceConfig·newsCrawler·deepseek_summary·judge_prompt·broadcast·articles.service·admin·encyclopedia·reports·정리 도구들의 고정 목록·문구·DB 이름 기본값을 설정으로.
+분야 글자: 174 → **0**(시험 field_profile.spec 이 src 전체를 훑어 0 을 확인). 시험: 설정 없음 → 시끄럽게 실패 · 이름 검증 · 빠진 칸 알림 · 다른 분야(testfield) 로 읽으면 거름망·소스·프롬프트·분류·DB 이름이 그 설정을 따름 · 기본 설정 값 확인.
+
+━━ ■2 중복 확인을 DeepSeek 앞으로 〔①〕〔②〕 ━━
+dedup.ts(새): 정규화 URL(https·소문자 호스트·www·#·utm_*·추적 쿼리 제거·끝 / 제거·쿼리 정렬) + 정규화 제목(따옴표·구두점·끝의 「 - 매체명」 무시).
+- 실행 시작에 기억표 = 최근 30일 저장분(soft 삭제·차단 포함) + 최근 30일 판정 거부분(rejected_articles, judgment_missing 제외 → 호출 실패분은 다시 판정 받음).
+- 후보마다 ① 피드 링크·원제로 기억표 → ② 구글 링크를 풀면 원문 URL 로 다시 → ③ 기억표에 없으면 URL 을 DB 에서 기간 없이 직접 조회 → 있으면 DeepSeek·본문 추출 0 · 「DeepSeek 앞 중복 건너뜀 N」 로그(방송·Statory 길도 같음).
+- 하루 상한 deepseek_budget.ts: env DEEPSEEK_DAILY_CAP > 설정 400 · 기사 하나(2회)가 들어갈 자리가 없으면 그날 남은 후보 중단·로그 1회 · 오늘 앞 실행 수는 crawl_runs 가 있을 때 더함(없으면 이번 실행만).
+- 저장 직전 중복 확인(isDuplicateInDb)은 그대로 둠(이중 안전).
+시험: 쿼리 꼬리만 다른 URL → 호출 0 · 같은 원제 → 호출 0 · DB 에만 있는 URL → 호출 0, 새 것만 호출 1 · 기억표 채움/실패 시 빈 표 · 상한 계산·로그 1회.
+
+━━ ■3 원문 URL 해석 〔③〕 ━━
+- 원인 고침: google_news_url.ts 의 f.req 를 세 겹 배열로(두 겹 → 400). 로컬 실측 5/5 원문(아시아경제·기호일보·KBS·한국경제 등).
+- 새 기사: 구글 링크는 저장 전에 한 번만 풀고(옛: 두 번 시도) source_url = 원문 · google_url = 구글 링크(구글이 아닌 피드는 이제 google_url 비움) · 출처 이름 = 피드 <source>(매체명) → 없으면 원문 도메인 · outlet_id = 원문 도메인 · 등급 = press(풀리면) / aggregator(못 풀면) · 못 풀면 구글 링크 유지 + url_resolve {status:pending, attempts:1}.
+- 기존 행(url_resolve.ts): 실행마다 source_url 이 구글 링크인 행을 오래된 순으로 최대 100건 → 성공이면 source_url·google_url(보존, 없으면 옛 링크)·source(제목 꼬리 매체명 → 도메인)·outlet_id·source_grade=press 갱신, 바꾸기 전 값은 url_resolve.prev 에(되돌리기) · 실패는 attempts+1, 3회째 status=failed 표시 후 건너뜀 · url_resolve 열(묶음 SQL 2) 있을 때만. 구글 링크 행 ≈ 2,700(표본 79% × 3,420 추정) → 하루 100건이면 약 4주(하루 2회 cron 이면 2주).
+시험: 성공(원문·보존·도메인·매체명·prev) · google_url 있으면 유지 · 실패 3회 → failed · 되풀이 SQL(failed 제외·오래된 순·100) · 요청 배열 세 겹.
+
+━━ ■4 피드 건강 〔①〕 ━━
+feed_fetch.ts(새): 처음부터 브라우저 UA·Accept · 403/406/429 는 1.5초 쉬고 다른 UA 로 1회 · 깨진 XML 은 BOM·앞 쓰레기·제어문자·맨 & 를 고쳐 1회 더 · format html(공지 목록 정규식)·json(기관 뉴스 API) · 주소의 {yesterday_mdy}.
+죽은 피드 처리(2026-10-10 매체 사이트 실측 · Render 로그의 14+2 목록은 볼 수 없어 로컬 실측으로 대신):
+| 피드 | 처리 |
+|---|---|
+| El Universal(wpr-017) | 교체 → /arc/outboundfeeds/rss/category/mundo/?outputType=xml (200·83건) |
+| El Espectador(wpr-019) | 교체 → /arc/outboundfeeds/discover/ (200·20건, 옛 주소 0건) |
+| Mail & Guardian(wpr-040) | 교체 → https://mg.co.za/rss/ (200·50건) |
+| Korea Herald(wpr-046) | 교체 → /rss/kh_World (200·50건, 옛 주소 0건) |
+| USA Today(009) · Animal Político(020) · Reuters(022) · Middle East Eye(033) · The Nation NG(039) · CNN(003, 2023 멈춤) · Xinhua(049, 2018 멈춤) | 대체 없음 → 비활성(사유 기록) |
+| Addiction Recovery eBulletin(spec-002) · Sober Nation(spec-004) | 대체 없음 → 비활성 |
+| us-drugfree | /feed/ 가 홈페이지 HTML 로 301 — XML 오류는 HTML 속 스크립트의 & · 피드 자체가 없음 → 비활성 |
+| WHO(옛 RSS, 2026-02 멈춤) | 비활성 → 기관 소스 WHO 뉴스 JSON 으로 대체 |
+| 동아일보·프레시안·Politico Europe(Render 로그 실패) | 로컬에서는 브라우저 UA 로 200 → 처음부터 UA 를 보내게 고침(Render 에서 되는지는 다음 cron 에 확인) |
+| The Fix(spec-001, 04-29) · Treatment Magazine(spec-003, 01-06) | 피드는 살아 있으나 매체가 조용함 → 그대로 |
+피드 건강 표: 실행마다 「소스 N · 성공 · 실패 + 실패 이름」을 로그 끝에, crawl_runs.failed_feeds·per_source 에. 시험: UA 헤더 · 403 재시도 1회 · 깨진 XML 고쳐 읽기 · html/json 목록 · 비활성 피드가 크롤 목록에서 빠짐.
+
+━━ ■5 소스 넓히기(설정 파일에만) 〔①〕 ━━
+ⓐ 구글뉴스 26(옛 KR 5 + 한국어 11 + 영어 10): 온라인 도박·마약 치료·펜타닐/오피오이드·음주 정책·금주/절주·게임 중독/게임이용장애·스마트폰 과의존/숏폼·금연/담배 규제·전자담배·도파민·회복/자조모임 / gambling addiction·opioid·fentanyl·alcohol policy·gaming disorder·smartphone/social media addiction·tobacco control·vaping·harm reduction·addiction recovery. 새 피드는 피드당 20건까지.
+ⓑ 기관 9: WHO(JSON API) · NIDA(목록 HTML) · NIAAA(목록 HTML, 최신 2025-12) · UNODC(목록 HTML) · 보건복지부 보도자료 RSS · 식약처 보도자료 RSS · 한국도박문제예방치유원 언론보도(목록 HTML) · SAMHSA = 미측(이 PC 에서 사이트 전체 403 → 비활성) · EUDA = RSS 는 있으나 Node 연결 Cloudflare 403 → 비활성.
+ⓒ 학술 2: ScienceDaily addiction RSS · EurekAlert(RSS 없음 → 어제 날짜 목록 HTML).
+출처 등급 칸 source_grade(기관 > 학술 > 언론 > 집계기)을 저장 행에(열 있을 때) · 기관·학술을 맨 먼저 크롤(같은 사건이면 기관판이 대표).
+첫 실행(읽기 전용 · source_probe.ts · DB·DeepSeek 없음 · 2026-10-10 17:19 KST · 배포 뒤 17:36 다시 = 같은 수):
+| 무리 | 소스(활성) | 읽음 | 핵심어 후보 |
+|---|---|---|---|
+| 기관 | 9(7) | 139 | 16(NIDA 8 · NIAAA 2 · UNODC 2 · 복지부 2 · 식약처 1 · 치유원 1 · WHO 0) |
+| 학술 | 2(2) | 32 | 10(ScienceDaily 10) |
+| 전문 | 4(2) | 20 | 11 |
+| 국내 신문 | 10(10) | 274 | 3 |
+| 세계 신문 | 60(53) | 1,286 | 2 |
+| 구글뉴스 한국어 | 16(16) | 370 | 262 |
+| 구글뉴스 영어 | 10(10) | 200 | 137 |
+| 전문·기관 직접(옛 고정 3) | 3(1) | 10 | 0 |
+| 방송 | 9(9) | 135 | 11 |
+| 합계 | 123(110) | 2,466 | 452 |
+※ 후보 = 제목+피드 요약의 핵심어만 본 수. 신문 피드는 요약이 짧아 실제 크롤에서는 원문 추출 뒤 다시 거르므로 여기 수보다 늘 수 있고, 반대로 중복·DeepSeek 관문에서 줄어든다. 활성 110 전부 읽기 성공(실패 0).
+
+━━ ■6 관문 두 층 〔①〕〔③〕 ━━
+tier.ts(새): publish = 지금 기준 그대로 · archive = 확신 낮음(fit=true, high 아님) · 사건·사고(is_incident 또는 키워드 사건 패턴) · 분류 불일치(fit=false 인데 확신 high 아님) — 셋 다 분야 핵심어가 있을 때만 · reject = 확실히 무관(fit=false·high) · 판정 없음(DeepSeek 실패 → fail-closed) → rejected_articles 지금처럼.
+- tier 열이 있을 때만 archive 저장(엔티티에는 insert:false, 저장 뒤 열 채우기) · archive 행의 tier 기록이 실패하면 blocked=true 로 막음(공개 안 됨) · 열이 없으면 archive → reject(옛 동작 = publish 만).
+- tier 열이 있고 설정이 사건 = archive 이면 키워드 사건 거름망을 통과시켜 판정 뒤 보관(옛: DeepSeek 전에 버림).
+- 공개 API: latest·latest-paged·category(+paged)·search·top·featured·rapha·issue 는 publish 만 · ?tier=archive 면 보관만(목록·검색·분류) · 열이 없으면 조건 없음(옛 동작), archive 요청은 빈 결과 · 상세(:id)는 층 무관. 방송 길은 publish 만(보관 없음, 다음 판 후보).
+시험: 세 갈래 · 설정이 reject 면 보관 없음 · 열 없음 → 옛 동작 · 공개 조건(publish 기본·archive 전용·열 없을 때 빈 결과).
+
+━━ ■7 보도 시각·「최신」 〔③〕 ━━
+published_ts timestamptz(묶음 SQL 2 · 기존 행 = published_at 날짜의 KST 0시) · 수집기는 피드 시각(isoDate/pubDate), 없거나 틀리면 수집 시각 · 방송은 YouTube 게시 시각 · 공개 API 응답에 publishedTs(열 있을 때) · isFresh(보도 시각, 없으면 보도 날짜 KST 0시가 72시간 안 · 설정 freshness_hours · 지우지 않음 · 미래 시각은 아님). 참고: published_at 은 API 에 2026-10-09T00:00:00.000Z 꼴로 나와 DB 에서 date 형일 수 있어 묶음 SQL 은 published_at::text 로 파생.
+시험: 보도 시각 · 날짜만 · Date 형 · 없음 · 미래.
+
+━━ ■8 집계·건강 〔②〕 ━━
+- crawl_runs(묶음 SQL 2): 실행마다 한 행 = 시각 · 소스 수 · 피드 성공/실패 · 실패 목록 · 읽음 · 후보 · 중복 · DeepSeek 호출·토큰·비용 추정 · 저장 · 보관 · 거절 · 시간초과 · 소스별 표(per_source: 읽음/후보/중복/호출/저장/보관/거절/실패) · 기존 행 원문 해석 결과. 표가 없으면 로그에만.
+- GET /api/health = {ok, commit, startedAt, lastRun} · lastRun = 마지막 실행 숫자 요약(표 없으면 null · 60초 기억 · 실패해도 200).
+- 관리자 화면 기사 삭제 → soft(deleted_at 찍기, remove 호출 없음) · 열이 없으면 지우지 않고 503.
+- YouTube RSS: 지난 실행 실패 채널을 맨 앞으로(crawl_runs 있을 때) · 재시도 6 → 10회.
+시험: crawl_runs 한 행 · 피드 건강 표 · 실패 채널 맨 앞 · 재시도 10 · 열 채우기(있는 열만·publish 생략·archive 실패 시 차단) · 관리자 soft 삭제/열 없음 · health lastRun(숫자만·60초 기억)·DB 없으면 null.
+
+━━ ■9 묶음 SQL 2 〔②〕 ━━
+docs/governance/sql/APPLY_20261010_news_bundle2.sql · 묶음 판 fc15ba1b(BUNDLE BODY sha256 앞 8자리 · 묶음 1 d775dc44 와 같은 셈법으로 검산) · BEGIN/COMMIT · 되풀이 안전(IF NOT EXISTS · NULL 인 칸만 채움).
+내용: tier text NOT NULL DEFAULT 'publish' · published_ts timestamptz NULL(+ 기존 행 파생) · source_grade text NULL(+ 기존 행 파생: who·drugfree=institution · docdocdoc=press · aggregator=aggregator · 그 밖 press) · url_resolve jsonb NULL · crawl_runs 표 + 색인.
+확인표 8줄: ① bundle fc15ba1b ② tier ③ published_ts ④ source_grade+url_resolve ⑤ crawl_runs 표 ⑥ published_ts 파생(남은 NULL 0) ⑦ source_grade 파생(남은 NULL 0) ⑧ tier 전부 publish — 끝 열 ok.
+검사: PostgreSQL 파서(pglast/libpg_query)로 묶음 1·2 구문 통과(문장 8·16). 공개 API 로 본 3,420건 published_at 은 전부 올바른 날짜.
+**오너 적용 → 웹 재시작**(웹은 시작할 때 열을 확인함 · 수집기·정리 cron 은 실행마다 확인).
+
+━━ ■10 시험·배포·전후 〔②〕 ━━
+jest 102 → 144 통과(새 시험 파일 6: field_profile · dedup · url_resolve · feed_fetch · tier · crawl_runs + app 1) · nest build 통과 · tsc 오류 0.
+push main 17:32:22 → health commit = 84123fa 확인 17:33:33 KST(2번째 시도). 배포 뒤 실측(17:35): / 200 · health 에 lastRun 칸(null — crawl_runs 표 없음) · 최근 100 = 배포 전과 같음(id 5186–5346) · 검색·분류·top·?kind=broadcast 정상.
+| | 전 | 후 |
+|---|---|---|
+| 소스(활성 · 기사) | 82 | 101 (+ 방송 9 = 110) · 비활성 13 사유 기록 |
+| 피드 성공(로컬 실측) | 71/82(옛 방식) | 110/110(읽기 전용 점검) |
+| 구글뉴스 원문 해석 | 0/5(400) | 5/5(로컬) · 운영 저장분 비율은 다음 날부터 |
+| 최근 100 의 구글 링크 | 78/100(17:32) | 78/100(17:35 · 기존 행 해석은 묶음 SQL 2 뒤 · 새 저장분은 다음 cron 부터) |
+| 코드 속 분야 글자 | 174 | 0 |
+| DeepSeek 앞 중복 확인 | 없음 | 기억표(30일) + DB URL |
+| /api/health | {ok,commit,startedAt} | {ok,commit,startedAt,lastRun} · lastRun=null(표 없음) |
+| ?tier=archive | 매개변수 무시(기사 5건) | 0건(tier 열 없음 → 빈 결과) |
+| 응답 칸 isFresh | 없음 | 있음(최근 100 중 3건 true · publishedTs=null, 열 없음) |
+| latest-paged total | 3,420 | 3,420(같음) |
+| 시험 | 102 | 144 |
+
+━━ 바뀐 파일(커밋 ⓑ 84123fa · 53파일) ━━
+새: backend/data/field_profiles/addiction.json · field_profiles/DEFAULT · src/crawler/field_profile.ts · field_filter.ts · feed_fetch.ts · dedup.ts · deepseek_budget.ts · tier.ts · crawl_runs.ts · url_resolve.ts · row_extras.ts · source_probe.ts · 시험 6(field_profile · dedup · url_resolve · feed_fetch · tier · crawl_runs) · docs/governance/sql/APPLY_20261010_news_bundle2.sql
+고침: newsCrawler.ts · sourceConfig.ts · deepseek_summary.ts · judge_prompt.ts · google_news_url.ts · broadcast.ts · schema_probe.ts · raw_body_store.ts(새 행 id 돌려줌) · addictionFilter.ts(호환 한 줄) · crawler_db.ts · crawl-once.ts · 정리·점검 도구 9(DB 이름 기본값·불용어·표본·기본 분류) · articles(entity·service·controller) · admin(service·controller) · app(service·controller·spec) · encyclopedia 3 · reports.controller · data/world_press_rss.json(교체 4·비활성 7, 옛 주소는 rss_url_before 로 남김) · data/specialty_press_rss.json(비활성 2)
+그대로 둔 것: .gitignore · video_pipeline/.gitignore · video_pipeline/README.md(수정됨·미커밋) · article_id.* · frontend-v2/ · 루트 package-lock.json · build_all_log.txt · data/addiction_keywords.json(안 읽음·지우지 않음) · Render 설정 · DB 데이터 · 지운 것 0.
+참고: 작업 중 저장소 안에 생긴 임시 파일 4개(백그라운드 실측의 curl 결과 backend/t.xml·w.html·x.html, pglast 내려받기 .whl — 모두 이번 세션 16:51~17:25 생성)는 지우지 않고 세션 작업 폴더로 옮김. 커밋에 들어가지 않음.
+
+━━ 미측 ━━
+- 새 수집기 본체의 실전 실행: 로컬은 .env(DB·DeepSeek 열쇠)·DB 직접 접속 금지라 못 돌림 → 단위 시험·형 검사·빌드·읽기 전용 점검까지만. 첫 실전 = 10-11 12:00 KST cron(Render 로그·묶음 SQL 2 적용 뒤 health lastRun 으로 확인).
+- Render 쪽 피드 실패 14+2 의 정확한 목록·DNS 실패: Render 로그를 볼 수 없음 → 로컬 실측으로 대신(동아·프레시안·Politico 는 로컬 200).
+- SAMHSA 피드·목록: 이 PC 에서 사이트 전체 403.
+- DeepSeek 공식 단가 표: 3자 출처 값($0.14/$0.28 per M)을 기본값으로 둠(env 로 바꿈).
+- 기존 구글 링크 행의 실제 해석 성공률: url_resolve 열(묶음 SQL 2) 적용 뒤 첫 실행부터.
+- archive 로 갈 하루 건수·DeepSeek 하루 실제 호출 수: 실전 뒤 crawl_runs 로.
+
+━━ 다음 판 후보(NEWS-Q3~) ━━
+1. 묶음 SQL 2 적용 뒤 첫 cron 의 crawl_runs·health lastRun 으로 저장/보관/거절/중복/비용 실측 → 상한 400·피드당 건수 조정.
+2. 수집 시간: 소스 82 → 101 + 구글 원문 해석(건당 ≈1.5초)으로 40분 상한에 닿을 수 있음 → 방송이 맨 뒤라 밀릴 위험 · 방송을 앞으로 또는 구글 피드 병렬화.
+3. 기존 구글 링크 행 ≈2,700 → 하루 100건이면 4주 · cron 하루 2회(오너 선택) 또는 되풀이 건수 상향.
+4. 방송 길에도 보관층(지금은 publish 만).
+5. 세계 신문 53개 중 핵심어 후보 2 — 일반 면 피드라 거의 안 걸림 → 건강·과학 면 피드로 바꾸기(분야 설정).
+6. EUDA(Node 403)·SAMHSA(403) 읽는 길(다른 경로·미러) 찾기.
+7. NIAAA 목록 최신 2025-12 · The Fix·Treatment Magazine 조용함 → 대체 전문 매체.
+8. 보관층을 11월 Statory 서재 입구에서 읽는 API(지금은 ?tier=archive 목록).
+9. 기존 행 source(「Google News (KR)」) 를 원문 매체명으로 — 되풀이가 제목 꼬리로 채우지만 꼬리 없는 행은 도메인.
+10. render.yaml 초안을 실제 서비스(이름·healthCheckPath)와 맞추기(NEWS-Q1 이월).
+
+━━ 오너가 뒤에 할 것 ━━
+1. 묶음 SQL 2 적용: docs/governance/sql/APPLY_20261010_news_bundle2.sql 을 Supabase SQL Editor 에서 실행(판 fc15ba1b · 확인표 8줄 끝 열 ok) → Render 웹 서비스 재시작.
+2. (선택) Render 수집 cron 을 하루 2회로: 스케줄 `0 3,15 * * *`(KST 12:00·24:00) — 하루 DeepSeek 상한 400 은 crawl_runs 로 두 실행을 합쳐 셈.
+
+NEWS-Q2 끝
