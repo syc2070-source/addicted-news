@@ -6,16 +6,21 @@ fetch.py — 백과 항목을 DB(addiction_news)에서 직접 읽어온다.
 """
 import os
 import json
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from pathlib import Path
 
 
 def _load_env():
-    """backend/.env 에서 DB_* 를 읽는다 (python-dotenv 없이 단순 파싱)."""
+    """게시 전용 env 또는 backend/.env 에서 DB_* 를 읽는다."""
     # video_pipeline/lib/fetch.py -> backend/.env
-    env_path = Path(__file__).resolve().parents[2] / "backend" / ".env"
+    configured = os.environ.get("PUBLISHER_DB_ENV", "").strip()
+    env_path = (
+        Path(configured).expanduser().resolve()
+        if configured
+        else Path(__file__).resolve().parents[2] / "backend" / ".env"
+    )
     conf = {}
+    if configured and not env_path.is_file():
+        raise RuntimeError(f"게시 전용 DB 환경 파일이 없습니다: {env_path}")
     if env_path.exists():
         for line in env_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -23,10 +28,19 @@ def _load_env():
                 continue
             k, v = line.split("=", 1)
             conf[k.strip()] = v.strip().strip('"').strip("'")
+    if configured:
+        required = ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME")
+        missing = [key for key in required if not conf.get(key)]
+        if missing:
+            raise RuntimeError(
+                "게시 전용 DB 환경 파일의 필수 키가 없습니다: " + ", ".join(missing)
+            )
     return conf
 
 
 def _connect():
+    import psycopg2
+
     c = _load_env()
     return psycopg2.connect(
         host=c.get("DB_HOST", "localhost"),
@@ -51,6 +65,8 @@ def _jsonb(val):
 
 def fetch_one(term_id):
     """단일 항목 dict 반환. 없으면 None."""
+    from psycopg2.extras import RealDictCursor
+
     with _connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(

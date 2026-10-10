@@ -258,7 +258,8 @@ try {
     $OutputEncoding = [Console]::OutputEncoding
     Set-Location -LiteralPath $PipelineRoot
 
-    $arguments = @('-I', '-B', $UploaderPath)
+    # -u: unbuffered stdout so each log line carries its real time (ENC-FIX-1 follow-up)
+    $arguments = @('-I', '-B', '-u', $UploaderPath)
     if ($DryRun) {
         $arguments += @('--dry-run', '--all')
         Write-PublisherLog "DRY-RUN 시작: 기록 $($initialSummary.completed)/$ExpectedCatalogCount, 남음 $($initialSummary.remaining)"

@@ -84,6 +84,12 @@ export class Article {
   @Column({ name: 'judge_status', type: 'varchar', length: 32, nullable: true })
   judgeStatus: string | null;
 
+  // NEWS-Q1: soft 삭제 시각. 열은 오너가 묶음 SQL(docs/governance/sql)로 추가한다.
+  // 열이 없어도 깨지지 않게 SELECT/INSERT/UPDATE 에서 빼 두고, 조건(where)에만
+  // 쓴다 — 그것도 ArticlesService 가 열 존재를 확인한 뒤에만.
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true, select: false, insert: false, update: false })
+  deletedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

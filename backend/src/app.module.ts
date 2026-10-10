@@ -6,6 +6,8 @@ import { ArticlesModule } from './articles/articles.module';
 import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
 import { EncyclopediaModule } from './encyclopedia/encyclopedia.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -36,5 +38,8 @@ import { EncyclopediaModule } from './encyclopedia/encyclopedia.module';
     ReportsModule,
     EncyclopediaModule,
   ],
+  // NEWS-Q1 ■2: GET / · GET /api/health (전에는 등록되지 않아 / 가 404)
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

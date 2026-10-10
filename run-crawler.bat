@@ -19,7 +19,7 @@ if %SILENT_MODE%==0 (
     echo.
 )
 
-cd /d D:\addicted-news\backend
+cd /d "%~dp0backend"
 
 if not exist logs mkdir logs
 

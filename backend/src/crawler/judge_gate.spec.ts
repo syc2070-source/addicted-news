@@ -26,8 +26,9 @@ describe('삭제 실행 가드 (canDelete) — 판정 실패는 절대 삭제 �
     expect(canDelete({ categoryFit: false, via: 'deepseek' })).toBe(true);
     expect(canDelete({ isIncident: false, categoryFit: true, via: 'deepseek' })).toBe(false);
   });
-  it("via 없음/keyword 는 shouldDelete 규칙대로(로컬 폴백)", () => {
-    expect(canDelete({ isIncident: true, via: 'keyword' })).toBe(true);
+  it("via 없음/keyword(휴리스틱)는 삭제 근거 아님 — 후보 표시만 (NEWS-Q1 ■1)", () => {
+    expect(canDelete({ isIncident: true, via: 'keyword' })).toBe(false);
+    expect(canDelete({ isIncident: true })).toBe(false);
     expect(canDelete({})).toBe(false);
   });
 });

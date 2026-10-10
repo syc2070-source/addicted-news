@@ -15,7 +15,8 @@ export type CategoryName =
   | '게임·디지털중독'
   | '중독사회와 회복';
 
-export type SourceType = 'world_press' | 'kr_press' | 'specialty' | 'aggregator';
+// 'broadcast' (NEWS-Q1): YouTube 방송 RSS. SOURCES 에는 넣지 않고 broadcast.ts 가 따로 돈다.
+export type SourceType = 'world_press' | 'kr_press' | 'specialty' | 'aggregator' | 'broadcast';
 
 export interface SourceConfig {
   id: string;

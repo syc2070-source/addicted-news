@@ -1,15 +1,16 @@
 // backend/src/articles/articles.controller.ts
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ArticlesService } from './articles.service';
+import { ArticlesService, parseKind } from './articles.service';
 
+// 목록·검색은 기본 기사만 · ?kind=broadcast 면 방송만(NEWS-Q1 ■4ⓓ)
 @Controller('articles')
 export class ArticlesController {
   constructor(private readonly articlesService: ArticlesService) {}
 
   // 최신 기사 (limit 개)
   @Get('latest')
-  getLatest(@Query('limit') limit?: string) {
-    return this.articlesService.getLatest(Number(limit) || 50);
+  getLatest(@Query('limit') limit?: string, @Query('kind') kind?: string) {
+    return this.articlesService.getLatest(Number(limit) || 50, parseKind(kind));
   }
 
   // TOP 뉴스 (isTop=true인 기사)
@@ -38,8 +39,12 @@ export class ArticlesController {
 
   // 카테고리별 기사 (최신 페이지)
   @Get('category/:key')
-  getByCategory(@Param('key') key: string, @Query('limit') limit?: string) {
-    return this.articlesService.getByCategory(key, Number(limit) || 20);
+  getByCategory(
+    @Param('key') key: string,
+    @Query('limit') limit?: string,
+    @Query('kind') kind?: string,
+  ) {
+    return this.articlesService.getByCategory(key, Number(limit) || 20, parseKind(kind));
   }
 
   // 카테고리별 기사 (페이징)
@@ -48,26 +53,33 @@ export class ArticlesController {
     @Param('key') key: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('kind') kind?: string,
   ) {
     return this.articlesService.getByCategoryPaged(
       key,
       Number(page) || 1,
       Number(limit) || 20,
+      parseKind(kind),
     );
   }
 
   // 기사 검색
   @Get('search')
-  search(@Query('q') q: string, @Query('limit') limit?: string) {
-    return this.articlesService.search(q, Number(limit) || 20);
+  search(@Query('q') q: string, @Query('limit') limit?: string, @Query('kind') kind?: string) {
+    return this.articlesService.search(q, Number(limit) || 20, parseKind(kind));
   }
 
   // 최신 페이지 (페이징)
   @Get('latest-paged')
-  getLatestPaged(@Query('page') page?: string, @Query('limit') limit?: string) {
+  getLatestPaged(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('kind') kind?: string,
+  ) {
     return this.articlesService.getLatestPaged(
       Number(page) || 1,
       Number(limit) || 20,
+      parseKind(kind),
     );
   }
 

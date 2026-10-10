@@ -17,7 +17,7 @@ echo ========================================
 echo.
 
 REM Start backend
-cd /d C:\addicted-news\backend
+cd /d "%~dp0backend"
 echo [1/2] Starting backend (NestJS)...
 start "AddictedNews Backend" cmd /k "npm run start:dev"
 
@@ -26,7 +26,7 @@ echo       Waiting 12s for backend boot...
 timeout /t 12 /nobreak >nul
 
 REM Start frontend
-cd /d C:\addicted-news\frontend
+cd /d "%~dp0frontend"
 echo [2/2] Starting frontend (http-server)...
 start "AddictedNews Frontend" cmd /k "npx http-server -p 8080"
 

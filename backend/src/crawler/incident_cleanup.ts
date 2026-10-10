@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { isIncidentReport, normalize } from './addictionFilter';
+import { hardDeleteEnabled } from './cleanup_policy';
 
 const DIAG = process.env.DIAG === 'true';
 
@@ -250,7 +251,10 @@ async function main() {
 
   // 5) 삭제 실행(articles 만). DRY_RUN 이면 건너뜀.
   let deleted = 0;
-  if (!DRY_RUN && toDeleteIds.length > 0) {
+  if (!DRY_RUN && !hardDeleteEnabled() && toDeleteIds.length > 0) {
+    // NEWS-Q1 ■1: 휴리스틱(키워드/언어 판정)은 후보 표시만. 하드 삭제는 CLEANUP_HARD_DELETE=1 일 때만.
+    console.log(`(후보만) 하드 삭제 깃발 꺼짐(CLEANUP_HARD_DELETE!=1) — 삭제 0, 후보 ${toDeleteIds.length}건은 위 목록·백업에만.`);
+  } else if (!DRY_RUN && toDeleteIds.length > 0) {
     const del = await client.query(`DELETE FROM articles WHERE id = ANY($1::int[])`, [toDeleteIds]);
     deleted = del.rowCount ?? 0;
     console.log(`🗑️  삭제 완료: ${deleted}건`);

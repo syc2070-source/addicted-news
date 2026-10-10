@@ -21,6 +21,10 @@ import { notifyDiscord } from './notifier';
 import { decodeEntities, crossMediaSimilarity } from './text_utils';
 import { crawlerConnectionOptions } from './crawler_db';
 import { insertArticleWithRawBody, RawBodyWriteState } from './raw_body_store';
+import {
+  BROADCAST_SOURCE_TYPE, buildBroadcastRow, decideBroadcast, fetchBroadcastItems, loadBroadcastSources,
+} from './broadcast';
+import { columnExists } from './schema_probe';
 
 type RssItem = {
   title?: string;
@@ -132,6 +136,10 @@ let crawlStats = {
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
   bodyExtractTried: 0,  // v5.2 #3: 원문 추출 시도 수
   bodyExtractOk: 0,     // v5.2 #3: 원문 추출 성공 수(>=MIN_BODY_CHARS)
+  broadcastSeen: 0,          // NEWS-Q1 ■4: 방송 RSS 항목
+  broadcastKeywordPass: 0,   // 핵심어 관문 통과(→ DeepSeek)
+  broadcastAccepted: 0,      // DeepSeek 관문 통과(저장 후보)
+  broadcastRejected: 0,      // DeepSeek 관문 거부
   failedFeeds: [] as string[],
   // v5.4.1 작업5: 구조화된 피드 실패(상태코드별 분류·복구 판단용)
   feedFailures: [] as { id: string; source: string; sourceType: SourceType; status: number | null; retried: boolean }[],
@@ -629,6 +637,71 @@ function sourceTypeRank(t: SourceType): number {
     case 'aggregator': return 2;
     default: return 3;
   }
+}
+
+// ---------- NEWS-Q1 ■4: 방송(YouTube RSS) ----------
+// 핵심어 관문(0원) → DeepSeek 관문 → 저장 후보. 기사 경로(crawlOneSource)와 섞지 않는다:
+// 설명은 짧아 본문 길이 기준·기사용 사건사고 거름망이 맞지 않는다.
+async function crawlBroadcastSources(): Promise<Candidate[]> {
+  const sources = loadBroadcastSources();
+  const out: Candidate[] = [];
+  if (!sources.length) return out;
+  console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → DeepSeek 관문)`);
+  for (const source of sources) {
+    if (Date.now() > crawlDeadline) {
+      console.log('  ⏱️ 타임아웃 도달 — 방송 추적 중단');
+      break;
+    }
+    let items;
+    try {
+      items = await fetchBroadcastItems(source, 15);
+    } catch (e) {
+      const status = httpStatusOf(e);
+      console.warn(`  ├─ [${source.program}] ❌ RSS 실패(스킵)${status ? ` [${status}]` : ''}: ${(e as Error).message}`);
+      crawlStats.failedFeeds.push(`broadcast:${source.outletId}${status ? ` [${status}]` : ''}`);
+      continue;
+    }
+    let accepted = 0;
+    for (const item of items) {
+      crawlStats.broadcastSeen++;
+      const pre = decideBroadcast(item, null, true);
+      if (pre.action === 'skip' && pre.reason === 'keyword_miss') continue;
+      crawlStats.broadcastKeywordPass++;
+      if (!deepseekAvailable) {
+        console.log(`  │   ⏭️ DeepSeek 없음 → 방송 저장 보류: ${item.title.slice(0, 40)}`);
+        continue;
+      }
+      const provCategory = classifyCategory(item.title, item.description, '중독사회와 회복');
+      const pack = await summarizeKoreanDeepSeek(item.title, item.description || item.title, {
+        translate: false, category: provCategory,
+      });
+      const judgment = pack
+        ? { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence }
+        : null;
+      const decision = decideBroadcast(item, judgment, true);
+      if (decision.action !== 'accept') {
+        crawlStats.broadcastRejected++;
+        const reason = decision.reason;
+        console.log(`  │   🚫 방송 관문 거부(${reason}): ${item.title.slice(0, 40)}`);
+        rejectedAll.push({
+          title: item.title, originalTitle: item.title, summary: pack?.summary || null,
+          category: provCategory, source: source.program, sourceUrl: item.url, googleUrl: null,
+          publishedAt: buildBroadcastRow(source, item, { category: provCategory }).publishedAt,
+          lang: 'ko', sourceType: BROADCAST_SOURCE_TYPE, rejectReason: `broadcast:${reason}`,
+          confidence: pack?.confidence ?? null,
+          // domain 비움: youtube.com 이 기사용 자동 블랙리스트 집계에 섞이지 않게.
+          domain: null,
+        });
+        continue;
+      }
+      out.push(buildBroadcastRow(source, item, { summary: pack?.summary, category: provCategory }) as Candidate);
+      accepted++;
+      crawlStats.broadcastAccepted++;
+      console.log(`  │   📺 방송 채택: [${source.program}] ${item.title.slice(0, 40)}`);
+    }
+    console.log(`  ├─ [${source.program}] 읽음 ${items.length} · 채택 ${accepted}`);
+  }
+  return out;
 }
 
 function calculateTitleSimilarity(title1: string, title2: string): number {
@@ -1138,18 +1211,22 @@ function recentYmdWindow(centerYmd: string, days: number): string[] {
 // ---------- DB 중복 체크 ----------
 async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
   if (await repo.findOne({ where: { sourceUrl: c.sourceUrl } })) return true;
+  // NEWS-Q1: 방송은 영상 URL 로만 중복을 본다(기사와 제목이 닮아도 별개 자료).
+  if (c.sourceType === BROADCAST_SOURCE_TYPE) return false;
   if (c.googleUrl && await repo.findOne({ where: { googleUrl: c.googleUrl } })) return true;
   if (await repo.findOne({ where: { title: c.title, publishedAt: c.publishedAt, source: c.source } })) return true;
   // v5.2 #4: 같은 날짜만 → 최근 3일 창으로 확장(매체별 게재일 차이 흡수)
   const window = recentYmdWindow(c.publishedAt, 3);
   const nearbyArticles = await repo.find({ where: window.map((d) => ({ publishedAt: d })) });
   for (const existing of nearbyArticles) {
+    if (existing.sourceType === BROADCAST_SOURCE_TYPE) continue;
     if (calculateTitleSimilarity(c.title, existing.title) >= 0.5) return true;
   }
   // v5.4.1 3-2: 최근 72시간 저장분과 크로스매체(매체만 다른 동일 사건) 유사도 검사
   const since = new Date(Date.now() - 72 * 3600 * 1000);
   const recent72h = await repo.find({ where: { createdAt: MoreThanOrEqual(since) } });
   for (const existing of recent72h) {
+    if (existing.sourceType === BROADCAST_SOURCE_TYPE) continue;
     const sim = crossMediaSimilarity(c.title, existing.title);
     if (sim >= 0.6) {
       crawlStats.crossMediaDupSkip++;
@@ -1216,6 +1293,21 @@ async function saveCandidates(list: Candidate[]) {
     }
   }
   console.log(`  └─ Save complete! inserted=${inserted}, duplicates=${dup}, withImage=${withImage}\n`);
+  // NEWS-Q1: kind 열(묶음 SQL)이 있을 때만 방송 행의 kind 를 맞춘다. 없으면 source_type 으로만 구분.
+  if (list.some((c) => c.sourceType === BROADCAST_SOURCE_TYPE)) {
+    const q = (sql: string, params?: unknown[]) => ds.query(sql, params);
+    if (await columnExists(q, 'articles', 'kind')) {
+      try {
+        await ds.query(
+          `UPDATE articles SET kind = 'broadcast' WHERE source_type = 'broadcast' AND kind IS DISTINCT FROM 'broadcast'`,
+        );
+      } catch (e) {
+        console.warn('[broadcast] kind 기록 실패(무시, source_type 으로 구분됨):', (e as Error).message);
+      }
+    } else {
+      console.log('  [broadcast] kind 열 없음 — source_type=broadcast 로만 구분(묶음 SQL 적용 전)');
+    }
+  }
   return { inserted, dup, withImage };
 }
 
@@ -1327,7 +1419,19 @@ async function main() {
     all.push(...statoryCands);
   }
 
-  const result = await saveCandidates(all);
+  // NEWS-Q1 ■4: 방송은 기사 통계(한국 비중 등)에 섞지 않고 저장만 함께 한다.
+  // CRAWL_SOURCE_TYPES 로 좁힌 실행에서는 broadcast 가 들어 있을 때만 돈다.
+  let broadcasts: Candidate[] = [];
+  const broadcastWanted = !typeFilter.length || typeFilter.includes(BROADCAST_SOURCE_TYPE);
+  if (broadcastWanted && !timedOut && Date.now() <= crawlDeadline) {
+    try {
+      broadcasts = await crawlBroadcastSources();
+    } catch (e) {
+      console.warn('[broadcast] 방송 추적 실패(기사 저장은 계속):', (e as Error).message);
+    }
+  }
+
+  const result = await saveCandidates([...all, ...broadcasts]);
   // v5.4: 거부 기사 격리 저장(자동 블랙리스트는 다음 실행 시작 시 rejected 집계로 재평가)
   crawlStats.quarantined = await saveRejected(rejectedAll);
   const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -1359,6 +1463,7 @@ async function main() {
   console.log(`   ├ ⚠️ 판정 실패(DeepSeek 응답없음/장애): ${crawlStats.deepseekFailSkip}건`);
   console.log(`   ├ 🌐 비한국어 산출물: 재생성 ${crawlStats.langRetry}건 / 격리 ${crawlStats.langRejectSkip}건`);
   console.log(`   ├ 📦 격리 저장(rejected_articles): ${crawlStats.quarantined}건`);
+  console.log(`   ├ 📺 방송: 읽음 ${crawlStats.broadcastSeen} → 핵심어 ${crawlStats.broadcastKeywordPass} → DeepSeek 통과 ${crawlStats.broadcastAccepted} / 거부 ${crawlStats.broadcastRejected}`);
   const blSnap = getBlacklistSnapshot();
   console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);
   console.log(`   ├ 핵심어 중복 스킵: ${crawlStats.dupSkipKeyword}건`);

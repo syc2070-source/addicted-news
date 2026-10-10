@@ -22,6 +22,7 @@ import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { isKoreanOutput, describeLangCheck, KO_MIN, HANJA_MAX } from './lang_output';
 import { isApply, modeLabel } from './cli_flags';
+import { hardDeleteEnabled } from './cleanup_policy';
 
 const DRY_RUN = !isApply();
 const DEPLOY_DIR = path.join(__dirname, '../../../deploy');
@@ -106,7 +107,10 @@ async function main() {
   }
 
   let deleted = 0;
-  if (!DRY_RUN && ids.length > 0) {
+  if (!DRY_RUN && !hardDeleteEnabled() && ids.length > 0) {
+    // NEWS-Q1 ■1: 휴리스틱(키워드/언어 판정)은 후보 표시만. 하드 삭제는 CLEANUP_HARD_DELETE=1 일 때만.
+    console.log(`(후보만) 하드 삭제 깃발 꺼짐(CLEANUP_HARD_DELETE!=1) — 삭제 0, 후보 ${ids.length}건은 위 목록·백업에만.`);
+  } else if (!DRY_RUN && ids.length > 0) {
     const del = await client.query(`DELETE FROM articles WHERE id = ANY($1::int[])`, [ids]);
     deleted = del.rowCount ?? 0;
     console.log(`🗑️  삭제 완료: ${deleted}건`);

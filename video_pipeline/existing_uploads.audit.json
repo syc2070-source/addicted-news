@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-10-05",
+  "status": "VERIFIED",
+  "canonical_source_root": "D:\\addicted-news\\video_pipeline\\video_v2",
+  "rejected_source_root": "D:\\video_pipeline\\video",
+  "method": "Exact YouTube video ID, title, public/unlisted flags, channel ID, upload date and duration were compared with both local generations. Local SHA-256 identifies the source file; it is not compared to YouTube's re-encoded stream.",
+  "channels": {
+    "UCNLL7-k2it9ngjN9BUma4Og": {
+      "title": "중독이야기",
+      "verified_video_count": 11
+    },
+    "UCnFS7iIhnjn3tYPG9IIs0UA": {
+      "title": "바닥을 본 교수의 세상이야기",
+      "verified_video_count": 5
+    }
+  },
+  "videos": [
+    {
+      "term_id": "behavioral-addiction",
+      "video_id": "wvez7z8cfuc",
+      "title": "행동중독 — 중독백과",
+      "youtube_duration_iso": "PT3M11S",
+      "upload_date": "2026-07-24T19:13:42-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/behavioral-addiction.mp4", "size_bytes": 9384074, "duration_seconds": 190.416, "sha256": "aeba28e515ba50ec7edde9891e43ef6f42235d3918821d61c63082c07fdbf182"}
+    },
+    {
+      "term_id": "compulsive-computer-use",
+      "video_id": "qV1-4UW9_sQ",
+      "title": "강박적 컴퓨터·인터넷 사용 — 중독백과",
+      "youtube_duration_iso": "PT2M32S",
+      "upload_date": "2026-07-25T01:35:43-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/compulsive-computer-use.mp4", "size_bytes": 9207477, "duration_seconds": 151.92, "sha256": "9257f1e9e6cdfc66b05a3396641f345a5c0f5f94b460990b17dfb2983e806f27"}
+    },
+    {
+      "term_id": "compulsive-shopping",
+      "video_id": "Gf0fb6kqbLs",
+      "title": "강박적 쇼핑 — 중독백과",
+      "youtube_duration_iso": "PT2M18S",
+      "upload_date": "2026-07-25T01:35:55-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/compulsive-shopping.mp4", "size_bytes": 7393037, "duration_seconds": 137.16, "sha256": "ad039f147efe917ff8db2971785b44054a24f4a6fbfa468839d36e02bdfcda8c"}
+    },
+    {
+      "term_id": "crypto-trading-addiction",
+      "video_id": "Xj0kk1PZCzs",
+      "title": "암호화폐·투자 중독 — 중독백과",
+      "youtube_duration_iso": "PT2M19S",
+      "upload_date": "2026-07-25T01:36:05-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/crypto-trading-addiction.mp4", "size_bytes": 8686808, "duration_seconds": 138.6, "sha256": "1d771ed82dd375cf14ed19e3a21b79f3733c5e64134c86263c02df6926feb096"}
+    },
+    {
+      "term_id": "cybersex-addiction",
+      "video_id": "1j6hIL8R0JE",
+      "title": "사이버섹스·포르노 중독 — 중독백과",
+      "youtube_duration_iso": "PT2M8S",
+      "upload_date": "2026-07-25T01:35:59-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/cybersex-addiction.mp4", "size_bytes": 6314296, "duration_seconds": 127.416, "sha256": "a56124d89b4b2eac8dd4a6da0a2a31415b548607de11ec42f93f22efc9032926"}
+    },
+    {
+      "term_id": "exercise-addiction",
+      "video_id": "Naf7SmRd3Lg",
+      "title": "운동중독 — 중독백과",
+      "youtube_duration_iso": "PT2M18S",
+      "upload_date": "2026-07-25T01:36:12-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/exercise-addiction.mp4", "size_bytes": 7505612, "duration_seconds": 137.424, "sha256": "343826b440e2d7c0f23a35a638ad8cb4f52603d15a62e16eebb24ca3f86d57d7"}
+    },
+    {
+      "term_id": "food-addiction",
+      "video_id": "2qSrWB7uUR8",
+      "title": "음식중독 — 중독백과",
+      "youtube_duration_iso": "PT2M24S",
+      "upload_date": "2026-07-25T16:39:38-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/food-addiction.mp4", "size_bytes": 7636811, "duration_seconds": 142.968, "sha256": "2e073ae054b50217a6fde4f638b83196e5c9beda3bf4df7b8d32c78dbe78f98c"}
+    },
+    {
+      "term_id": "gaming-disorder",
+      "video_id": "2OOh4F0UAJY",
+      "title": "게임이용장애 — 중독백과",
+      "youtube_duration_iso": "PT3M12S",
+      "upload_date": "2026-07-25T16:39:56-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/gaming-disorder.mp4", "size_bytes": 10182907, "duration_seconds": 191.472, "sha256": "bb501d3a65c4255b1fc99ae0fce328c51c04dd3737acb29f866aa6d99505c428"}
+    },
+    {
+      "term_id": "hypersexuality",
+      "video_id": "M3xlBOfe2vc",
+      "title": "과잉성욕 — 중독백과",
+      "youtube_duration_iso": "PT2M14S",
+      "upload_date": "2026-07-25T16:40:01-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/hypersexuality.mp4", "size_bytes": 6686790, "duration_seconds": 132.96, "sha256": "e12518eabe4e5fe3b8e5b474651810722ac073344eb9af1fc475a7a79621fdaf"}
+    },
+    {
+      "term_id": "loot-boxes",
+      "video_id": "NluCMao9Oag",
+      "title": "확률형 아이템·루트박스 — 중독백과",
+      "youtube_duration_iso": "PT2M22S",
+      "upload_date": "2026-07-25T16:40:07-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/loot-boxes.mp4", "size_bytes": 7082866, "duration_seconds": 141.264, "sha256": "738b1fed9e6fae0930dbad5c33841b0bf6f3df239b4c89bbdb3532e26770a556"}
+    },
+    {
+      "term_id": "online-gambling",
+      "video_id": "JydecIJJpRo",
+      "title": "온라인·모바일 도박 — 중독백과",
+      "youtube_duration_iso": "PT2M34S",
+      "upload_date": "2026-07-25T16:40:21-07:00",
+      "channel_id": "UCNLL7-k2it9ngjN9BUma4Og",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/online-gambling.mp4", "size_bytes": 7993221, "duration_seconds": 153.864, "sha256": "06bdd6b6d9ed020ed4dad563a550c8502dcca9eb42653f7acf35a1c6a2f2d15a"}
+    },
+    {
+      "term_id": "pathological-gambling",
+      "video_id": "_Krwh6gYBMg",
+      "title": "도박장애 — 중독백과",
+      "youtube_duration_iso": "PT3M54S",
+      "upload_date": "2026-08-01T16:50:33-07:00",
+      "channel_id": "UCnFS7iIhnjn3tYPG9IIs0UA",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/pathological-gambling.mp4", "size_bytes": 13619307, "duration_seconds": 233.136, "sha256": "c7219cb01a3b0494e654bfabbc154e7bbe82fb1e1e60e7bb4e50ed3111dd1fd2"}
+    },
+    {
+      "term_id": "sexual-addiction",
+      "video_id": "xrXHvCkKmQ8",
+      "title": "성중독 — 중독백과",
+      "youtube_duration_iso": "PT2M18S",
+      "upload_date": "2026-08-01T16:50:47-07:00",
+      "channel_id": "UCnFS7iIhnjn3tYPG9IIs0UA",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/sexual-addiction.mp4", "size_bytes": 7048422, "duration_seconds": 137.088, "sha256": "c8532803d6da478ad340a3f6b85f909477be05e272a727382f97dcd9cdb86b1b"}
+    },
+    {
+      "term_id": "short-form-video",
+      "video_id": "dx3xkYZLXGE",
+      "title": "숏폼·도파민 문화 — 중독백과",
+      "youtube_duration_iso": "PT2M33S",
+      "upload_date": "2026-08-01T16:50:57-07:00",
+      "channel_id": "UCnFS7iIhnjn3tYPG9IIs0UA",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/short-form-video.mp4", "size_bytes": 8327419, "duration_seconds": 152.784, "sha256": "c7cfe0225e288dae6f14b2d9a5bc251a86763120a64a3210eb75b6cd8653e49a"}
+    },
+    {
+      "term_id": "smartphone-addiction",
+      "video_id": "lS64RMBEhoo",
+      "title": "스마트폰 과의존 — 중독백과",
+      "youtube_duration_iso": "PT2M22S",
+      "upload_date": "2026-08-01T16:51:15-07:00",
+      "channel_id": "UCnFS7iIhnjn3tYPG9IIs0UA",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/smartphone-addiction.mp4", "size_bytes": 12021408, "duration_seconds": 141.768, "sha256": "c94f826f418ff5db9b27eb0bd922986e81793273fcc88c7de54bbfbbf2f800a1"}
+    },
+    {
+      "term_id": "social-media-addiction",
+      "video_id": "8z55LCleSo8",
+      "title": "소셜미디어 중독 — 중독백과",
+      "youtube_duration_iso": "PT2M42S",
+      "upload_date": "2026-08-01T16:51:23-07:00",
+      "channel_id": "UCnFS7iIhnjn3tYPG9IIs0UA",
+      "public": true,
+      "unlisted": false,
+      "playability": "OK",
+      "source": {"path": "video_v2/social-media-addiction.mp4", "size_bytes": 10978873, "duration_seconds": 161.016, "sha256": "6c41c40f988a6d07293f0ff4d0b59e846353f278e31c8efe96e91e9fdd64218a"}
+    }
+  ]
+}

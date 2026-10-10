@@ -1,0 +1,265 @@
+// ============================================================
+// broadcast.ts (NEWS-Q1 ■4) — 탐사·시사 방송의 중독 편 추적.
+// YouTube 공개 채널 RSS(Atom, 열쇠 불필요) → 핵심어 관문(0원) → (크롤러에서) DeepSeek 관문 → 저장.
+// 저장 구분은 기존 열 source_type='broadcast' 로 한다(kind 열은 묶음 SQL 적용 뒤 함께 기록).
+//
+// 읽기 전용 점검(DB·DeepSeek 접속 없음):
+//   npx ts-node src/crawler/broadcast.ts          # 채널마다 최근 15개 → 핵심어 통과 표
+// ============================================================
+import * as fs from 'fs';
+import * as path from 'path';
+import axios from 'axios';
+import Parser from 'rss-parser';
+import { Judgment, passesIngestionGate, rejectReason } from './judge_article';
+
+export const BROADCAST_SOURCE_TYPE = 'broadcast';
+
+/** 지시서 ■4ⓑ 핵심어(제목+설명에 하나 이상). 바꾸려면 오너 결정. */
+export const BROADCAST_KEYWORDS = [
+  '중독', '도박', '마약', '약물', '알코올', '음주', '게임',
+  '스마트폰', '도파민', '흡연', '담배', '의존', '단주', '재활',
+] as const;
+
+export interface BroadcastSource {
+  outletId: string;
+  program: string;
+  channelTitle: string;
+  channelId: string;
+  feedUrl: string;
+  sharedChannel: boolean;
+}
+
+export interface BroadcastItem {
+  videoId: string;
+  title: string;
+  description: string;
+  publishedAt: string; // ISO 8601 (YouTube <published>)
+  url: string;
+  thumbnailUrl: string | null;
+}
+
+export function feedUrlFor(channelId: string): string {
+  return `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+}
+
+export function loadBroadcastSources(
+  file = path.join(__dirname, '../../data/broadcast_youtube_rss.json'),
+): BroadcastSource[] {
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { feeds?: Array<Record<string, unknown>> };
+    return (raw.feeds || [])
+      .filter((f) => /^UC[\w-]{22}$/.test(String(f.channel_id || '')))
+      .map((f) => ({
+        outletId: String(f.outlet_id),
+        program: String(f.program),
+        channelTitle: String(f.channel_title || f.program),
+        channelId: String(f.channel_id),
+        feedUrl: feedUrlFor(String(f.channel_id)),
+        sharedChannel: f.shared_channel === true,
+      }));
+  } catch (e) {
+    console.warn(`[broadcast] 소스 파일을 읽지 못함(방송 추적 건너뜀): ${(e as Error).message}`);
+    return [];
+  }
+}
+
+/** 핵심어를 품었지만 뜻이 다른 낱말(예: 재활용). 핵심어 목록 자체는 지시서 그대로. */
+const KEYWORD_FALSE_FRIENDS = ['재활용'];
+
+export function matchedBroadcastKeywords(title: string, description: string): string[] {
+  let text = `${title}\n${description}`;
+  for (const word of KEYWORD_FALSE_FRIENDS) text = text.split(word).join(' ');
+  return BROADCAST_KEYWORDS.filter((k) => text.includes(k));
+}
+
+export function passesBroadcastKeywordGate(item: Pick<BroadcastItem, 'title' | 'description'>): boolean {
+  return matchedBroadcastKeywords(item.title, item.description).length > 0;
+}
+
+function firstText(value: unknown): string {
+  if (Array.isArray(value)) return firstText(value[0]);
+  if (value && typeof value === 'object') {
+    const v = value as Record<string, unknown>;
+    if (typeof v._ === 'string') return v._;
+    return '';
+  }
+  return typeof value === 'string' ? value : '';
+}
+
+function thumbnailOf(group: Record<string, unknown> | undefined, videoId: string): string | null {
+  const thumb = group?.['media:thumbnail'];
+  const node = Array.isArray(thumb) ? thumb[0] : thumb;
+  const url = (node as { $?: { url?: string } } | undefined)?.$?.url;
+  if (url) return url;
+  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
+}
+
+const atomParser = new Parser<Record<string, unknown>, Record<string, unknown>>({
+  customFields: { item: ['media:group', 'yt:videoId'] as string[] },
+});
+
+/** rss-parser 결과(YouTube Atom) → BroadcastItem[]. 영상 ID 가 없는 항목은 버린다. */
+export function toBroadcastItems(feed: { items?: Array<Record<string, unknown>> }, limit = 15): BroadcastItem[] {
+  const out: BroadcastItem[] = [];
+  for (const it of (feed.items || []).slice(0, limit)) {
+    const idField = String(it['yt:videoId'] || it.id || '');
+    const videoId = idField.replace(/^yt:video:/, '').trim();
+    if (!/^[\w-]{11}$/.test(videoId)) continue;
+    const group = it['media:group'] as Record<string, unknown> | undefined;
+    const description = firstText(group?.['media:description']).trim();
+    out.push({
+      videoId,
+      title: String(it.title || '').trim(),
+      description,
+      publishedAt: String(it.isoDate || it.pubDate || ''),
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      thumbnailUrl: thumbnailOf(group, videoId),
+    });
+  }
+  return out;
+}
+
+export async function parseBroadcastXml(xml: string, limit = 15): Promise<BroadcastItem[]> {
+  return toBroadcastItems(await atomParser.parseString(xml), limit);
+}
+
+/**
+ * YouTube 채널 RSS 는 같은 주소에 404/500 을 섞어 낸다(곧 다시 200, 2026-10-10 실측)
+ * → 짧은 간격으로 여러 번 다시 묻는다.
+ */
+export async function fetchBroadcastItems(
+  source: BroadcastSource,
+  limit = 15,
+  attempts = 6,
+  waitMs = (n: number) => 1000 * n,
+): Promise<BroadcastItem[]> {
+  let lastError: unknown;
+  for (let n = 1; n <= attempts; n++) {
+    try {
+      const res = await axios.get<string>(source.feedUrl, {
+        timeout: Number(process.env.RSS_TIMEOUT_MS ?? 15000),
+        responseType: 'text',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AddictedNewsBot/1.0)' },
+      });
+      return await parseBroadcastXml(res.data, limit);
+    } catch (e) {
+      lastError = e;
+      if (n < attempts) await new Promise((r) => setTimeout(r, waitMs(n)));
+    }
+  }
+  throw lastError;
+}
+
+/** KST 기준 YYYY-MM-DD (articles.published_at 기존 규약: 날짜만). */
+export function kstYmd(iso: string): string | null {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+/** 설명 요지: 해시태그·링크 줄을 뺀 앞부분. */
+export function descriptionGist(description: string, max = 300): string {
+  const lines = description
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(#\S+\s*)+$/.test(l) && !/^https?:\/\//.test(l));
+  const text = lines.join(' ');
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** raw_body 에 남길 원자료(정확한 게시 시각 포함). */
+export function broadcastRawBody(source: BroadcastSource, item: BroadcastItem): string {
+  return [
+    `프로그램: ${source.program}`,
+    `채널: ${source.channelTitle} (${source.channelId})`,
+    `게시 시각: ${item.publishedAt}`,
+    `영상: ${item.url}`,
+    '',
+    item.description,
+  ].join('\n').slice(0, 6000);
+}
+
+export type BroadcastDecision =
+  | { action: 'skip'; reason: 'keyword_miss' | 'no_deepseek' }
+  | { action: 'reject'; reason: string }
+  | { action: 'accept' };
+
+/**
+ * 관문 순서: 핵심어(0원) → DeepSeek 판정(passesIngestionGate 와 같은 기준).
+ * DeepSeek 가 없거나 판정이 없으면 저장하지 않는다(fail-closed).
+ * 키워드 사건사고 거름망은 쓰지 않는다 — 탐사 방송은 사건을 다루는 것이 본업이라
+ * 기사용 거름망이 중독 편까지 막는다. 사건 보도 판정은 DeepSeek 의 is_incident 로만.
+ */
+export function decideBroadcast(
+  item: Pick<BroadcastItem, 'title' | 'description'>,
+  judgment: Judgment | null,
+  aiAvailable: boolean,
+): BroadcastDecision {
+  if (!passesBroadcastKeywordGate(item)) return { action: 'skip', reason: 'keyword_miss' };
+  if (!aiAvailable) return { action: 'skip', reason: 'no_deepseek' };
+  const j = judgment ?? {};
+  if (passesIngestionGate(j, false)) return { action: 'accept' };
+  return { action: 'reject', reason: rejectReason(j, false) || 'rejected' };
+}
+
+/** 저장 행(articles). 종류 구분 = source_type 'broadcast' (kind 열은 있으면 크롤러가 따로 맞춤). */
+export function buildBroadcastRow(
+  source: BroadcastSource,
+  item: BroadcastItem,
+  ai: { summary?: string | null; category: string },
+) {
+  const gist = descriptionGist(item.description);
+  const summary = (ai.summary && ai.summary.trim()) || gist || item.title;
+  return {
+    title: item.title,
+    originalTitle: item.title,
+    teaser: gist ? gist.slice(0, 220) : null,
+    summary,
+    rawBody: broadcastRawBody(source, item),
+    keywords: matchedBroadcastKeywords(item.title, item.description),
+    category: ai.category,
+    region: 'kr',
+    source: source.program,
+    sourceUrl: item.url,
+    googleUrl: null,
+    imageUrl: item.thumbnailUrl,
+    origin: 'crawler',
+    isTop: false,
+    isFeature: false,
+    publishedAt: kstYmd(item.publishedAt) || kstYmd(new Date().toISOString())!,
+    lang: 'ko' as const,
+    isForeign: false,
+    blocked: false,
+    blockedReason: null,
+    sourceType: BROADCAST_SOURCE_TYPE,
+    outletId: source.outletId,
+  };
+}
+
+async function readOnlyReport() {
+  const sources = loadBroadcastSources();
+  console.log(`=== 방송 추적 읽기 전용 점검 (${sources.length}채널 · 채널마다 최근 15개 · 핵심어 관문만, DB·DeepSeek 없음) ===`);
+  let total = 0, passed = 0;
+  for (const s of sources) {
+    try {
+      const items = await fetchBroadcastItems(s, 15);
+      const ok = items.filter(passesBroadcastKeywordGate);
+      total += items.length; passed += ok.length;
+      console.log(`\n[${s.program}] ${s.channelId} · 읽음 ${items.length} · 통과 ${ok.length}`);
+      for (const it of ok) {
+        const kw = matchedBroadcastKeywords(it.title, it.description).join(',');
+        console.log(`  ✓ ${kstYmd(it.publishedAt)} ${it.title}  [${kw}]`);
+      }
+    } catch (e) {
+      console.log(`\n[${s.program}] ${s.channelId} · ❌ ${(e as Error).message}`);
+    }
+  }
+  console.log(`\n=== 합계: 읽음 ${total} · 핵심어 통과 ${passed} ===`);
+}
+
+if (require.main === module) {
+  readOnlyReport().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
