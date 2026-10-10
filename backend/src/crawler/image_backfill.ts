@@ -19,6 +19,7 @@
 import 'dotenv/config';
 import { Client, ClientConfig } from 'pg';
 import { fetchImageForBackfill } from './article_extractor';
+import { defaultDbName } from './field_profile';
 
 const DELAY_MS = Number(process.env.DELAY_MS ?? 700);
 const LIMIT = Number(process.env.BACKFILL_LIMIT ?? 0); // 0 = 전체
@@ -41,7 +42,7 @@ function buildClientConfig(): ClientConfig {
     port: Number(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
     password: String(process.env.DB_PASSWORD ?? ''),
-    database: process.env.DB_NAME || 'addiction_news',
+    database: defaultDbName(),
     ssl,
   };
 }

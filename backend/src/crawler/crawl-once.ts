@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { DataSource } from 'typeorm';
-import { SOURCES } from './sourceConfig';
+import { buildSources } from './sourceConfig';
 
 // ✅ named import 금지: 경로/캐시 꼬이면 TS2305 반복됨
 import * as crawler from './newsCrawler';
@@ -21,7 +21,7 @@ async function main() {
     throw new Error('newsCrawler.ts에 runCrawler 또는 runCrawler1 export가 없습니다.');
   }
 
-  await fn(dataSource, SOURCES);
+  await fn(dataSource, buildSources());
 
   await app.close();
 }

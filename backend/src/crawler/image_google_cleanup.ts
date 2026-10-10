@@ -17,6 +17,7 @@ import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { extractOgImageFromUrl } from './article_extractor';
 import { googleBlockedImageSqlCondition, isValidArticleImageUrl } from './image_validation';
+import { defaultDbName } from './field_profile';
 
 const DELAY_MS = Number(process.env.DELAY_MS ?? 2500);
 const LIMIT = Number(process.env.BACKFILL_LIMIT ?? 0);
@@ -39,7 +40,7 @@ function buildClientConfig(): ClientConfig {
     port: Number(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
     password: String(process.env.DB_PASSWORD ?? ''),
-    database: process.env.DB_NAME || 'addiction_news',
+    database: defaultDbName(),
     ssl,
   };
 }

@@ -28,12 +28,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { summarizeKoreanDeepSeek, deepseekAvailable } from './deepseek_summary';
-import { isIncidentReport } from './addictionFilter';
+import { isIncidentReport } from './field_filter';
 import { isApply } from './cli_flags';
 import {
   candidateReason, cleanupMode, CleanupMode, hardDeleteEnabled, isCandidate, isDeletionBasis, JudgedRow,
 } from './cleanup_policy';
 import { columnExists, QueryFn } from './schema_probe';
+import { defaultDbName } from './field_profile';
 
 const DELAY_MS = Number(process.env.DELAY_MS ?? 500);
 const JUDGE_DAYS = Number(process.env.JUDGE_DAYS ?? 14);
@@ -56,7 +57,7 @@ function buildClientConfig(): ClientConfig {
     port: Number(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
     password: String(process.env.DB_PASSWORD ?? ''),
-    database: process.env.DB_NAME || 'addiction_news',
+    database: defaultDbName(),
     ssl,
   };
 }

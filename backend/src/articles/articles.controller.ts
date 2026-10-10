@@ -1,16 +1,17 @@
 // backend/src/articles/articles.controller.ts
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ArticlesService, parseKind } from './articles.service';
+import { ArticlesService, parseKind, parseTier } from './articles.service';
 
 // 목록·검색은 기본 기사만 · ?kind=broadcast 면 방송만(NEWS-Q1 ■4ⓓ)
+// 기본 publish 층만 · ?tier=archive 면 보관만(NEWS-Q2 ■6). 응답 칸 isFresh·publishedTs(■7).
 @Controller('articles')
 export class ArticlesController {
   constructor(private readonly articlesService: ArticlesService) {}
 
   // 최신 기사 (limit 개)
   @Get('latest')
-  getLatest(@Query('limit') limit?: string, @Query('kind') kind?: string) {
-    return this.articlesService.getLatest(Number(limit) || 50, parseKind(kind));
+  getLatest(@Query('limit') limit?: string, @Query('kind') kind?: string, @Query('tier') tier?: string) {
+    return this.articlesService.getLatest(Number(limit) || 50, parseKind(kind), parseTier(tier));
   }
 
   // TOP 뉴스 (isTop=true인 기사)
@@ -31,7 +32,7 @@ export class ArticlesController {
     return this.articlesService.getRaphaNews();
   }
 
-  // 중독이슈 (isIssue=true인 기사)
+  // 이슈 (isIssue=true인 기사)
   @Get('issue')
   getIssueNews(@Query('limit') limit?: string) {
     return this.articlesService.getIssueNews(Number(limit) || 5);
@@ -43,8 +44,9 @@ export class ArticlesController {
     @Param('key') key: string,
     @Query('limit') limit?: string,
     @Query('kind') kind?: string,
+    @Query('tier') tier?: string,
   ) {
-    return this.articlesService.getByCategory(key, Number(limit) || 20, parseKind(kind));
+    return this.articlesService.getByCategory(key, Number(limit) || 20, parseKind(kind), parseTier(tier));
   }
 
   // 카테고리별 기사 (페이징)
@@ -54,19 +56,21 @@ export class ArticlesController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('kind') kind?: string,
+    @Query('tier') tier?: string,
   ) {
     return this.articlesService.getByCategoryPaged(
       key,
       Number(page) || 1,
       Number(limit) || 20,
       parseKind(kind),
+      parseTier(tier),
     );
   }
 
   // 기사 검색
   @Get('search')
-  search(@Query('q') q: string, @Query('limit') limit?: string, @Query('kind') kind?: string) {
-    return this.articlesService.search(q, Number(limit) || 20, parseKind(kind));
+  search(@Query('q') q: string, @Query('limit') limit?: string, @Query('kind') kind?: string, @Query('tier') tier?: string) {
+    return this.articlesService.search(q, Number(limit) || 20, parseKind(kind), parseTier(tier));
   }
 
   // 최신 페이지 (페이징)
@@ -75,11 +79,13 @@ export class ArticlesController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('kind') kind?: string,
+    @Query('tier') tier?: string,
   ) {
     return this.articlesService.getLatestPaged(
       Number(page) || 1,
       Number(limit) || 20,
       parseKind(kind),
+      parseTier(tier),
     );
   }
 

@@ -99,7 +99,8 @@ async function batchexecuteDecode(
 ): Promise<string | null> {
   try {
     const inner = `["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"${articleId}",${meta.timestamp},"${meta.signature}"]`;
-    const reqData = `f.req=${encodeURIComponent(JSON.stringify([['Fbv4je', inner, null, 'generic']]))}`;
+    // NEWS-Q2 ■3: f.req 는 세 겹 배열이어야 한다([[[rpc, inner, null, 'generic']]]). 두 겹이면 400 → 해석 0%.
+    const reqData = `f.req=${encodeURIComponent(JSON.stringify([[['Fbv4je', inner, null, 'generic']]]))}`;
     const res = await axios.post(BATCH_EXECUTE_URL, reqData, {
       timeout: 20000,
       validateStatus: () => true,

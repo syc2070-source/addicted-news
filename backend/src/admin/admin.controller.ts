@@ -83,7 +83,7 @@ export class AdminController {
     return this.adminService.setRapha(parseInt(id), isRapha, imageUrl);
   }
 
-  // 중독이슈 설정
+  // 이슈 설정
   @Put('articles/:id/issue')
   async setIssue(
     @Headers('authorization') auth: string,
@@ -169,7 +169,7 @@ export class AdminController {
     return this.adminService.getRaphaNews();
   }
 
-  // 중독이슈 목록
+  // 이슈 목록
   @Get('issue')
   async getIssueNews(@Headers('authorization') auth: string) {
     this.checkAuth(auth);
@@ -183,7 +183,7 @@ export class AdminController {
     return this.adminService.getStats();
   }
 
-  // 중독백과 항목 수정 (definition/example/body/advanced)
+  // 백과 항목 수정 (definition/example/body/advanced)
   @Put('encyclopedia/:id')
   async updateEncyclopedia(
     @Headers('authorization') auth: string,

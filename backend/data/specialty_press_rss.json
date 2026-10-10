@@ -25,7 +25,9 @@
       "region_label_en": "Addiction Specialty",
       "source_type": "specialty",
       "verified_by_fetch": true,
-      "notes_ko": "치료 전문가·회복 당사자 대상. 2026 활발. comments 피드 아님(메인 feed)."
+      "notes_ko": "치료 전문가·회복 당사자 대상. 2026 활발. comments 피드 아님(메인 feed). NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: 사이트 전체 Cloudflare 403",
+      "active": false,
+      "inactive_reason": "대체 없음: 사이트 전체 Cloudflare 403"
     },
     {
       "feed_id": "spec-003",
@@ -51,7 +53,9 @@
       "region_label_en": "Addiction Specialty",
       "source_type": "specialty",
       "verified_by_fetch": true,
-      "notes_ko": "회복 커뮤니티 대상. 섹션 피드(50건)."
+      "notes_ko": "회복 커뮤니티 대상. 섹션 피드(50건). NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: 사이트 개편(WordPress 아님) · 전 피드 경로 404",
+      "active": false,
+      "inactive_reason": "대체 없음: 사이트 개편(WordPress 아님) · 전 피드 경로 404"
     }
   ]
 }

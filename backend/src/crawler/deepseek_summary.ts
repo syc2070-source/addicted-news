@@ -1,10 +1,11 @@
 // ============================================================
-// 중독뉴스 요약: DeepSeek 기반 한국어 "충실한 한 문단" 요약
+// 분야 뉴스 요약: DeepSeek 기반 한국어 "충실한 한 문단" 요약(분야 문구 = 분야 설정 prompts)
 // 외국어 → 한국어 번역+요약 통합. env: DEEPSEEK_API_KEY
 // ============================================================
 import OpenAI from 'openai';
 import { extractJsonObject } from './json_extract';
-import { JUDGE_SYSTEM, JUDGE_RETRY_SYSTEM, JUDGE_JSON_SCHEMA, buildJudgeUser } from './judge_prompt';
+import { judgeSystem, JUDGE_RETRY_SYSTEM, judgeJsonSchema, buildJudgeUser } from './judge_prompt';
+import { fieldProfile } from './field_profile';
 
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || '';
 // 모델명 단일 소스: 환경변수 DEEPSEEK_MODEL. 기본값은 현행 모델(구 deepseek-chat 폐기됨).
@@ -23,7 +24,13 @@ const deepseek = deepseekAvailable
 
 // v5.2 #6: DeepSeek 실제 호출 집계(비용 추적). 재시도 포함 매 API 요청을 calls로,
 // 성공/실패를 분리 집계한다. (기존 apiCallCount는 미호출 dead-code였음)
-export const deepseekStats = { calls: 0, ok: 0, fail: 0 };
+export const deepseekStats = { calls: 0, ok: 0, fail: 0, promptTokens: 0, completionTokens: 0 };
+
+/** 응답의 usage 를 더한다(없으면 0). 비용 추정은 deepseek_budget.estimateCostUsd. */
+export function addUsage(r: { usage?: { prompt_tokens?: number; completion_tokens?: number } } | null | undefined): void {
+  deepseekStats.promptTokens += Number(r?.usage?.prompt_tokens || 0);
+  deepseekStats.completionTokens += Number(r?.usage?.completion_tokens || 0);
+}
 
 // LANG-GUARD-1 작업1-3: 한국어 출력 지시를 프롬프트 맨 앞에 명시(보조 수단).
 // ※ 방어선은 저장 직전 가드(lang_output)이며, 이 문구만으로 갈음하지 않는다.
@@ -33,50 +40,13 @@ const KOREAN_ONLY_RULE =
   '원문 문장을 그대로 옮기거나 원문 언어로 답하지 말 것. 고유명사는 한국어 표기하되 ' +
   '필요하면 괄호로 원어를 병기한다. ';
 
-const SUMMARY_SYSTEM_KO_BASE =
-  KOREAN_ONLY_RULE +
-  '너는 중독(도박·약물·알코올·행동중독 등) 전문 뉴스 큐레이터다. ' +
-  '독자가 원문 기사에 가지 않고도 내용을 충분히 파악할 수 있도록, 한국어로 충실한 요약을 쓴다. ' +
-  '중독 뉴스 원문에는 도박 광고 등 유해 요소가 많아, 요약만으로 이해가 끝나는 것이 독자에게 이롭다. ' +
-  '형식: 자연스러운 한 문단(대략 5~8문장). 소제목·불릿·번호 없이 서술형으로. ' +
-  '내용에 반드시 담을 것: (1) 무슨 일이 있었는가(핵심 사실·주체·시점), ' +
-  '(2) 원문에 나온 배경이나 맥락. ' +
-  '규칙: 제목을 그대로 반복하지 말 것. 본문에 없는 사실(수치·인용·이름)을 지어내지 말 것 — ' +
-  '재료가 부족하면 확인된 범위에서만 서술하고, 무리하게 늘리지 말 것. ' +
-  // v5.2 #2: 논평·사설 금지 — 사실중심 재서술만
-  '원문에 없는 평가·의견·교훈·전망·의의를 절대 덧붙이지 말 것. ' +
-  '"~을 보여준다", "~로 평가된다", "~이 필요하다", "~을 시사한다", "~을 강조한다", ' +
-  '"~중요성을 보여준다", "~문제다", "~우려된다" 같은 논평·해석·프레임 문장을 쓰지 말 것. ' +
-  '오직 원문이 전한 사실만 담담히 재서술한다. "왜 중요한가"를 네 판단으로 덧붙이지 말고, ' +
-  '원문이 직접 언급한 경우에만 그 근거와 함께 사실로 적을 것. ' +
-  // v5.2 #3: 본문 부실 시 추측 금지
-  '본문이 부실하거나 정보가 적으면 추측하지 말고 확인된 사실만 1~2문장으로 짧게 쓸 것. ' +
-  '"~것으로 보인다", "~것으로 추정된다", "~로 풀이된다" 같은 추측 어미를 쓰지 말 것. ' +
-  '과장·선정성·자극적 표현 배제. 담담하고 정확하게. 도박·약물 사용을 조장하거나 미화하지 말 것. ' +
-  '민감한 주제(자살·자해 등)는 방법·수치를 넣지 말 것.';
+// 요약 역할·규칙(분야 문구 포함)은 분야 설정 prompts.summary_system(NEWS-Q2 ■1).
+function summarySystemKoBase(): string {
+  return KOREAN_ONLY_RULE + fieldProfile().prompts.summary_system;
+}
 
-// v5.4: 입구 게이트용 판정 — 정밀도 우선("엄한 기사가 실리는 것보다 잃는 것이 낫다").
-const JUDGE_JSON_INSTRUCTION =
-  ' 그리고 이 기사가 "중독 전문 매체"에 실릴 자격이 있는지 엄격히 판정한다. 정밀도 우선 — 애매하면 거부한다.\n' +
-  '[유지 = category_fit:true, is_incident:false] ' +
-  '중독 관련 정책·법·제도·규제 동향; 정부·지자체·공공기관·공익재단의 예방사업·캠페인·포럼·교육(강원랜드·사행산업통합감독위 유형); ' +
-  '중독 관련 연구 결과·통계·역학 데이터·치료법·치료과학; 중독 산업 구조 분석·심층 기획·연재; 해외 중독 정책·대응 사례.\n' +
-  '[거부 = category_fit:false 또는 is_incident:true] ' +
-  '개인의 사건·사고·범죄·사망 보도(범인/피해자가 특정 개인); ' +
-  // v5.4.1 작업1: 기관 집행 단신 구멍 봉합(개인 특정 여부 무관)
-  '수사기관·행정기관의 개별 집행 활동 단신(단속·검거·체포·압수·폐기·적발·소탕·기소·송치·표창/감사장 전달 등 ' +
-  '"누가 언제 무엇을 집행했다" 형태의 1회성 보도). 판별 요령: 그 기사에서 집행 활동을 빼면 남는 내용이 없으면 거부. ' +
-  '단, 집행 실적이 정책 변화·통계 분석·제도 논의의 근거로 다뤄지면 유지(예: "연간 단속 통계 발표…전년比 30%↑"는 유지, ' +
-  '"OO서, 불법도박 9명 검거"는 거부); ' +
-  '연예인·유명인의 중독 고백·신변잡기·예능 내용(금쪽이·결혼지옥·상담소 유형); ' +
-  '소송·재판·판결 보도(집단소송 포함 — 전부 사건으로 분류); ' +
-  '스포츠 경기 결과·문화연예 일반·건강 일반 상식; ' +
-  '"중독"이 비유·수사로만 쓰인 기사(규제 중독, 중독성 있는 맛, 관직 중독 등); ' +
-  '카지노·토토 홍보 및 SEO 생성 콘텐츠(부자연스러운 조사, 무의미한 부제 패턴); ' +
-  '확신이 서지 않는 모든 경우.\n' +
-  'is_incident: 개별 인물·특정 사건의 사고·범죄·판결·수사 보도이면 true(본문에 중독 단어가 있어도). ' +
-  'category_fit: 위 [유지] 기준에 확실히 부합하고 배정 카테고리에 맞으면 true, 아니면 false. ' +
-  'confidence: 판정 확신도 "high"|"medium"|"low"(조금이라도 애매하면 high 를 주지 말 것).\n' +
+// v5.4: 입구 게이트용 판정 — 유지/거부 기준은 분야 설정 prompts.judge_criteria, 출력 형식은 여기.
+const JUDGE_FORMAT_TAIL =
   '반드시 아래 JSON만 출력(다른 텍스트 금지): ' +
   '{"titleKo":"제목(외국어는 한국어 번역, 한국어는 원제)","summary":"한국어 한 문단 요약",' +
   '"is_incident":true|false,"category_fit":true|false,"confidence":"high|medium|low"}\n' +
@@ -86,12 +56,21 @@ const JUDGE_JSON_INSTRUCTION =
   '응답의 첫 글자는 "{" 이고 마지막 글자는 "}" 여야 한다. ' +
   '판정이 어려워도 산문으로 답하지 말고, 위 JSON 스키마에 confidence:"low" 로 채워 출력할 것.';
 
-const SUMMARY_SYSTEM_KO = SUMMARY_SYSTEM_KO_BASE + JUDGE_JSON_INSTRUCTION;
+function judgeJsonInstruction(): string {
+  return fieldProfile().prompts.judge_criteria + JUDGE_FORMAT_TAIL;
+}
 
-const SUMMARY_SYSTEM_TRANSLATE =
-  SUMMARY_SYSTEM_KO_BASE +
-  ' 원문이 외국어(영어·일본어 등)이면 반드시 한국어로 번역·요약하라.' +
-  JUDGE_JSON_INSTRUCTION;
+export function summarySystemKo(): string {
+  return summarySystemKoBase() + judgeJsonInstruction();
+}
+
+export function summarySystemTranslate(): string {
+  return (
+    summarySystemKoBase() +
+    ' 원문이 외국어(영어·일본어 등)이면 반드시 한국어로 번역·요약하라.' +
+    judgeJsonInstruction()
+  );
+}
 
 // LANG-GUARD-1 1-2: 언어 가드 불합격 후 1회 재생성용 강화 지시.
 const KOREAN_RETRY_SYSTEM =
@@ -174,7 +153,7 @@ async function summarizeCombined(
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       deepseekStats.calls++;
-      const baseSystem0 = translate ? SUMMARY_SYSTEM_TRANSLATE : SUMMARY_SYSTEM_KO;
+      const baseSystem0 = translate ? summarySystemTranslate() : summarySystemKo();
       // LANG-GUARD-1 1-2: 언어 가드 불합격 후 재생성 시 한국어 강제 지시를 앞세운다.
       const baseSystem = opts?.forceKorean ? `${KOREAN_RETRY_SYSTEM}\n\n${baseSystem0}` : baseSystem0;
       const system = strictRetry ? `${STRICT_RETRY_SYSTEM}\n\n${baseSystem}` : baseSystem;
@@ -211,6 +190,7 @@ async function summarizeCombined(
         }));
       }
       const r = await deepseek.chat.completions.create(params);
+      addUsage(r as any);
       const choice = r.choices?.[0];
       let text = (choice?.message?.content || '').trim();
 
@@ -403,7 +383,7 @@ export async function judgeArticleFields(
       const params: Record<string, unknown> = {
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: 'system', content: ensureJsonWord(strict ? `${JUDGE_RETRY_SYSTEM}\n\n${JUDGE_SYSTEM}` : JUDGE_SYSTEM) },
+          { role: 'system', content: ensureJsonWord(strict ? `${JUDGE_RETRY_SYSTEM}\n\n${judgeSystem()}` : judgeSystem()) },
           {
             role: 'user',
             content: ensureJsonWord(
@@ -414,7 +394,7 @@ export async function judgeArticleFields(
           },
         ],
         response_format: USE_JSON_SCHEMA
-          ? { type: 'json_schema', json_schema: JUDGE_JSON_SCHEMA }
+          ? { type: 'json_schema', json_schema: judgeJsonSchema() }
           : { type: 'json_object' },
         temperature: 0,            // 추론이 꺼지면 유효해진다(thinking 모드에선 무시됨)
         max_tokens: JUDGE_MAX_TOKENS,
@@ -434,6 +414,7 @@ export async function judgeArticleFields(
       }
       const r = await (deepseek.chat.completions.create as unknown as
         (p: unknown) => Promise<{ choices?: Array<{ finish_reason?: string; message?: { content?: string } }> }>)(params);
+      addUsage(r as any);
       const choice = r.choices?.[0];
       const text = (choice?.message?.content || '').trim();
       if (choice?.finish_reason === 'length') {

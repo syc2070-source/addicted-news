@@ -1,5 +1,5 @@
 // ============================================================
-// broadcast.ts (NEWS-Q1 ■4) — 탐사·시사 방송의 중독 편 추적.
+// broadcast.ts (NEWS-Q1 ■4) — 탐사·시사 방송의 분야 편 추적(채널·핵심어 = 분야 설정 sources.broadcast).
 // YouTube 공개 채널 RSS(Atom, 열쇠 불필요) → 핵심어 관문(0원) → (크롤러에서) DeepSeek 관문 → 저장.
 // 저장 구분은 기존 열 source_type='broadcast' 로 한다(kind 열은 묶음 SQL 적용 뒤 함께 기록).
 //
@@ -11,14 +11,17 @@ import * as path from 'path';
 import axios from 'axios';
 import Parser from 'rss-parser';
 import { Judgment, passesIngestionGate, rejectReason } from './judge_article';
+import { fieldProfile } from './field_profile';
 
 export const BROADCAST_SOURCE_TYPE = 'broadcast';
 
-/** 지시서 ■4ⓑ 핵심어(제목+설명에 하나 이상). 바꾸려면 오너 결정. */
-export const BROADCAST_KEYWORDS = [
-  '중독', '도박', '마약', '약물', '알코올', '음주', '게임',
-  '스마트폰', '도파민', '흡연', '담배', '의존', '단주', '재활',
-] as const;
+/** 핵심어(제목+설명에 하나 이상) — 분야 설정 sources.broadcast.keywords(NEWS-Q1 ■4ⓑ 목록 그대로 옮김). */
+export function broadcastKeywords(): string[] {
+  return fieldProfile().sources.broadcast.keywords;
+}
+
+/** YouTube RSS 재시도 횟수(NEWS-Q2 ■8: 6 → 10). */
+export const BROADCAST_FETCH_ATTEMPTS = 10;
 
 export interface BroadcastSource {
   outletId: string;
@@ -43,7 +46,7 @@ export function feedUrlFor(channelId: string): string {
 }
 
 export function loadBroadcastSources(
-  file = path.join(__dirname, '../../data/broadcast_youtube_rss.json'),
+  file = path.join(__dirname, '../../data', fieldProfile().sources.broadcast.file || 'missing.json'),
 ): BroadcastSource[] {
   try {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { feeds?: Array<Record<string, unknown>> };
@@ -63,13 +66,17 @@ export function loadBroadcastSources(
   }
 }
 
-/** 핵심어를 품었지만 뜻이 다른 낱말(예: 재활용). 핵심어 목록 자체는 지시서 그대로. */
-const KEYWORD_FALSE_FRIENDS = ['재활용'];
-
+/** 핵심어를 품었지만 뜻이 다른 낱말(분야 설정 sources.broadcast.false_friends). */
 export function matchedBroadcastKeywords(title: string, description: string): string[] {
   let text = `${title}\n${description}`;
-  for (const word of KEYWORD_FALSE_FRIENDS) text = text.split(word).join(' ');
-  return BROADCAST_KEYWORDS.filter((k) => text.includes(k));
+  for (const word of fieldProfile().sources.broadcast.false_friends) text = text.split(word).join(' ');
+  return broadcastKeywords().filter((k) => text.includes(k));
+}
+
+/** NEWS-Q2 ■8: 지난 실행에서 실패한 채널을 맨 앞으로(순서는 그 밖 그대로). */
+export function orderFailedFirst<T extends { outletId: string }>(sources: T[], failedOutletIds: string[]): T[] {
+  const failed = new Set(failedOutletIds);
+  return [...sources.filter((s) => failed.has(s.outletId)), ...sources.filter((s) => !failed.has(s.outletId))];
 }
 
 export function passesBroadcastKeywordGate(item: Pick<BroadcastItem, 'title' | 'description'>): boolean {
@@ -130,7 +137,7 @@ export async function parseBroadcastXml(xml: string, limit = 15): Promise<Broadc
 export async function fetchBroadcastItems(
   source: BroadcastSource,
   limit = 15,
-  attempts = 6,
+  attempts = BROADCAST_FETCH_ATTEMPTS,
   waitMs = (n: number) => 1000 * n,
 ): Promise<BroadcastItem[]> {
   let lastError: unknown;
@@ -188,7 +195,7 @@ export type BroadcastDecision =
  * 관문 순서: 핵심어(0원) → DeepSeek 판정(passesIngestionGate 와 같은 기준).
  * DeepSeek 가 없거나 판정이 없으면 저장하지 않는다(fail-closed).
  * 키워드 사건사고 거름망은 쓰지 않는다 — 탐사 방송은 사건을 다루는 것이 본업이라
- * 기사용 거름망이 중독 편까지 막는다. 사건 보도 판정은 DeepSeek 의 is_incident 로만.
+ * 기사용 거름망이 분야 편까지 막는다. 사건 보도 판정은 DeepSeek 의 is_incident 로만.
  */
 export function decideBroadcast(
   item: Pick<BroadcastItem, 'title' | 'description'>,
@@ -233,6 +240,9 @@ export function buildBroadcastRow(
     blockedReason: null,
     sourceType: BROADCAST_SOURCE_TYPE,
     outletId: source.outletId,
+    // NEWS-Q2 ■7: 게시 시각(published_ts 열이 있으면 기록) · ■5 출처 등급
+    publishedTs: Number.isNaN(Date.parse(item.publishedAt)) ? null : new Date(item.publishedAt),
+    sourceGrade: 'press' as const,
   };
 }
 

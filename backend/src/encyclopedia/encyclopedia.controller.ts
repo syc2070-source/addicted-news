@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { EncyclopediaService } from './encyclopedia.service';
 
 // 전역 prefix 없음(레포 컨벤션) → 루트 경로 /encyclopedia
-// 이 컨트롤러가 스테토리·중독사회가 그대로 호출할 공용 데이터 API.
+// 이 컨트롤러가 스테토리·자매 사이트가 그대로 호출할 공용 데이터 API.
 @Controller('encyclopedia')
 export class EncyclopediaController {
   constructor(private readonly service: EncyclopediaService) {}

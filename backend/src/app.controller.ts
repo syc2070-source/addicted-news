@@ -11,9 +11,9 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  // GET /api/health — {ok, commit, startedAt}. DB·인증·비밀 0.
+  // GET /api/health — {ok, commit, startedAt, lastRun}. lastRun = 마지막 수집 실행 숫자 요약(NEWS-Q2 ■8, 표 없으면 null). 인증·비밀 0.
   @Get('api/health')
   getHealth() {
-    return this.appService.getHealth();
+    return this.appService.getHealthWithRun();
   }
 }

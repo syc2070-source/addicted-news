@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { Client, ClientConfig } from 'pg';
 import { decodeEntities, hasEntityArtifact } from './text_utils';
 import { isApply, modeLabel } from './cli_flags';
+import { defaultDbName } from './field_profile';
 
 const DRY_RUN = !isApply();
 
@@ -19,7 +20,7 @@ function buildClientConfig(): ClientConfig {
   if (url) return { connectionString: url, ssl };
   return {
     host, port: Number(process.env.DB_PORT || 5432), user: process.env.DB_USER || 'postgres',
-    password: String(process.env.DB_PASSWORD ?? ''), database: process.env.DB_NAME || 'addiction_news', ssl,
+    password: String(process.env.DB_PASSWORD ?? ''), database: defaultDbName(), ssl,
   };
 }
 

@@ -1,22 +1,23 @@
 // backend/src/crawler/sourceConfig.ts
-// v5.1 — 세계신문 60 + 국내 10 + 중독전문 4 + 국내 구글 소수
+// v5.1 — 세계신문 60 + 국내 10 + 전문 4 + 국내 구글 소수
+// NEWS-Q2 ■1·■5: 고정 목록(구글뉴스·전문·기관·학술)은 분야 설정(field_profiles/*.json)으로 옮김.
+//   코드에는 분야 글자가 없다. 신문 피드 파일 이름도 분야 설정 sources.press_files 에서.
 import * as fs from 'fs';
 import * as path from 'path';
+import { fieldProfile, FieldProfile, ProfileFeed, SourceGrade } from './field_profile';
 
-export const AD_PENALTY_KEYWORDS = [
-  '가입코드', '추천인', '공식주소', '입금플러스', '꽁머니',
-  '안전놀이터', '수익보장', '텔레그램 문의', '단톡방', '롤링', '마틴루틴',
-];
+/** 광고·홍보 감점 낱말(분야 설정 keywords.ad_penalty). */
+export function adPenaltyKeywords(): string[] {
+  return fieldProfile().keywords.ad_penalty;
+}
 
-export type CategoryName =
-  | '중독정책'
-  | '알코올·약물중독'
-  | '도박중독'
-  | '게임·디지털중독'
-  | '중독사회와 회복';
+/** 분류 이름 — 목록은 분야 설정 categories.list. */
+export type CategoryName = string;
 
 // 'broadcast' (NEWS-Q1): YouTube 방송 RSS. SOURCES 에는 넣지 않고 broadcast.ts 가 따로 돈다.
-export type SourceType = 'world_press' | 'kr_press' | 'specialty' | 'aggregator' | 'broadcast';
+// 'institution'·'academic' (NEWS-Q2 ■5): 기관 뉴스룸·학술 뉴스.
+export type SourceType =
+  | 'world_press' | 'kr_press' | 'specialty' | 'aggregator' | 'broadcast' | 'institution' | 'academic';
 
 export interface SourceConfig {
   id: string;
@@ -28,15 +29,36 @@ export interface SourceConfig {
   sourceType: SourceType;
   outletId: string;
   verifiedByFetch?: boolean;
-  /** 전문 기관/직접 RSS — 중독 점수 통과 임계값 완화(1점) */
+  /** 전문 기관/직접 RSS — 분야 점수 통과 임계값 완화(1점) */
   isSpecialized?: boolean;
   /** 수집 순서(낮을수록 먼저, 미지정 100) */
   priority?: number;
+  /** 출처 등급(기관 > 학술 > 언론 > 집계기) — NEWS-Q2 ■5 */
+  grade: SourceGrade;
+  /** 한 번에 읽을 항목 수(기본 30) */
+  maxItems?: number;
+  /** false 면 건너뜀(죽은 피드 · 대체 없음) — NEWS-Q2 ■4 */
+  active: boolean;
+  inactiveReason?: string;
+  format?: 'rss' | 'html' | 'json';
+  listPattern?: string;
+  jsonMap?: ProfileFeed['json_map'];
+}
+
+export const GRADE_RANK: Record<SourceGrade, number> = { institution: 0, academic: 1, press: 2, aggregator: 3 };
+
+/** 종류별 기본 등급. 구글뉴스로 찾은 기사도 원문으로 풀리면 press. */
+export function defaultGrade(t: SourceType): SourceGrade {
+  if (t === 'institution') return 'institution';
+  if (t === 'academic') return 'academic';
+  if (t === 'aggregator') return 'aggregator';
+  return 'press';
 }
 
 const DATA_DIR = path.join(__dirname, '../../data');
 
-function loadJson<T>(name: string): T | null {
+function loadJson<T>(name: string | undefined): T | null {
+  if (!name) return null;
   const p = path.join(DATA_DIR, name);
   try {
     if (!fs.existsSync(p)) {
@@ -50,15 +72,13 @@ function loadJson<T>(name: string): T | null {
   }
 }
 
-function categoryForRegion(regionId: string): CategoryName {
-  // 기본 버킷 — 키워드 필터 통과 후 classifyCategory 가 재분류할 수 있음
-  if (regionId === 'kr') return '중독사회와 회복';
-  if (regionId === 'specialty') return '중독사회와 회복';
-  return '중독사회와 회복';
+function activeOf(f: Record<string, unknown>): { active: boolean; inactiveReason?: string } {
+  if (f.active === false) return { active: false, inactiveReason: String(f.inactive_reason || '비활성') };
+  return { active: true };
 }
 
-function loadWorldPress(): SourceConfig[] {
-  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>('world_press_rss.json');
+function loadWorldPress(p: FieldProfile): SourceConfig[] {
+  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>(p.sources.press_files.world);
   const feeds = raw?.feeds;
   if (!Array.isArray(feeds)) return [];
   const out: SourceConfig[] = [];
@@ -75,7 +95,7 @@ function loadWorldPress(): SourceConfig[] {
       id: `wp-${feedId}`,
       url: rss,
       sourceName: nameEn,
-      category: categoryForRegion(regionId),
+      category: p.categories.default,
       region: regionId,
       lang,
       sourceType: 'world_press',
@@ -83,13 +103,15 @@ function loadWorldPress(): SourceConfig[] {
       verifiedByFetch: verified,
       isSpecialized: true,
       priority: 20,
+      grade: 'press',
+      ...activeOf(f),
     });
   });
   return out;
 }
 
-function loadKrPress(): SourceConfig[] {
-  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>('kr_press_rss.json');
+function loadKrPress(p: FieldProfile): SourceConfig[] {
+  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>(p.sources.press_files.kr);
   const feeds = raw?.feeds;
   if (!Array.isArray(feeds)) return [];
   const out: SourceConfig[] = [];
@@ -101,7 +123,7 @@ function loadKrPress(): SourceConfig[] {
       id: `kr-press-${outletId}`,
       url: rss,
       sourceName: outletId,
-      category: '중독사회와 회복',
+      category: p.categories.default,
       region: String(f.region_id || 'kr'),
       lang: String(f.lang_primary || 'ko'),
       sourceType: 'kr_press',
@@ -109,13 +131,15 @@ function loadKrPress(): SourceConfig[] {
       verifiedByFetch: true,
       isSpecialized: true,
       priority: 10,
+      grade: 'press',
+      ...activeOf(f),
     });
   });
   return out;
 }
 
-function loadSpecialtyPress(): SourceConfig[] {
-  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>('specialty_press_rss.json');
+function loadSpecialtyPress(p: FieldProfile): SourceConfig[] {
+  const raw = loadJson<{ feeds?: Array<Record<string, unknown>> }>(p.sources.press_files.specialty);
   const feeds = raw?.feeds;
   if (!Array.isArray(feeds)) return [];
   const out: SourceConfig[] = [];
@@ -132,7 +156,7 @@ function loadSpecialtyPress(): SourceConfig[] {
       id: feedId.startsWith('spec-') ? feedId : `spec-${feedId}`,
       url: rss,
       sourceName: nameEn,
-      category: categoryForRegion(regionId),
+      category: p.categories.default,
       region: regionId,
       lang,
       sourceType: 'specialty',
@@ -140,120 +164,65 @@ function loadSpecialtyPress(): SourceConfig[] {
       verifiedByFetch: verified,
       isSpecialized: true,
       priority: 5,
+      grade: 'press',
+      ...activeOf(f),
     });
   });
   return out;
 }
 
-/** 국내 구글 — 중독 키워드 검색만 소수 유지 */
-const KR_GOOGLE_AGGREGATORS: SourceConfig[] = [
-  {
-    id: 'kr-google-policy',
-    url: 'https://news.google.com/rss/search?q="중독"+AND+(정책+OR+규제+OR+법안+OR+대책+OR+예방)&hl=ko&gl=KR&ceid=KR:ko',
-    sourceName: 'Google News (KR)',
-    category: '중독정책',
-    region: 'kr',
-    lang: 'ko',
-    sourceType: 'aggregator',
-    outletId: 'google-kr-policy',
-    priority: 50,
-  },
-  {
-    id: 'kr-google-alcohol',
-    url: 'https://news.google.com/rss/search?q="알코올중독"+OR+"알코올+의존"+OR+"음주+중독"&hl=ko&gl=KR&ceid=KR:ko',
-    sourceName: 'Google News (KR)',
-    category: '알코올·약물중독',
-    region: 'kr',
-    lang: 'ko',
-    sourceType: 'aggregator',
-    outletId: 'google-kr-alcohol',
-    priority: 51,
-  },
-  {
-    id: 'kr-google-drug',
-    url: 'https://news.google.com/rss/search?q="약물중독"+OR+"마약+중독"+OR+"펜타닐"+OR+"필로폰"&hl=ko&gl=KR&ceid=KR:ko',
-    sourceName: 'Google News (KR)',
-    category: '알코올·약물중독',
-    region: 'kr',
-    lang: 'ko',
-    sourceType: 'aggregator',
-    outletId: 'google-kr-drug',
-    priority: 52,
-  },
-  {
-    id: 'kr-google-gambling',
-    url: 'https://news.google.com/rss/search?q="도박중독"+OR+"불법도박"+OR+"사행산업"&hl=ko&gl=KR&ceid=KR:ko',
-    sourceName: 'Google News (KR)',
-    category: '도박중독',
-    region: 'kr',
-    lang: 'ko',
-    sourceType: 'aggregator',
-    outletId: 'google-kr-gambling',
-    priority: 53,
-  },
-  {
-    id: 'kr-google-digital',
-    url: 'https://news.google.com/rss/search?q="게임중독"+OR+"스마트폰중독"+OR+"인터넷중독"&hl=ko&gl=KR&ceid=KR:ko',
-    sourceName: 'Google News (KR)',
-    category: '게임·디지털중독',
-    region: 'kr',
-    lang: 'ko',
-    sourceType: 'aggregator',
-    outletId: 'google-kr-digital',
-    priority: 54,
-  },
-];
-
-/** 중독 전문 직접 RSS (소수) */
-const SPECIALIZED: SourceConfig[] = [
-  {
-    id: 'kr-docdocdoc-rss',
-    url: 'http://www.docdocdoc.co.kr/rss/clickTop.xml',
-    sourceName: '청년의사',
-    category: '알코올·약물중독',
-    region: 'kr',
-    lang: 'ko',
-    sourceType: 'aggregator',
-    outletId: 'docdocdoc',
-    isSpecialized: true,
-    priority: 8,
-  },
-  {
-    id: 'us-drugfree',
-    url: 'https://drugfree.org/feed/',
-    sourceName: 'Partnership to End Addiction',
-    category: '알코올·약물중독',
-    region: 'north_america',
-    lang: 'en',
-    sourceType: 'aggregator',
-    outletId: 'drugfree',
-    isSpecialized: true,
-    priority: 30,
-  },
-  {
-    id: 'global-who-substance',
-    url: 'https://www.who.int/rss-feeds/news-english.xml',
-    sourceName: 'WHO',
-    category: '중독정책',
-    region: 'global',
-    lang: 'en',
-    sourceType: 'aggregator',
-    outletId: 'who',
-    isSpecialized: true,
-    priority: 31,
-  },
-];
-
-export function buildSources(): SourceConfig[] {
-  const world = loadWorldPress();
-  const kr = loadKrPress();
-  const specialty = loadSpecialtyPress();
-  console.log(
-    `[sourceConfig] world_press=${world.length}, kr_press=${kr.length}, specialty=${specialty.length}, google_kr=${KR_GOOGLE_AGGREGATORS.length}`,
-  );
-  // 전문매체 우선 → 국내 → 세계신문 → 기타 전문/애그리게이터
-  return [...specialty, ...kr, ...world, ...SPECIALIZED, ...KR_GOOGLE_AGGREGATORS];
+/** 분야 설정의 피드 목록(구글뉴스·전문·기관·학술) → SourceConfig. */
+export function profileFeedsToSources(
+  feeds: ProfileFeed[],
+  sourceType: SourceType,
+  p: FieldProfile,
+  opts: { isSpecialized?: boolean; defaultPriority?: number } = {},
+): SourceConfig[] {
+  return feeds
+    .filter((f) => f && f.id && f.url)
+    .map((f) => ({
+      id: f.id,
+      url: f.url,
+      sourceName: f.source_name || f.id,
+      category: f.category && p.categories.list.includes(f.category) ? f.category : p.categories.default,
+      region: f.region || 'global',
+      lang: f.lang || 'en',
+      sourceType,
+      outletId: f.outlet_id || f.id,
+      isSpecialized: opts.isSpecialized,
+      priority: f.priority ?? opts.defaultPriority,
+      grade: f.grade || defaultGrade(sourceType),
+      maxItems: f.max_items,
+      active: f.active !== false,
+      inactiveReason: f.active === false ? f.inactive_reason || '비활성' : undefined,
+      format: f.format,
+      listPattern: f.list_pattern,
+      jsonMap: f.json_map,
+    }));
 }
 
-/** 크롤러가 쓰는 통합 목록 (로드 시점에 구성) */
-export const SOURCES: SourceConfig[] = buildSources();
+/** 전 소스(비활성 포함) — 읽기 전용 점검·피드 건강 표용. */
+export function buildAllSources(p: FieldProfile = fieldProfile()): SourceConfig[] {
+  const world = loadWorldPress(p);
+  const kr = loadKrPress(p);
+  const specialty = loadSpecialtyPress(p);
+  const s = p.sources;
+  const specialized = profileFeedsToSources(s.specialized, 'aggregator', p, { isSpecialized: true, defaultPriority: 30 });
+  const institutions = profileFeedsToSources(s.institutions, 'institution', p, { isSpecialized: true, defaultPriority: 3 });
+  const academic = profileFeedsToSources(s.academic, 'academic', p, { isSpecialized: true, defaultPriority: 4 });
+  const google = profileFeedsToSources(s.google_news, 'aggregator', p, { defaultPriority: 50 });
+  console.log(
+    `[sourceConfig] field=${p.field} world_press=${world.length}, kr_press=${kr.length}, specialty=${specialty.length}, ` +
+    `institution=${institutions.length}, academic=${academic.length}, specialized=${specialized.length}, google=${google.length}`,
+  );
+  // 기관·학술 → 전문매체 → 국내 → 세계신문 → 기타 전문/애그리게이터 → 구글
+  return [...institutions, ...academic, ...specialty, ...kr, ...world, ...specialized, ...google];
+}
+
+/** 크롤러가 쓰는 소스(활성만). */
+export function buildSources(p: FieldProfile = fieldProfile()): SourceConfig[] {
+  const all = buildAllSources(p);
+  const off = all.filter((s) => !s.active);
+  if (off.length) console.log(`[sourceConfig] 비활성 ${off.length}: ${off.map((s) => `${s.id}(${s.inactiveReason})`).join(', ')}`);
+  return all.filter((s) => s.active);
+}

@@ -15,19 +15,22 @@ export async function insertArticleWithRawBody(
   values: DeepPartial<Article>,
   state: RawBodyWriteState,
   warn: (line: string) => void = console.warn,
-): Promise<void> {
+): Promise<number | null> {
   const insert = async (includeRaw: boolean) => {
     const payload = { ...values };
     if (!includeRaw) delete payload.rawBody;
     const columns = Object.keys(payload).filter((key) => payload[key] !== undefined);
-    await repo.createQueryBuilder().insert().into(Article, columns).values(payload).execute();
+    const r: any = await repo.createQueryBuilder().insert().into(Article, columns).values(payload).execute();
+    // NEWS-Q2: 새 행 id(묶음 SQL 2 의 열을 뒤이어 채울 때 쓴다). 못 얻으면 null.
+    const id = r?.identifiers?.[0]?.id ?? r?.raw?.[0]?.id;
+    return id == null ? null : Number(id);
   };
   try {
-    await insert(!state.unavailable);
+    return await insert(!state.unavailable);
   } catch (error) {
     if (state.unavailable || !missingRawBody(error)) throw error;
     state.unavailable = true;
     warn('[raw_body] column unavailable; storing articles without raw_body until deploy/v5.5_raw_body.sql is applied.');
-    await insert(false);
+    return await insert(false);
   }
 }

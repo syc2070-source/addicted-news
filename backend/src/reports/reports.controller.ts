@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { fieldProfile } from '../crawler/field_profile';
 
 const EMPTY_LIST = { count: 0, items: [] };
 const NOT_FOUND = { found: false, item: null };
@@ -21,7 +22,7 @@ export class ReportsController {
 
     try {
       const params = new URLSearchParams();
-      params.set('scenario_id', 'addiction');
+      params.set('scenario_id', fieldProfile().statory_scenario_id);
       const parsedLimit = limit ? parseInt(limit, 10) : 50;
       params.set('limit', String(Number.isFinite(parsedLimit) ? parsedLimit : 50));
       const parsedOffset = offset ? parseInt(offset, 10) : 0;

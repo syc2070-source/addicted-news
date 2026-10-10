@@ -41,7 +41,9 @@
       "rss_url": "http://rss.cnn.com/rss/cnn_topstories.rss",
       "lang_primary": "en",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: rss.cnn.com 전 피드 2023-04 멈춤(최신 항목 2023), 현행 RSS 없음",
+      "active": false,
+      "inactive_reason": "대체 없음: rss.cnn.com 전 피드 2023-04 멈춤(최신 항목 2023), 현행 RSS 없음"
     },
     {
       "feed_id": "wpr-004",
@@ -113,7 +115,9 @@
       "rss_url": "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
       "lang_primary": "en",
       "verified_by_fetch": false,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. 작업 X: rssfeeds 도메인이 HTML(SPA) 응답 — 공식 XML 피드 미탐색. verify 스크립트 UA에서 파싱 실패 가능. verified_by_fetch=false 유지. 후보 경로 중 www.usatoday.com/news/world/feed/ 는 HTTP 404 확인(작업 X). URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: feedparser 파싱 bozo — URL 또는 응답 포맷 변경 가능, 재검증 후속. 점검 필요 [alive-maybe HTTP200: ok but not rss-like ct=text/html; charset=utf-8 len=243281] (2026-07-12 fetch)."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. 작업 X: rssfeeds 도메인이 HTML(SPA) 응답 — 공식 XML 피드 미탐색. verify 스크립트 UA에서 파싱 실패 가능. verified_by_fetch=false 유지. 후보 경로 중 www.usatoday.com/news/world/feed/ 는 HTTP 404 확인(작업 X). URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: feedparser 파싱 bozo — URL 또는 응답 포맷 변경 가능, 재검증 후속. 점검 필요 [alive-maybe HTTP200: ok but not rss-like ct=text/html; charset=utf-8 len=243281] (2026-07-12 fetch). NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: usatoday 전 경로 402 Access Restricted(HTML)",
+      "active": false,
+      "inactive_reason": "대체 없음: usatoday 전 경로 402 Access Restricted(HTML)"
     },
     {
       "feed_id": "wpr-010",
@@ -206,10 +210,11 @@
       "outlet_id": "eluniversal",
       "name_en": "El Universal (Mexico)",
       "homepage_url": "https://www.eluniversal.com.mx",
-      "rss_url": "https://www.eluniversal.com.mx/rss/mundo.xml",
+      "rss_url": "https://www.eluniversal.com.mx/arc/outboundfeeds/rss/category/mundo/?outputType=xml",
       "lang_primary": "es",
-      "verified_by_fetch": false,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. mundo.xml 404 — 본 RSS 경로 미확정(2022 이후 변경 추정). verified_by_fetch=false 유지. 본 RSS 영역 미확정 (2022 영역 변경 후). URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 404 — RSS 본 경로 변경 가능, URL 후보 재탐색 후속. 점검 필요 [dead HTTP404] (2026-07-12 fetch)."
+      "verified_by_fetch": true,
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. mundo.xml 404 — 본 RSS 경로 미확정(2022 이후 변경 추정). verified_by_fetch=false 유지. 본 RSS 영역 미확정 (2022 영역 변경 후). URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 404 — RSS 본 경로 변경 가능, URL 후보 재탐색 후속. 점검 필요 [dead HTTP404] (2026-07-12 fetch). NEWS-Q2 ■4 (2026-10-10 실측): 옛 /rss/mundo.xml 404 → Arc 피드(200·83건·10-10)",
+      "rss_url_before": "https://www.eluniversal.com.mx/rss/mundo.xml"
     },
     {
       "feed_id": "wpr-018",
@@ -230,10 +235,11 @@
       "outlet_id": "elespectador",
       "name_en": "El Espectador",
       "homepage_url": "https://www.elespectador.com",
-      "rss_url": "https://www.elespectador.com/rss",
+      "rss_url": "https://www.elespectador.com/arc/outboundfeeds/discover/",
       "lang_primary": "es",
-      "verified_by_fetch": false,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. 본 RSS 경로 404 확인. verified_by_fetch=false 유지. 본 RSS 영역 0 확인. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 404 — RSS 경로 변경 가능, 재탐색 후속. 점검 필요 [dead HTTP404] (2026-07-12 fetch)."
+      "verified_by_fetch": true,
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. 본 RSS 경로 404 확인. verified_by_fetch=false 유지. 본 RSS 영역 0 확인. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 404 — RSS 경로 변경 가능, 재탐색 후속. 점검 필요 [dead HTTP404] (2026-07-12 fetch). NEWS-Q2 ■4 (2026-10-10 실측): 옛 /rss 0건 → 홈페이지 alternate 피드(200·20건·10-10)",
+      "rss_url_before": "https://www.elespectador.com/rss"
     },
     {
       "feed_id": "wpr-020",
@@ -245,7 +251,9 @@
       "rss_url": "https://www.animalpolitico.com/feed/",
       "lang_primary": "es",
       "verified_by_fetch": false,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. 작업 X: /feed·/rss 404 — 공개 RSS 미확인. verified_by_fetch=false 유지. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 404 — WordPress feed 응답 변경 가능, 재탐색 후속. 점검 필요 [dead HTTP404] (2026-07-12 fetch)."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. 작업 X: /feed·/rss 404 — 공개 RSS 미확인. verified_by_fetch=false 유지. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 404 — WordPress feed 응답 변경 가능, 재탐색 후속. 점검 필요 [dead HTTP404] (2026-07-12 fetch). NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: /feed·/rss·Arc 경로 전부 404, 홈페이지에 피드 링크 없음",
+      "active": false,
+      "inactive_reason": "대체 없음: /feed·/rss·Arc 경로 전부 404, 홈페이지에 피드 링크 없음"
     },
     {
       "feed_id": "wpr-021",
@@ -269,7 +277,9 @@
       "rss_url": "https://feeds.reuters.com/reuters/topNews",
       "lang_primary": "en",
       "verified_by_fetch": false,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. Reuters RSS 공식 영역 2020-06 종료(FiveFilters 등 제3자 외 공식 0). verified_by_fetch=false 유지. RSS 공식 종료 2020-06 — 본 영역 작동 불가. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: Reuters 공식 RSS 2020-06 종료 (FiveFilters 등 제3자 외 부재) — 시드 제외 후보, 운영 결정 후 처리. 점검 필요 [dead: fetch failed] (2026-07-12 fetch)."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. Reuters RSS 공식 영역 2020-06 종료(FiveFilters 등 제3자 외 공식 0). verified_by_fetch=false 유지. RSS 공식 종료 2020-06 — 본 영역 작동 불가. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: Reuters 공식 RSS 2020-06 종료 (FiveFilters 등 제3자 외 부재) — 시드 제외 후보, 운영 결정 후 처리. 점검 필요 [dead: fetch failed] (2026-07-12 fetch). NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: feeds.reuters.com DNS 없음, 공식 공개 RSS 폐지(reuters.com 401)",
+      "active": false,
+      "inactive_reason": "대체 없음: feeds.reuters.com DNS 없음, 공식 공개 RSS 폐지(reuters.com 401)"
     },
     {
       "feed_id": "wpr-023",
@@ -401,7 +411,9 @@
       "rss_url": "https://www.middleeasteye.net/rss",
       "lang_primary": "en",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: 피드 경로 6곳 404, 홈페이지에 피드 링크 없음",
+      "active": false,
+      "inactive_reason": "대체 없음: 피드 경로 6곳 404, 홈페이지에 피드 링크 없음"
     },
     {
       "feed_id": "wpr-034",
@@ -473,7 +485,9 @@
       "rss_url": "https://thenationonlineng.net/feed/",
       "lang_primary": "en",
       "verified_by_fetch": false,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. HTTP 403 봇 차단 — User-Agent 보강 또는 영역 외. verified_by_fetch=false 유지. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 403 봇 차단 — User-Agent 보강 또는 시드 제외 검토 후속. 점검 필요 [dead HTTP403] (2026-07-12 fetch)."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. HTTP 403 봇 차단 — User-Agent 보강 또는 영역 외. verified_by_fetch=false 유지. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: HTTP 403 봇 차단 — User-Agent 보강 또는 시드 제외 검토 후속. 점검 필요 [dead HTTP403] (2026-07-12 fetch). NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: 전 피드·사이트맵 Cloudflare 403",
+      "active": false,
+      "inactive_reason": "대체 없음: 전 피드·사이트맵 Cloudflare 403"
     },
     {
       "feed_id": "wpr-040",
@@ -482,10 +496,11 @@
       "outlet_id": "mg_co_za",
       "name_en": "Mail & Guardian",
       "homepage_url": "https://mg.co.za",
-      "rss_url": "https://mg.co.za/feed/",
+      "rss_url": "https://mg.co.za/rss/",
       "lang_primary": "en",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. NEWS-Q2 ■4 (2026-10-10 실측): 옛 /feed/ 404 → /rss/(200·50건·10-09)",
+      "rss_url_before": "https://mg.co.za/feed/"
     },
     {
       "feed_id": "wpr-041",
@@ -554,10 +569,11 @@
       "outlet_id": "koreaherald",
       "name_en": "The Korea Herald",
       "homepage_url": "http://www.koreaherald.com",
-      "rss_url": "https://www.koreaherald.com/rss/world",
+      "rss_url": "https://www.koreaherald.com/rss/kh_World",
       "lang_primary": "en",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: feedparser 파싱 bozo — 한국어/영어 RSS 분리 또는 URL 변경 가능, 재탐색 후속."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. URL 영역 정정 2026-05-13 (작업 X). / 2026-05-13 작업 X: feedparser 파싱 bozo — 한국어/영어 RSS 분리 또는 URL 변경 가능, 재탐색 후속. NEWS-Q2 ■4 (2026-10-10 실측): 옛 /rss/world 0건 → /rss/kh_World(200·50건·10-09)",
+      "rss_url_before": "https://www.koreaherald.com/rss/world"
     },
     {
       "feed_id": "wpr-047",
@@ -593,7 +609,9 @@
       "rss_url": "http://www.xinhuanet.com/english/rss/worldrss.xml",
       "lang_primary": "en",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정. NEWS-Q2 ■4 (2026-10-10 실측): 비활성 — 대체 없음: english.news.cn/rss 목록의 피드가 모두 2017~2018 멈춤",
+      "active": false,
+      "inactive_reason": "대체 없음: english.news.cn/rss 목록의 피드가 모두 2017~2018 멈춤"
     },
     {
       "feed_id": "wpr-050",

@@ -90,6 +90,19 @@ export class Article {
   @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true, select: false, insert: false, update: false })
   deletedAt: Date | null;
 
+  // NEWS-Q2 묶음 SQL 2 — 열이 없을 수 있어 SELECT·INSERT·UPDATE 에 섞지 않는다(있을 때만 따로 읽고 씀).
+  @Column({ type: 'text', nullable: true, select: false, insert: false, update: false })
+  tier: string | null;
+
+  @Column({ name: 'published_ts', type: 'timestamptz', nullable: true, select: false, insert: false, update: false })
+  publishedTs: Date | null;
+
+  @Column({ name: 'source_grade', type: 'text', nullable: true, select: false, insert: false, update: false })
+  sourceGrade: string | null;
+
+  @Column({ name: 'url_resolve', type: 'jsonb', nullable: true, select: false, insert: false, update: false })
+  urlResolve: any; // jsonb(url_resolve.ts UrlResolveState) — 엔티티로는 읽고 쓰지 않음
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

@@ -1,5 +1,6 @@
 // backend/src/admin/admin.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { columnExists } from '../crawler/schema_probe';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Article } from '../articles/article.entity';
@@ -125,7 +126,7 @@ export class AdminService {
     return { success: true, article };
   }
 
-  // 중독이슈 설정
+  // 이슈 설정
   async setIssue(id: number, isIssue: boolean) {
     const article = await this.getArticle(id);
     
@@ -166,11 +167,15 @@ export class AdminService {
     return { success: true, article };
   }
 
-  // 기사 완전 삭제
+  // 기사 삭제 = soft(deleted_at 찍기) — NEWS-Q2 ■8. 하드 삭제 없음, 열이 없으면 삭제하지 않는다.
   async deleteArticle(id: number) {
-    const article = await this.getArticle(id);
-    await this.articleRepo.remove(article);
-    return { success: true, id };
+    await this.getArticle(id);
+    const q = (sql: string, params?: unknown[]) => this.articleRepo.query(sql, params);
+    if (!(await columnExists(q, 'articles', 'deleted_at'))) {
+      throw new ServiceUnavailableException('deleted_at 열 없음 — 삭제하지 않음(soft 삭제만 허용)');
+    }
+    await q(`UPDATE articles SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL`, [id]);
+    return { success: true, id, soft: true };
   }
 
   // 새 기사 생성
@@ -245,7 +250,7 @@ export class AdminService {
     });
   }
 
-  // 중독이슈 목록
+  // 이슈 목록
   async getIssueNews() {
     return this.articleRepo.find({
       where: { isIssue: true, blocked: false },

@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { EncyclopediaTerm } from './encyclopedia.entity';
+import { fieldProfile } from '../crawler/field_profile';
 
 @Injectable()
 export class EncyclopediaService {
@@ -65,9 +66,8 @@ export class EncyclopediaService {
   }
 
   // 자동 링크에서 제외할 너무 흔한 일반어(오탐 방지)
-  private static readonly LINK_STOP = new Set<string>([
-    '중독', '치료', '회복', '부정', '대처', '개입', '예방', '강화',
-  ]);
+  // 목록은 분야 설정 encyclopedia.link_stop(NEWS-Q2 ■1)
+  private static readonly LINK_STOP = new Set<string>(fieldProfile().encyclopedia.link_stop);
 
   // 표제어 -> 안전한 별칭 목록
   private linkAliases(termKo: string): string[] {

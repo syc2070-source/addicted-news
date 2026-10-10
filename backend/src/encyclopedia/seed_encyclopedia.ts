@@ -1,11 +1,12 @@
 /**
- * 중독백과 JSON → encyclopedia_terms upsert
+ * 백과 JSON(분야 설정 encyclopedia.file) → encyclopedia_terms upsert
  * 실행: npx ts-node src/encyclopedia/seed_encyclopedia.ts
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { Client } from 'pg';
 import * as dotenv from 'dotenv';
+import { fieldProfile } from '../crawler/field_profile';
 
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
@@ -33,7 +34,7 @@ interface EncFile {
 }
 
 async function main() {
-  const jsonPath = path.join(__dirname, '../../addiction_encyclopedia_v4.json');
+  const jsonPath = path.join(__dirname, '../..', fieldProfile().encyclopedia.file);
   const raw = fs.readFileSync(jsonPath, 'utf8');
   const data = JSON.parse(raw) as EncFile;
   const entries = data.entries ?? [];

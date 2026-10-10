@@ -14,33 +14,10 @@
 import 'dotenv/config';
 import { Client, ClientConfig } from 'pg';
 import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats, DEEPSEEK_MODEL } from './deepseek_summary';
+import { defaultDbName, fieldProfile } from './field_profile';
 
-const SAMPLES: Array<{ label: string; title: string; content: string; category: string }> = [
-  {
-    label: '정책/이슈(유지 기대: category_fit=true, incident=false)',
-    title: '정부, 청소년 도박중독 예방 교육 전국 확대 발표',
-    content:
-      '보건복지부는 청소년 도박중독 예방을 위해 전국 중·고등학교에 예방 교육을 확대한다고 밝혔다. ' +
-      '올해 시범사업 결과를 바탕으로 프로그램을 표준화하고 상담 연계를 강화한다는 계획이다.',
-    category: 'policy',
-  },
-  {
-    label: '개별 사건(거부 기대: is_incident=true)',
-    title: 'OO경찰서, 불법 도박장 운영 일당 9명 검거',
-    content:
-      'OO경찰서는 도심 오피스텔에서 불법 도박장을 운영한 혐의로 일당 9명을 검거해 조사 중이라고 밝혔다. ' +
-      '경찰은 여죄를 추궁하고 있다.',
-    category: 'society',
-  },
-  {
-    label: '연구/통계(유지 기대: category_fit=true)',
-    title: '알코올 사용장애 유병률 5년간 변화 연구 결과 공개',
-    content:
-      '국내 연구진이 지난 5년간 알코올 사용장애 유병률 변화를 분석한 결과를 학술지에 발표했다. ' +
-      '연령대별 추이와 치료 접근성의 상관관계를 함께 제시했다.',
-    category: 'mechanism',
-  },
-];
+// 점검 표본(유지·거부 기대 사례)은 분야 설정 smoke_samples(NEWS-Q2 ■1).
+const SAMPLES: Array<{ label: string; title: string; content: string; category: string }> = fieldProfile().smoke_samples;
 
 /** --batch N (또는 --n N) → N. 없으면 0. */
 function batchCount(): number {
@@ -61,7 +38,7 @@ function buildClientConfig(): ClientConfig {
   if (url) return { connectionString: url, ssl };
   return {
     host, port: Number(process.env.DB_PORT || 5432), user: process.env.DB_USER || 'postgres',
-    password: String(process.env.DB_PASSWORD ?? ''), database: process.env.DB_NAME || 'addiction_news', ssl,
+    password: String(process.env.DB_PASSWORD ?? ''), database: defaultDbName(), ssl,
   };
 }
 

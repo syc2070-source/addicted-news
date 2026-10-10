@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
 import { isApply } from './cli_flags';
+import { defaultDbName, fieldProfile } from './field_profile';
 
 // 복원 대상 22건 (상단 하드코딩)
 const RESTORE_IDS: number[] = [
@@ -43,7 +44,7 @@ function buildClientConfig(): ClientConfig {
   return {
     host, port: Number(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres', password: String(process.env.DB_PASSWORD ?? ''),
-    database: process.env.DB_NAME || 'addiction_news', ssl,
+    database: defaultDbName(), ssl,
   };
 }
 
@@ -80,7 +81,7 @@ function rowValues(r: any): any[] {
   const g = (k: string, d: any = null) => (r[k] === undefined ? d : r[k]);
   return [
     r.id, g('title'), g('original_title'), g('teaser'), g('summary'),
-    g('category', '중독사회와 회복'), g('region', 'KR'), g('source', ''),
+    g('category', fieldProfile().categories.default), g('region', 'KR'), g('source', ''),
     g('source_url', ''), g('google_url'), g('origin', 'crawler'),
     g('is_top', false), g('is_feature', false), g('is_rapha', false), g('is_issue', false),
     g('image_url'), g('published_at', ''), g('lang', 'ko'), g('is_foreign', false),

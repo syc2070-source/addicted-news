@@ -16,8 +16,9 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Client, ClientConfig } from 'pg';
-import { isIncidentReport, normalize } from './addictionFilter';
+import { isIncidentReport, normalize } from './field_filter';
 import { hardDeleteEnabled } from './cleanup_policy';
+import { defaultDbName, fieldProfile } from './field_profile';
 
 const DIAG = process.env.DIAG === 'true';
 
@@ -62,10 +63,8 @@ const DUP_STOPWORDS = new Set([
   '오늘', '내일', '어제', '올해', '지난', '이번', '최근', '다시', '또한', '위해',
   '대해', '따라', '밝혀', '밝혀져', '전했다', '말했다', '나타났다', '드러났다',
   '종합', '단독', '속보', '기자', '뉴스', '보도', '영상', '사진', '인터뷰',
-  '중독', '도박', '도박중독', '알코올', '마약', '상담', '지원', '예방', '강화',
-  '도입', '서비스', '개시', '운영', '대책', '정책', '사업', '캠페인', '확대',
-  '추진', '발표', '계획', '방안', '행사', '세미나', '토론회', '실태', '현황',
-  '문제', '우려', '논란', '급증', '감소', '증가',
+  // 분야 상용어 — 분야 설정 keywords.dup_stopwords(NEWS-Q2 ■1)
+  ...fieldProfile().keywords.dup_stopwords,
 ]);
 export function extractCoreKeywords(title: string): Set<string> {
   return new Set(
@@ -123,7 +122,7 @@ function buildClientConfig(): ClientConfig {
     port: Number(process.env.DB_PORT || 5432),
     user: process.env.DB_USER || 'postgres',
     password: String(process.env.DB_PASSWORD ?? ''),
-    database: process.env.DB_NAME || 'addiction_news',
+    database: defaultDbName(),
     ssl,
   };
 }

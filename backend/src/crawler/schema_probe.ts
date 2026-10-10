@@ -19,3 +19,39 @@ export async function columnExists(query: QueryFn, table: string, column: string
     return false;
   }
 }
+
+export async function tableExists(query: QueryFn, table: string): Promise<boolean> {
+  try {
+    const rows = await query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = $1 LIMIT 1`,
+      [table],
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** NEWS-Q2: 묶음 SQL 1·2 의 열·표가 섰는지 한 번에. 하나하나 "있을 때만" 켠다. */
+export interface SchemaFlags {
+  deletedAt: boolean;
+  kind: boolean;
+  tier: boolean;
+  publishedTs: boolean;
+  sourceGrade: boolean;
+  urlResolve: boolean;
+  crawlRuns: boolean;
+}
+
+export async function probeSchema(query: QueryFn): Promise<SchemaFlags> {
+  const [deletedAt, kind, tier, publishedTs, sourceGrade, urlResolve, crawlRuns] = await Promise.all([
+    columnExists(query, 'articles', 'deleted_at'),
+    columnExists(query, 'articles', 'kind'),
+    columnExists(query, 'articles', 'tier'),
+    columnExists(query, 'articles', 'published_ts'),
+    columnExists(query, 'articles', 'source_grade'),
+    columnExists(query, 'articles', 'url_resolve'),
+    tableExists(query, 'crawl_runs'),
+  ]);
+  return { deletedAt, kind, tier, publishedTs, sourceGrade, urlResolve, crawlRuns };
+}

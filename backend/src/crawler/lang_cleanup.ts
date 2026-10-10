@@ -23,6 +23,7 @@ import { Client, ClientConfig } from 'pg';
 import { isKoreanOutput, describeLangCheck, KO_MIN, HANJA_MAX } from './lang_output';
 import { isApply, modeLabel } from './cli_flags';
 import { hardDeleteEnabled } from './cleanup_policy';
+import { defaultDbName } from './field_profile';
 
 const DRY_RUN = !isApply();
 const DEPLOY_DIR = path.join(__dirname, '../../../deploy');
@@ -38,7 +39,7 @@ function buildClientConfig(): ClientConfig {
   if (url) return { connectionString: url, ssl };
   return {
     host, port: Number(process.env.DB_PORT || 5432), user: process.env.DB_USER || 'postgres',
-    password: String(process.env.DB_PASSWORD ?? ''), database: process.env.DB_NAME || 'addiction_news', ssl,
+    password: String(process.env.DB_PASSWORD ?? ''), database: defaultDbName(), ssl,
   };
 }
 
