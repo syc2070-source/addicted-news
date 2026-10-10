@@ -1,0 +1,53 @@
+NEWS-Q1 지시서 (2026-10-10 · 중독뉴스 첫 판 · 실행자 = 데스크탑 Claude Code · 폴더 D:\addicted-news)
+
+[위치판]
+저장소 D:\addicted-news · GitHub syc2070-source/addicted-news · main = ENC-FIX-1 뒤 머리(■0 실측) · 정적 프런트 + NestJS 11 + TypeORM/PostgreSQL(Supabase 프로젝트 addiction-news · PRODUCTION · articles.raw_body 있음) · Render: addicted-news-backend(웹) · addicted-news-crawler(cron · 날마다 성공) · 수집 = RSS/Google News → DeepSeek 관문 → DB
+알려진 것(Codex 감사 09-02 · CTO 미실측): **P0 = 주간 cleanup `--apply` 가 기사를 하드 삭제 · AI 판정 실패 시 휴리스틱이 삭제 근거 · 백업은 배포 인스턴스 로컬** · migration 0(synchronize:false) · health `/` 404 · 로컬 .bat C:\ 고정 · sourceUrl/googleUrl 혼동 · 중복 lock 없음 · README 낡음 · 미추적 파일(article_id.* · frontend-v2/ · 루트 lock · 영상 로그) · 가지 claude/addicted-news-setup-fv9da4(frontend-v2 · 손대지 않음)
+ENC-FIX-1 잔일: lib/fetch.py · existing_uploads.audit.json · install_youtube_publisher_task.ps1 · publisher-requirements.lock.txt 미커밋 · ps1 의 python 출력 버퍼(`python -u`)
+오너 10-10: 탐사 방송(PD수첩 등)의 중독 편을 자동 추적 → 이 판 ■4
+
+[목표]
+① 중독뉴스는 최신성이다 — 세계 중독 보도를 날마다 모아 정확히 분류해 보여 주고, 기사는 기계 판단 실패로 사라지지 않는다.
+② 운영 사이트는 재작성하지 않고 측정한 뒤 깨진 것만 작은 판으로 고친다.
+③ 11월에 Statory 서재의 입구가 된다(기사·방송 카드) — 출처·종류·시각이 정확해야 한다.
+항목마다 〔①〕〔②〕〔③〕.
+
+[규율]
+- 오너에게 묻지 말고 끝까지. 3번 시도 뒤 「미측」. 「미측 ≠ 0」. 오너 액션 0.
+- 열쇠 값 0 · .env* 읽기·쓰기 0 · DB 직접 접속 0(운영 데이터는 공개 API 로만 읽음) · DB 데이터 수정 0 · 스키마 변경은 코드로 하지 않고 **묶음 SQL 파일**(`docs/governance/sql/APPLY_<YYYYMMDD>_news_bundle.sql` · BEGIN/COMMIT · IF NOT EXISTS · 확인표 첫 줄 = 묶음 판 sha256 앞 8자리 · 끝 열 ok) 로 만들어 오너가 Supabase SQL Editor 에서 돌림 · 새 열을 쓰는 코드는 **열이 있는지 확인한 뒤에만** 켜짐(없으면 옛 동작 그대로 · 단 삭제는 0).
+- 지우기 0(파일·커밋·기사·작업) · 미추적 파일 add 0(git add 는 파일 이름 하나씩) · rebase·force 0 · frontend-v2 · 업로더(video_pipeline) 손대지 않음.
+- 커밋 ⓐ 지시서 [skip ci] [skip render] → ⓑ 코드(배포됨 · [skip] 0 · 혼자 push) → ⓒ 보고서 [skip ci] [skip render].
+
+■0 시작 〔②〕
+ⓐ 지시서 전문 → docs/reports/202610/NEWS-Q1_instruction.txt · git fetch · main pull --ff-only · HEAD 기록 · git checkout -b claude/news-q1 · 커밋 ⓐ · push 가지.
+ⓑ 잔일: 네 파일을 고정본(release)과 fc /b 대조한 뒤 커밋(lock 은 내용 그대로) · ps1 의 python 호출에 `-u`(런타임 사본과 Git 원본 둘 다 · fc 동일 · 작업 변경 0).
+ⓒ 실측 표: Render 서비스 둘의 설정(render.yaml 있으면 · rootDir·build·start·cron 식) · cleanup 이 어디서 어떻게 도나(cron 식 · 명령 · `--apply` 경로 · 삭제 기준 · AI 실패 분기 · 백업 꼴) · articles 표의 열(상태·삭제·종류·출처 열이 있는지 — TypeORM 엔티티로) · 공개 API 목록·검색 길 · 수집기 소스 설정 파일 꼴.
+
+■1 cleanup fail-closed(P0) 〔①〕
+ⓐ AI 판정 실패·시간초과·빈 응답 → 그 기사는 **건너뜀**(삭제 0 · 로그) · 휴리스틱은 「후보 표시」만 하고 삭제 근거가 되지 않음.
+ⓑ 삭제는 soft 만: `deleted_at`(timestamptz NULL) 를 찍고 공개 API·프런트는 NULL 만 보여 줌 · 하드 삭제 코드는 깃발 `CLEANUP_HARD_DELETE`(기본 0) 뒤로 옮기고 이 판에서 켜지 않음 · 30일 뒤 하드 삭제도 이 판 0.
+ⓒ `deleted_at` 열이 없으면(■0ⓒ) 묶음 SQL 로 열 추가를 적어 두고(■4 의 kind 열과 한 묶음) 코드는 열 존재 확인 뒤에만 soft 삭제 · 열이 없는 동안 cleanup 은 「후보 목록만 쓰고 삭제 0」.
+ⓓ 돌 때마다 「삭제 후보 목록」(id · 제목 · 사유 · AI/휴리스틱)을 DB 안(기사 메타 또는 전용 표 — 표가 필요하면 묶음에) 또는 로그에 남김 · 인스턴스 로컬 파일만 두는 백업은 백업이 아님.
+ⓔ 시험: AI 실패 → 삭제 0 · 휴리스틱만 → 삭제 0 · AI 「삭제」 → deleted_at 만 · 열 없음 → 삭제 0 · 공개 API 가 deleted_at 숨김 = 5건 이상.
+
+■2 health 〔②〕
+`GET /` 200(짧은 글) · `GET /api/health` → {ok, commit: RENDER_GIT_COMMIT ?? "local", startedAt} · DB·인증·비밀 0 · Render healthCheckPath 설정은 손대지 않음.
+
+■3 품질 표본(읽기만 · 고치기는 NEWS-Q2) 〔①〕〔③〕
+공개 API 로 최근 100건: 중복(제목 정규화·sourceUrl) · 언어(ko/en/기타) · 세계/한국 비율 · 분류 분포 · raw_body 있음 비율 · 원문 링크 살아 있음(HEAD 20건) · 보도 시각 vs 수집 시각 차 · DeepSeek 관문 통과/거절 수(수집기 로그 7일) → 표 · 「고칠 것 후보」 열 줄.
+
+■4 방송 추적 〔①〕〔③〕
+ⓐ 채널 아홉의 channel_id 실측(채널 페이지 소스의 channelId · 못 찾으면 미측): MBC PD수첩 · MBC 스트레이트 · SBS 그것이 알고 싶다 · SBS 스페셜 · KBS 추적60분 · KBS 시사기획 창 · KBS 다큐인사이트 · EBS 다큐프라임 · 뉴스타파 → RSS `https://www.youtube.com/feeds/videos.xml?channel_id=<id>` 를 수집기 소스에 등록(종류 broadcast · 프로그램 이름 · 열쇠 0).
+ⓑ 관문: 제목+설명에 핵심어(중독 · 도박 · 마약 · 약물 · 알코올 · 음주 · 게임 · 스마트폰 · 도파민 · 흡연 · 담배 · 의존 · 단주 · 재활) 하나 이상 → 그때만 DeepSeek 관문으로(비용 주 몇 건) → 저장: 제목 · 프로그램 · 방송(게시) 시각 · 영상 URL · 설명 요지 · kind=broadcast.
+ⓒ kind 열이 없으면 묶음 SQL(■1 과 한 묶음 · `kind text NOT NULL DEFAULT 'article'`) · 열 없는 동안은 기존 열로 구분이 되면(category/source 규약 `broadcast:` 접두) 그걸로, 안 되면 저장 보류(미측) — 어느 길인지 보고서에.
+ⓓ 공개 목록·검색 기본은 기사만 · 방송은 `?kind=broadcast` 로만(프런트 변경 0 · 중독사회 연대기 노출은 SOC-R1).
+ⓔ 첫 실행(읽기 전용 모드 있으면 그걸로 · 없으면 통과분만 저장): 채널마다 최근 15개 읽어 통과 건수·제목 표(PD수첩 2026-08-11 「도박소년이 된 내 아들」이 통과하는지 확인).
+ⓕ 시험: 관문 통과/탈락 · kind 저장 · 공개 목록 제외 · RSS 파싱 = 4건 이상.
+
+■5 로컬 .bat 〔②〕 C:\ 고정 경로 → 스크립트 위치 기준 상대 경로(내용 같음 · 실행 확인).
+
+■6 배포 확인·보고 〔②〕
+커밋 ⓑ 「fix(news): cleanup fail-closed + health + broadcast sources (NEWS-Q1)」 → push 가지 → main ff-merge → push main(혼자) → 25분 동안 60초마다 `GET /api/health` commit 이 머리 해시가 되면 배포 시각 기록 · 넘기면 「배포 미확인」 → 전/후 표(/ 404→200 · health · 최근 100 표 · 방송 통과 건수) → 보고서 docs/reports/202610/NEWS-Q1_<MMDD>.txt(첫 줄 경보 · ■0~■5 표 · 묶음 SQL 있으면 파일 경로·확인표 줄 수·묶음 판 번호 · 바뀐 파일 · 미측 · 다음 판 후보 열 줄 · 「NEWS-Q1 끝」) → 커밋 ⓒ → push main. 보고서 전문 화면 출력.
+
+[하지 않는 것]
+보존 기간·삭제 기준 바꾸기(오너 제품 정의) · 하드 삭제 · DB 데이터 수정 · 스키마를 코드로 바꾸기 · 방송 외 수집 피드·키워드 변경 · frontend-v2 · 업로더 · 미추적 add · .env · 열쇠 출력 · 지우기 · rebase/force.
