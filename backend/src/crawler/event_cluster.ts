@@ -6,6 +6,9 @@
 //      ① 제목 2-gram Jaccard ≥ 0.5 (한글 = 띄어쓰기 뺀 글자 2-gram · 라틴 = 낱말)
 //      ② 핵심 명사 집합 겹침 |A∩B| / min(|A|,|B|) ≥ 0.6 — 제목 명사(겹친 것 2개+) 또는 제목+첫 문단 명사(3개+)
 //         핵심 명사 = 길이 2+ 낱말 − 불용어 − 묶음 안 흔한 낱말(문서 빈도 > max(12, 10%))
+//      ③ (NEWS-Q4 ■3) 고유명사 규칙: 제목+첫 문단의 기관명·인명(기관 접미 본부·위원회·청·처·부·원·협회·재단·병원·
+//         대학교·센터·경찰서 등 · 「○○○ 의원/장관」 꼴 인명)이 서로 다른 것 둘 이상 같으면
+//         제목 Jaccard 문턱 0.5 → 0.35, 또는 제목+첫 문단 2-gram Jaccard ≥ 0.25(실측 · 보고서 NEWS-Q4 ■3).
 //  · 보도 시각 차 ±36시간 안에서만.
 //  · 사슬 막기: 새 기사는 묶음의 (시간 창 안) 기사 절반 이상과 겹칠 때만 그 묶음에 든다.
 //  · cluster_id = 묶음에서 가장 이른 보도의 id · 대표 = source_grade 높은 매체 → 같으면 이른 보도 → 작은 id.
@@ -21,6 +24,14 @@ export const WINDOW_HOURS = 36;
 /** 흔한 낱말 = 문서 빈도 > max(12, 10%) */
 export const COMMON_MIN_DOCS = 12;
 export const COMMON_DOC_RATIO = 0.1;
+/** NEWS-Q4 ■3: 고유명사 규칙(끄려면 false — 오묶음이 생기면 끄고 사유를 보고서에) */
+export const ENTITY_RULE_ON = true;
+export const ENTITY_MIN_SHARED = 2;
+export const ENTITY_JACCARD_MIN = 0.35;
+export const ENTITY_PARA_JACCARD_MIN = 0.25;
+
+/** 같은 사건으로 본 근거: ① 제목 Jaccard · ② 명사 겹침 · ③ 고유명사 규칙 */
+export type ClusterRule = 'jaccard' | 'noun' | 'entity';
 
 export const GRADE_ORDER: Record<string, number> = { institution: 0, academic: 1, press: 2, aggregator: 3 };
 export function gradeRank(g: SourceGrade | string | null | undefined): number {
@@ -32,6 +43,8 @@ export interface ClusterDoc {
   title: string;
   /** 첫 문단(요약 첫 문장 · 피드 스니펫) — 없어도 됨 */
   lead?: string | null;
+  /** 첫 문단(앞 두 문장 · 300자) — 고유명사 규칙용 · 없으면 lead */
+  para?: string | null;
   /** 보도 시각(ms) */
   ts: number;
   grade?: SourceGrade | string | null;
@@ -53,6 +66,8 @@ export interface ClusterOptions {
   /** 첫 문단으로 쓰지 않을 문장(설정 prompts.fallback_summary_line 같은 대체 문구) */
   ignoreLeads?: Iterable<string>;
   windowHours?: number;
+  /** 고유명사 규칙(기본 ENTITY_RULE_ON) */
+  entityRule?: boolean;
 }
 
 // ---------- 정규화 ----------
@@ -197,6 +212,59 @@ export function leadOf(text: string | null | undefined): string {
   return sentence.slice(0, 160);
 }
 
+/** 첫 문단의 앞 두 문장(300자 이내) — 고유명사 규칙 재료. */
+export function paraOf(text: string | null | undefined): string {
+  const first = String(text || '').trim().split(/\n+/)[0] || '';
+  return first.split(/(?<=[.!?。])\s+/).slice(0, 2).join(' ').slice(0, 300);
+}
+
+// ---------- 고유명사(기관명·인명) ----------
+// 긴 접미부터(경찰청 → 청 순서). 한 글자 접미는 낱말이 3자+ 일 때만.
+const ENTITY_SUFFIXES = [
+  '위원회', '대학교', '경찰서', '경찰청', '교육청', '지원청', '연구소', '연구원', '치유원', '진흥원', '본부', '협회', '재단',
+  '병원', '대학', '센터', '경찰', '공단', '학회', '의회', '축제', '청', '처', '부', '원',
+];
+const PERSON_TITLES = new Set([
+  '의원', '장관', '대표', '청장', '처장', '원장', '교수', '회장', '시장', '지사', '위원장', '본부장', '이사장', '구청장', '군수',
+  '총장', '대행', '센터장', '소장', '국장',
+]);
+
+/** 제목·문단 속 기관명(접미)·인명(「세 글자 + 직함」). 앞 「한국·국립·대한」은 뗀다. */
+export function entitiesOf(text: string): string[] {
+  const toks = tokensOf(text);
+  const out = new Set<string>();
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (!/^[가-힣]+$/.test(t)) continue;
+    if (/^[가-힣]{3}$/.test(t) && PERSON_TITLES.has(toks[i + 1] || '')) out.add('人' + t);
+    for (const s of ENTITY_SUFFIXES) {
+      if (t.length >= s.length + 2 && t.endsWith(s)) {
+        const name = t.replace(/^(한국|국립|대한)(?=[가-힣]{3})/, '');
+        out.add(name);
+        break;
+      }
+    }
+  }
+  return [...out];
+}
+
+/** 두 기사에 함께 나온 고유명사(서로 다른 것만 · 「경남경찰」⊂「경남경찰청」 은 하나로 셈). */
+export function sharedEntities(a: Iterable<string>, b: Iterable<string>): string[] {
+  const bs = [...b];
+  const hits: string[] = [];
+  for (const x of a) {
+    for (const y of bs) {
+      const same = x === y || (x.length >= 3 && y.length >= 3 && !x.startsWith('人') && !y.startsWith('人') && (x.includes(y) || y.includes(x)));
+      if (same) hits.push(x.length <= y.length ? x : y);
+    }
+  }
+  const kept: string[] = [];
+  for (const h of [...new Set(hits)].sort((p, q) => p.length - q.length)) {
+    if (!kept.some((k) => k === h || (!k.startsWith('人') && !h.startsWith('人') && (h.includes(k) || k.includes(h))))) kept.push(h);
+  }
+  return kept;
+}
+
 // ---------- 준비(정규화 결과 기억) ----------
 interface Prepared {
   doc: ClusterDoc;
@@ -204,6 +272,9 @@ interface Prepared {
   altGrams: Set<string> | null;
   titleNouns: string[];
   leadNouns: string[];
+  /** ■3: 제목+첫 문단 고유명사 · 제목+첫 문단 2-gram */
+  entities: string[];
+  paraGrams: Set<string>;
 }
 
 interface Filtered {
@@ -212,12 +283,15 @@ interface Filtered {
   altGrams: Set<string> | null;
   titleNouns: Set<string>;
   allNouns: Set<string>;
+  entities: string[];
+  paraGrams: Set<string>;
 }
 
 class Prep {
   readonly stop: Set<string>;
   readonly ignoreLeads: Set<string>;
   readonly windowMs: number;
+  readonly entityRule: boolean;
   private df = new Map<string, number>();
   private n = 0;
 
@@ -225,6 +299,7 @@ class Prep {
     this.stop = new Set([...(opts.fieldStopwords || [])].map((s) => normalizeClusterText(String(s))).filter(Boolean));
     this.ignoreLeads = new Set([...(opts.ignoreLeads || [])].map((s) => normalizeClusterText(String(s))).filter(Boolean));
     this.windowMs = (opts.windowHours ?? WINDOW_HOURS) * 3600 * 1000;
+    this.entityRule = opts.entityRule ?? ENTITY_RULE_ON;
   }
 
   prepare(doc: ClusterDoc): Prepared {
@@ -234,18 +309,26 @@ class Prep {
     if (doc.altTitle && doc.altTitle !== doc.title) {
       for (const w of nounsOf(stripOutletSuffix(doc.altTitle), this.stop)) if (!titleNouns.includes(w)) titleNouns.push(w);
     }
+    let para = paraOf(doc.para ?? doc.lead);
+    if (para && (this.ignoreLeads.has(normalizeClusterText(para)) || this.ignoreLeads.has(normalizeClusterText(leadOf(para))))) para = '';
+    const title = stripOutletSuffix(doc.title);
+    const grams = titleGrams(doc.title, this.stop);
     return {
       doc,
-      grams: titleGrams(doc.title, this.stop),
+      grams,
       altGrams: doc.altTitle && doc.altTitle !== doc.title ? titleGrams(doc.altTitle, this.stop) : null,
       titleNouns,
       leadNouns: lead ? nounsOf(lead, this.stop).filter((w) => !titleNouns.includes(w)) : [],
+      entities: this.entityRule ? entitiesOf(`${title} ${para}`) : [],
+      // 첫 문단이 없으면 빈 집합 → 고유명사 규칙은 제목 Jaccard(0.35)로만
+      paraGrams: this.entityRule && para ? titleGrams(`${title} ${para}`, this.stop) : new Set<string>(),
     };
   }
 
   count(p: Prepared): void {
     this.n++;
     for (const w of new Set([...p.titleNouns, ...p.leadNouns])) this.df.set(w, (this.df.get(w) || 0) + 1);
+    for (const e of p.entities) this.df.set('E:' + e, (this.df.get('E:' + e) || 0) + 1);
   }
 
   /** 문서 빈도로 흔한 낱말을 뺀 비교용 꼴. */
@@ -260,23 +343,35 @@ class Prep {
       altGrams: p.altGrams,
       titleNouns,
       allNouns: new Set([...titleNouns, ...p.leadNouns.filter(keep)]),
+      // 흔한 기관(국감 철 「보건복지위원회」 같은)은 고유명사 규칙에서 뺀다.
+      entities: p.entities.filter((e) => (this.df.get('E:' + e) || 0) <= limit),
+      paraGrams: p.paraGrams,
     };
   }
 
   /** 같은 사건인가. */
   same(a: Filtered, b: Filtered): boolean {
-    if (Math.abs(a.doc.ts - b.doc.ts) > this.windowMs) return false;
+    return this.rule(a, b) !== null;
+  }
+
+  /** 같은 사건으로 본 근거(아니면 null). */
+  rule(a: Filtered, b: Filtered): ClusterRule | null {
+    if (Math.abs(a.doc.ts - b.doc.ts) > this.windowMs) return null;
     const j = Math.max(
       jaccard(a.grams, b.grams),
       a.altGrams ? jaccard(a.altGrams, b.grams) : 0,
       b.altGrams ? jaccard(a.grams, b.altGrams) : 0,
       a.altGrams && b.altGrams ? jaccard(a.altGrams, b.altGrams) : 0,
     );
-    if (j >= JACCARD_MIN) return true;
+    if (j >= JACCARD_MIN) return 'jaccard';
     const t = overlap(a.titleNouns, b.titleNouns);
-    if (t.count >= NOUN_OVERLAP_MIN_COUNT && t.ratio >= NOUN_OVERLAP_MIN) return true;
+    if (t.count >= NOUN_OVERLAP_MIN_COUNT && t.ratio >= NOUN_OVERLAP_MIN) return 'noun';
     const f = overlap(a.allNouns, b.allNouns);
-    return f.count >= NOUN_OVERLAP_MIN_COUNT_WITH_LEAD && f.ratio >= NOUN_OVERLAP_MIN;
+    if (f.count >= NOUN_OVERLAP_MIN_COUNT_WITH_LEAD && f.ratio >= NOUN_OVERLAP_MIN) return 'noun';
+    if (this.entityRule && sharedEntities(a.entities, b.entities).length >= ENTITY_MIN_SHARED) {
+      if (j >= ENTITY_JACCARD_MIN || jaccard(a.paraGrams, b.paraGrams) >= ENTITY_PARA_JACCARD_MIN) return 'entity';
+    }
+    return null;
   }
 }
 
@@ -383,6 +478,32 @@ export function multiClusters(index: Map<number, ClusterInfo>): ClusterInfo[] {
     if (info.size < 2 || seen.has(info.clusterId)) continue;
     seen.add(info.clusterId);
     out.push(info);
+  }
+  return out;
+}
+
+/**
+ * ■3: 묶음 기사마다 같은 사건으로 본 근거(가장 센 것: jaccard > noun > entity). 가장 이른 기사 = 'seed'.
+ * 묶음 안 다른 기사 누구와도 직접 안 겹치면(평균 연결로 합쳐진 것) 'merge'.
+ */
+export function clusterRules(docs: ClusterDoc[], opts: ClusterOptions = {}): Map<number, ClusterRule | 'seed' | 'merge'> {
+  const prep = new Prep(opts);
+  const prepared = docs.filter((d) => Number.isFinite(d.ts)).map((d) => prep.prepare(d));
+  for (const p of prepared) prep.count(p);
+  const fs = prepared.map((p) => prep.filter(p));
+  const out = new Map<number, ClusterRule | 'seed' | 'merge'>();
+  if (!fs.length) return out;
+  const seed = earliest(fs.map((f) => f.doc));
+  const strength: Record<ClusterRule, number> = { jaccard: 3, noun: 2, entity: 1 };
+  for (const me of fs) {
+    if (me.doc === seed) { out.set(me.doc.id, 'seed'); continue; }
+    let best: ClusterRule | null = null;
+    for (const other of fs) {
+      if (other === me) continue;
+      const r = prep.rule(me, other);
+      if (r && (!best || strength[r] > strength[best])) best = r;
+    }
+    out.set(me.doc.id, best ?? 'merge');
   }
   return out;
 }

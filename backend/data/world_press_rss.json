@@ -177,7 +177,15 @@
       "rss_url": "https://www.clarin.com/rss/lo-ultimo/",
       "lang_primary": "es",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정.",
+      "blocked": {
+        "kind": "blocked_from_host",
+        "retry": "weekly",
+        "since": "2026-10-11",
+        "local_ok": "2026-10-13",
+        "substitute": "wp-google-site-clarin",
+        "note": "Render 에서 3회 연속 403 · 이 PC 200(0.09초)"
+      }
     },
     {
       "feed_id": "wpr-015",
@@ -363,7 +371,15 @@
       "rss_url": "https://www.politico.eu/feed/",
       "lang_primary": "en",
       "verified_by_fetch": true,
-      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."
+      "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정.",
+      "blocked": {
+        "kind": "blocked_from_host",
+        "retry": "weekly",
+        "since": "2026-10-11",
+        "local_ok": "2026-10-13",
+        "substitute": "wp-google-site-politico-eu",
+        "note": "Render 에서 3회 연속 403 · 이 PC 200(0.34초)"
+      }
     },
     {
       "feed_id": "wpr-030",

@@ -33,7 +33,11 @@ import { CrawlRunSummary, SourceRunStat, emptySourceStat, feedHealthLines, lastF
 import { backfillGoogleUrls, hostOf, isGoogleNewsLink, UrlResolveState } from './url_resolve';
 import { decodeGoogleNewsUrl } from './google_news_url';
 import { writeRowExtras } from './row_extras';
-import { ClusterPool, leadOf } from './event_cluster';
+import { ClusterPool, leadOf, paraOf } from './event_cluster';
+import {
+  BROADCAST_SHARE_MS, ReadCtx, ReadOutcome, RunProgress, SOURCE_CAP_MS, SOURCE_CONCURRENCY, crawlTimeoutMs,
+  emptyProgress, lastRunLastSourceId, planSources, runSources,
+} from './crawl_schedule';
 import { PoolData, backfillClusters, loadClusterPool, savedPct } from './event_cluster_store';
 
 // NEWS-Q2 ■1: 분야 설정(FIELD_PROFILE, 기본 = data/field_profiles/DEFAULT). 없으면 여기서 시끄럽게 실패한다.
@@ -110,8 +114,8 @@ const SKIP_DAILY_CHECK =
   process.env.SKIP_DAILY_CHECK === 'true' || process.env.RENDER === 'true';
 // v5.2 #3: 본문 최소 길이. 미만이면 추측 요약 방지를 위해 스킵.
 const MIN_BODY_CHARS = Number(process.env.MIN_BODY_CHARS ?? 300);
-// Cron 안전장치: 전체 크롤 상한 시간(기본 40분). 초과 시 그때까지 수집분을 저장하고 종료.
-const CRAWL_TIMEOUT_MS = Number(process.env.CRAWL_TIMEOUT_MS ?? 40 * 60 * 1000);
+// Cron 안전장치: 전체 크롤 상한 시간(NEWS-Q4 ■1ⓔ: 기본 55분 · 옛 기본 2400000 은 무시). 초과 시 그때까지 수집분을 저장하고 종료.
+const CRAWL_TIMEOUT_MS = crawlTimeoutMs(process.env);
 let crawlDeadline = Number.POSITIVE_INFINITY;  // main()에서 startTime 기준 설정
 
 let foreignArticleCount = 0;
@@ -149,6 +153,7 @@ let crawlStats = {
   clusterInheritRejected: 0, // NEWS-Q3 ■1: 대표가 거부라 함께 거부(호출 0)
   clusterForeignSkip: 0,     // NEWS-Q3 ■1: 묶음 외국어 기사(번역 없이 싣지 않음 · 호출 0)
   judgedForCluster: 0,       // NEWS-Q3 ■1: DeepSeek 로 판정한 기사 수(절감 % 분모)
+  sourceTimeouts: [] as string[], // NEWS-Q4 ■1: 소스별 60초 상한에 걸린 소스
   failedFeeds: [] as string[],
   // v5.4.1 작업5: 구조화된 피드 실패(상태코드별 분류·복구 판단용)
   feedFailures: [] as { id: string; source: string; sourceType: SourceType; status: number | null; retried: boolean }[],
@@ -396,6 +401,8 @@ type RunContext = {
   /** NEWS-Q3 ■1: 사건 묶음 기억(최근 저장분 + 이번 실행 판정분). 못 읽으면 null(옛 동작). */
   pool: ClusterPool<PoolData> | null;
   poolLoaded: number;
+  /** NEWS-Q4 ■1: 순서·상한 기록(crawl_runs.per_source.__run) */
+  progress: RunProgress | null;
 };
 const RUN: RunContext = {
   flags: {
@@ -408,6 +415,7 @@ const RUN: RunContext = {
   perSource: {},
   pool: null,
   poolLoaded: 0,
+  progress: null,
 };
 // 이번 실행 묶음 후보의 임시 id(음수 · DB id 와 겹치지 않음)
 let clusterTempId = 0;
@@ -660,7 +668,7 @@ function sourceTypeRank(t: SourceType): number {
 // ---------- NEWS-Q1 ■4: 방송(YouTube RSS) ----------
 // 핵심어 관문(0원) → DeepSeek 관문 → 저장 후보. 기사 경로(crawlOneSource)와 섞지 않는다:
 // 설명은 짧아 본문 길이 기준·기사용 사건사고 거름망이 맞지 않는다.
-async function crawlBroadcastSources(): Promise<Candidate[]> {
+async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<Candidate[]> {
   let sources = loadBroadcastSources();
   const out: Candidate[] = [];
   if (!sources.length) return out;
@@ -674,8 +682,8 @@ async function crawlBroadcastSources(): Promise<Candidate[]> {
   }
   console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → DeepSeek 관문)`);
   for (const source of sources) {
-    if (Date.now() > crawlDeadline) {
-      console.log('  ⏱️ 타임아웃 도달 — 방송 추적 중단');
+    if (Date.now() > deadline) {
+      console.log('  ⏱️ 방송 몫 시간 도달 — 방송 추적 중단');
       break;
     }
     const stat = sourceStat(`broadcast:${source.outletId}`);
@@ -791,38 +799,179 @@ function normalizeRssFeedUrl(raw: string): string {
   }
 }
 
-// ---------- Crawl one ----------
-async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
-  const stat = sourceStat(conf.id);
-  try {
-    if (conf.verifiedByFetch === false) {
-      console.log(`  ├─ [${conf.id}] verified_by_fetch=false — 시도 후 실패 시 스킵`);
+// ---------- Read one (NEWS-Q4 ■1: 동시 4 · 소스별 60초 · 이번 실행 공유 상태는 건드리지 않음) ----------
+// 피드 가져오기·해석 + 항목별 네트워크 일(기존 기사 확인 읽기 · 구글 링크 풀기 · 원문 추출)만 한다.
+// 이번 실행 중복(seenTitles)·묶음·DeepSeek·집계는 판정(judgeSource)에서 소스 순서대로.
+interface ReadItem {
+  it: RssItem;
+  rawTitle: string;
+  itemLink: string;
+  /** 같은 소스 안 같은 제목(판정에서 'exact' 로 빠짐) — 네트워크 일 안 함 */
+  sameSourceDup: boolean;
+  /** ■2: 링크·제목이 이미 저장됨 */
+  preDup: boolean;
+  publishedAt: string;
+  publishedTs: Date;
+  rawContent: string;
+  ogImageHint: string | null;
+  fieldOk: boolean;
+  /** 스니펫(200자+)만으로 분야 미통과 */
+  snippetSkip: boolean;
+  isGoogle: boolean;
+  resolvedUrl: string;
+  urlResolve: UrlResolveState | null;
+  /** 풀린 원문 링크가 이미 저장됨 */
+  resolvedDup: boolean;
+  bodyTried: boolean;
+  /** 원문 추출로 본문이 길어졌으면 그 길이 */
+  bodyGrewTo: number;
+  bodyOk: boolean;
+}
+
+interface ReadSource {
+  items: ReadItem[];
+  total: number;
+  retried: boolean;
+  repaired: boolean;
+}
+
+async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<string>): Promise<ReadItem> {
+  const rawTitle = normalizeText(it.title || '');
+  const itemLink = it.link ? String(it.link) : '';
+  const r: ReadItem = {
+    it, rawTitle, itemLink, sameSourceDup: false, preDup: false, publishedAt: '', publishedTs: new Date(), rawContent: '',
+    ogImageHint: null, fieldOk: false, snippetSkip: false, isGoogle: false, resolvedUrl: itemLink, urlResolve: null,
+    resolvedDup: false, bodyTried: false, bodyGrewTo: 0, bodyOk: false,
+  };
+  if (!rawTitle) return r;
+  const key = normalizeForDuplicateCheck(rawTitle);
+  if (seenHere.has(key)) { r.sameSourceDup = true; return r; }
+  seenHere.add(key);
+
+  // ■2: DeepSeek·본문 추출 앞 중복 확인(링크·제목 → 기억표 · DB) — 읽기만
+  if (await preDuplicate(RUN.known, RUN.query, { urls: [itemLink], titles: [rawTitle] })) { r.preDup = true; return r; }
+
+  r.publishedAt = parsePublishedAt(it);
+  r.publishedTs = parsePublishedTs(it);
+  // 1) RSS 스니펫 → 분야 필터 → (필요 시) 원문 추출 후 재검사 → 요약 재료
+  r.rawContent = extractContent(it);
+  r.fieldOk = matchesFieldKeywords(rawTitle, r.rawContent || '', { allowIncident });
+  if (!r.fieldOk && (r.rawContent || '').length >= 200) { r.snippetSkip = true; return r; }
+
+  // ■3: 구글뉴스 링크는 원문으로 한 번만 푼다(못 풀면 구글 링크 유지 + 해석 실패 표시).
+  r.isGoogle = isGoogleNewsLink(itemLink);
+  if (r.isGoogle) {
+    const decoded = await decodeGoogleNewsUrl(itemLink).catch(() => null);
+    const at = new Date().toISOString();
+    if (decoded && !isGoogleNewsLink(decoded)) {
+      r.resolvedUrl = decoded;
+      r.urlResolve = { status: 'ok', attempts: 1, at };
+      if (await preDuplicate(RUN.known, RUN.query, { urls: [decoded], titles: [] })) { r.resolvedDup = true; return r; }
+    } else {
+      r.urlResolve = { status: 'pending', attempts: 1, at };
     }
-    console.log(`  ├─ [${conf.id}] Parsing ${conf.format === 'html' ? 'HTML list' : conf.format === 'json' ? 'JSON list' : 'RSS'}...`);
-    const { feed, retried, repaired } = await fetchFeed(
-      { url: normalizeRssFeedUrl(conf.url), format: conf.format, listPattern: conf.listPattern, jsonMap: conf.jsonMap },
-      parser,
-      { timeoutMs: RSS_TIMEOUT },
-    );
-    crawlStats.feedsOk++;
-    if (retried) console.log(`  ├─ [${conf.id}] 403/406/429 → 다른 UA 재시도 성공`);
-    if (repaired) { crawlStats.feedsRepaired++; console.log(`  ├─ [${conf.id}] 깨진 XML 고쳐 읽음`); }
-    const items = (feed.items || []).slice(0, conf.maxItems ?? 30) as RssItem[];
-    stat.read = items.length;
-    console.log(`  ├─ [${conf.id}] Found ${items.length} items`);
+  }
 
-    const out: Candidate[] = [];
-    // ■6: tier 열이 있고 설정이 사건·사고 = 보관이면, 키워드 사건 거름망을 통과시켜 판정 뒤 보관한다.
-    const allowIncident = RUN.flags.tier && PROFILE.gate.incident === 'archive';
+  // 원문 본문 추출(부족·미통과 시). og:image 힌트도 함께 수집(v5.2 #5).
+  if ((!r.fieldOk || !r.rawContent || r.rawContent.length < MIN_BODY_CHARS) && r.resolvedUrl) {
+    r.bodyTried = true;
+    const data = await extractArticleData(r.resolvedUrl);
+    r.ogImageHint = data.ogImage;
+    if (data.body && data.body.length > (r.rawContent || '').length) {
+      r.rawContent = data.body;
+      r.bodyGrewTo = data.body.length;
+      r.fieldOk = matchesFieldKeywords(rawTitle, r.rawContent, { allowIncident });
+    }
+    r.bodyOk = (r.rawContent || '').length >= MIN_BODY_CHARS;
+  }
+  return r;
+}
 
-    for (const it of items) {
+async function readSource(conf: SourceConfig, ctx: ReadCtx<ReadSource>): Promise<ReadSource> {
+  const { feed, retried, repaired } = await fetchFeed(
+    { url: normalizeRssFeedUrl(conf.url), format: conf.format, listPattern: conf.listPattern, jsonMap: conf.jsonMap },
+    parser,
+    { timeoutMs: RSS_TIMEOUT },
+  );
+  const raw = (feed.items || []).slice(0, conf.maxItems ?? 30) as RssItem[];
+  const res: ReadSource = { items: [], total: raw.length, retried: !!retried, repaired: !!repaired };
+  ctx.partial(res);
+  // ■6: tier 열이 있고 설정이 사건·사고 = 보관이면, 키워드 사건 거름망을 통과시켜 판정 뒤 보관한다.
+  const allowIncident = RUN.flags.tier && PROFILE.gate.incident === 'archive';
+  const seenHere = new Set<string>();
+  for (const it of raw) {
+    // 소스 상한(60초)·전체 상한이면 그때까지 읽은 것만 판정으로
+    if (ctx.cancelled() || Date.now() > ctx.deadlineAt || Date.now() > crawlDeadline) break;
+    const r = await readItem(it, allowIncident, seenHere);
+    if (ctx.cancelled()) break;
+    res.items.push(r);
+  }
+  return res;
+}
+
+function recordFeedFailure(conf: SourceConfig, e: any): void {
+  const stat = sourceStat(conf.id);
+  const status = httpStatusOf(e);
+  console.error(`  └─ [${conf.id}] ❌ ERROR (스킵 후 계속)${status ? ` [${status}]` : ''}:`, e?.message || e);
+  crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName})${status ? ` [${status}]` : ''}: ${e?.message || e}`);
+  crawlStats.feedFailures.push({ id: conf.id, source: conf.sourceName, sourceType: conf.sourceType, status, retried: false });
+  stat.failed = String(status ?? 'ERR');
+}
+
+// ---------- Judge one (소스 순서대로 하나씩 · 이번 실행 중복 → 묶음 → DeepSeek) ----------
+async function judgeSource(
+  conf: SourceConfig,
+  outcome: ReadOutcome<ReadSource>,
+  opts: { blockedRetry?: boolean } = {},
+): Promise<Candidate[]> {
+  const stat = sourceStat(conf.id);
+  stat.readMs = outcome.ms;
+  if (conf.verifiedByFetch === false) {
+    console.log(`  ├─ [${conf.id}] verified_by_fetch=false — 시도 후 실패 시 스킵`);
+  }
+  if (outcome.status === 'error') {
+    if (opts.blockedRetry) {
+      // ■2: 막힌 피드의 주·월 1회 재시도 실패는 예상된 것 — 실패 피드 목록·경고에 넣지 않고 blocked 로 남김
+      const status = httpStatusOf(outcome.error);
+      stat.failed = `blocked:${status ?? 'ERR'}`;
+      stat.blocked = true;
+      console.log(`  └─ [${conf.id}] 막힌 피드 재시도 실패${status ? ` [${status}]` : ''} — 대체 피드(${conf.blocked?.substitute ?? '-'})가 읽음`);
+      return [];
+    }
+    recordFeedFailure(conf, outcome.error);
+    return [];
+  }
+  const maybe: ReadSource | null = outcome.value;
+  if (outcome.status === 'timeout') {
+    stat.timeout = true;
+    crawlStats.sourceTimeouts.push(conf.id);
+    console.warn(`  ├─ [${conf.id}] ⏱️ 소스 상한 ${SOURCE_CAP_MS / 1000}초 — 읽은 ${maybe?.items.length ?? 0}/${maybe?.total ?? '?'}항목만 판정(재시도 0)`);
+    if (!maybe) {
+      stat.failed = opts.blockedRetry ? 'blocked:timeout' : 'timeout';
+      if (opts.blockedRetry) { stat.blocked = true; return []; }
+      crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName}) [timeout]: 소스 상한 ${SOURCE_CAP_MS / 1000}초`);
+      return [];
+    }
+  }
+  if (!maybe) return [];
+  const src = maybe;
+  crawlStats.feedsOk++;
+  if (src.retried) console.log(`  ├─ [${conf.id}] 403/406/429 → 다른 UA 재시도 성공`);
+  if (src.repaired) { crawlStats.feedsRepaired++; console.log(`  ├─ [${conf.id}] 깨진 XML 고쳐 읽음`); }
+  stat.read = src.total;
+  console.log(`  ├─ [${conf.id}] Found ${src.total} items (읽기 ${(outcome.ms / 1000).toFixed(1)}초)`);
+
+  const t0 = Date.now();
+  const out: Candidate[] = [];
+  try {
+    for (const r of src.items) {
       // 상한 시간 초과 시 이 소스의 남은 항목 중단(수집분은 반환되어 저장됨)
       if (Date.now() > crawlDeadline) {
         console.log(`  │   ⏱️ 타임아웃 도달 — 소스 [${conf.id}] 남은 항목 중단`);
         break;
       }
       crawlStats.itemsSeen++;
-      const rawTitle = normalizeText(it.title || '');
+      const { it, rawTitle, itemLink } = r;
       if (!rawTitle) continue;
       const sessionDup = sessionDuplicate(rawTitle);
       if (sessionDup === 'exact') continue;
@@ -832,24 +981,21 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
         console.log(`  │   ⚠️ 유사 기사 스킵(핵심어 50%+): ${rawTitle.slice(0, 30)}...`);
         continue;
       }
-      const itemLink = it.link ? String(it.link) : '';
+      if (r.sameSourceDup) continue;
 
-      // ■2: DeepSeek·본문 추출 앞 중복 확인(링크·제목 → 기억표 · DB)
-      if (await preDuplicate(RUN.known, RUN.query, { urls: [itemLink], titles: [rawTitle] })) {
+      // ■2: DeepSeek·본문 추출 앞 중복 확인(링크·제목 → 기억표 · DB) — 읽기 단계에서 확인해 둠
+      if (r.preDup) {
         crawlStats.dupPreSkip++;
         stat.dup++;
         continue;
       }
 
-      const publishedAt = parsePublishedAt(it);
-      const publishedTs = parsePublishedTs(it);
-      // 1) RSS 스니펫 → 분야 필터 → (필요 시) 원문 추출 후 재검사 → 요약 재료
-      let rawContent = extractContent(it);
-      let ogImageHint: string | null = null;
+      const { publishedAt, publishedTs, ogImageHint, resolvedUrl, urlResolve, isGoogle } = r;
+      const rawContent = r.rawContent;
+      const fieldOk = r.fieldOk;
 
-      let fieldOk = matchesFieldKeywords(rawTitle, rawContent || '', { allowIncident });
       // 스니펫만으로 이미 걸러진 경우(사건사고 vs 일반 필터) 로그 구분
-      if (!fieldOk && (rawContent || '').length >= 200) {
+      if (r.snippetSkip) {
         if (isIncidentReport(rawTitle, rawContent || '')) {
           crawlStats.incidentSkip++;
           console.log(`  │   🚫 사건사고 스킵: ${rawTitle.slice(0, 34)}...`);
@@ -858,41 +1004,32 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
         }
         continue;
       }
+      // ■2(NEWS-Q4): 대체 검색 피드의 오래된 항목(설정 max_age_days)
+      if (conf.maxAgeDays && publishedTs.getTime() < Date.now() - conf.maxAgeDays * 24 * 3600 * 1000) {
+        crawlStats.filterSkip++;
+        continue;
+      }
 
-      // ■3: 구글뉴스 링크는 원문으로 한 번만 푼다(못 풀면 구글 링크 유지 + 해석 실패 표시).
-      const isGoogle = isGoogleNewsLink(itemLink);
-      let resolvedUrl = itemLink;
-      let urlResolve: UrlResolveState | null = null;
+      // ■3: 구글뉴스 링크 풀기 결과(읽기 단계에서 한 번만 풀었음)
       if (isGoogle) {
-        const decoded = await decodeGoogleNewsUrl(itemLink).catch(() => null);
-        const at = new Date().toISOString();
-        if (decoded && !isGoogleNewsLink(decoded)) {
-          resolvedUrl = decoded;
-          urlResolve = { status: 'ok', attempts: 1, at };
+        if (urlResolve?.status === 'ok') {
           crawlStats.urlResolved++;
-          if (await preDuplicate(RUN.known, RUN.query, { urls: [resolvedUrl], titles: [] })) {
+          if (r.resolvedDup) {
             crawlStats.dupPreSkip++;
             stat.dup++;
             continue;
           }
         } else {
-          urlResolve = { status: 'pending', attempts: 1, at };
           crawlStats.urlResolveFail++;
           console.log(`  │   🔗 구글 링크 해석 실패(구글 링크 유지): ${rawTitle.slice(0, 30)}...`);
         }
       }
 
-      // 원문 본문 추출(부족·미통과 시). og:image 힌트도 함께 수집(v5.2 #5).
-      if ((!fieldOk || !rawContent || rawContent.length < MIN_BODY_CHARS) && resolvedUrl) {
+      // 원문 본문 추출 결과(부족·미통과 시 읽기 단계에서 추출 · og:image 힌트 포함)
+      if (r.bodyTried) {
         crawlStats.bodyExtractTried++;
-        const data = await extractArticleData(resolvedUrl);
-        ogImageHint = data.ogImage;
-        if (data.body && data.body.length > (rawContent || '').length) {
-          console.log(`  │   📄 원문추출 ${data.body.length}자`);
-          rawContent = data.body;
-          fieldOk = matchesFieldKeywords(rawTitle, rawContent, { allowIncident });
-        }
-        if ((rawContent || '').length >= MIN_BODY_CHARS) crawlStats.bodyExtractOk++;
+        if (r.bodyGrewTo) console.log(`  │   📄 원문추출 ${r.bodyGrewTo}자`);
+        if (r.bodyOk) crawlStats.bodyExtractOk++;
       }
 
       // google_url = 구글 링크일 때만(■3). 그 밖은 원문 링크가 source_url.
@@ -904,7 +1041,9 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
         ? (feedSourceName(it) || (resolved ? hostOf(sourceUrl) : '') || conf.sourceName).slice(0, 100)
         : conf.sourceName;
       const outletId = isGoogle && resolved ? hostOf(sourceUrl) || conf.outletId : conf.outletId;
-      const sourceGrade: SourceGrade = isGoogle ? (resolved ? 'press' : 'aggregator') : conf.grade;
+      // NEWS-Q4 ■2: 대체 검색 피드(site:)는 원 피드와 같은 등급(설정 grade) — 그 밖 구글 = 풀리면 press
+      const googleGrade: SourceGrade = conf.grade !== 'aggregator' ? conf.grade : 'press';
+      const sourceGrade: SourceGrade = isGoogle ? (resolved ? googleGrade : 'aggregator') : conf.grade;
 
       if (shouldBlockByDomain(sourceUrl, googleUrl || undefined)) continue;
 
@@ -944,7 +1083,7 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
 
       // ■1(NEWS-Q3): 같은 사건 묶음의 둘째 기사부터 = DeepSeek 관문 건너뛰고 대표의 tier·분류 상속(LLM 0).
       const clusterDoc = {
-        id: -(++clusterTempId), title: rawTitle, lead: leadOf(rawContent), ts: publishedTs.getTime(), grade: sourceGrade,
+        id: -(++clusterTempId), title: rawTitle, lead: leadOf(rawContent), para: paraOf(rawContent), ts: publishedTs.getTime(), grade: sourceGrade,
       };
       const hit = RUN.pool ? RUN.pool.match(clusterDoc) : null;
       if (hit) {
@@ -1137,15 +1276,15 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       });
     }
 
-    console.log(`  └─ [${conf.id}] Done: ${out.length} collected\n`);
+    stat.judgeMs = Date.now() - t0;
+    console.log(`  └─ [${conf.id}] Done: ${out.length} collected (판정 ${(stat.judgeMs / 1000).toFixed(1)}초)\n`);
     return out;
   } catch (e: any) {
-    const status = httpStatusOf(e);
-    console.error(`  └─ [${conf.id}] ❌ ERROR (스킵 후 계속)${status ? ` [${status}]` : ''}:`, e?.message || e);
-    crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName})${status ? ` [${status}]` : ''}: ${e?.message || e}`);
-    crawlStats.feedFailures.push({ id: conf.id, source: conf.sourceName, sourceType: conf.sourceType, status, retried: false });
-    stat.failed = String(status ?? 'ERR');
-    return [];
+    // 피드는 읽혔고 판정 중 오류 — 그때까지 모은 것은 살린다(피드 실패로 세지 않음)
+    stat.judgeMs = Date.now() - t0;
+    stat.failed = 'judge';
+    console.error(`  └─ [${conf.id}] ❌ 판정 중 오류(모은 ${out.length}건 유지 · 다음 소스로):`, e?.message || e);
+    return out;
   }
 }
 
@@ -1650,41 +1789,89 @@ async function main() {
     console.log(`⚠️  CRAWL_MAX_SOURCES=${maxSrc} — ${crawlSources.length}개만 실행\n`);
   }
   const all: Candidate[] = [];
-  console.log(`📡 Crawling ${crawlSources.length} sources...\n`);
 
-  // Cron 안전장치: startTime 기준 상한 시간 설정
+  // Cron 안전장치: startTime 기준 상한 시간 설정(■1ⓔ 55분)
   crawlDeadline = startTime + CRAWL_TIMEOUT_MS;
   let timedOut = false;
+  const progress = emptyProgress(crawlSources.length, CRAWL_TIMEOUT_MS);
+  RUN.progress = progress;
 
-  for (let i = 0; i < crawlSources.length; i++) {
-    if (Date.now() > crawlDeadline) {
-      timedOut = true;
-      console.warn(`\n⏱️ 상한 시간(${Math.round(CRAWL_TIMEOUT_MS / 60000)}분) 초과 — ${i}/${crawlSources.length} 소스에서 크롤 중단, 수집분 저장 진행\n`);
-      break;
+  // NEWS-Q1 ■4: 방송은 기사 통계(한국 비중 등)에 섞지 않고 저장만 함께 한다.
+  // NEWS-Q4 ■1ⓓ: 방송 9채널을 맨 앞에(작고 빠름 · 5분 몫) — 기사 소스가 상한에 걸려도 방송은 빠지지 않는다.
+  // CRAWL_SOURCE_TYPES 로 좁힌 실행에서는 broadcast 가 들어 있을 때만 돈다.
+  let broadcasts: Candidate[] = [];
+  const broadcastWanted = !typeFilter.length || typeFilter.includes(BROADCAST_SOURCE_TYPE);
+  progress.broadcastFirst = broadcastWanted;
+  if (broadcastWanted) {
+    const b0 = Date.now();
+    try {
+      broadcasts = await crawlBroadcastSources(Math.min(crawlDeadline, b0 + BROADCAST_SHARE_MS));
+    } catch (e) {
+      console.warn('[broadcast] 방송 추적 실패(기사 저장은 계속):', (e as Error).message);
     }
-    const conf = crawlSources[i];
-    console.log(`[${i + 1}/${crawlSources.length}] ${conf.sourceName} (${conf.category})`);
-    const got = await crawlOneSource(conf);
-    all.push(...got);
+    progress.broadcastMs = Date.now() - b0;
+  }
+
+  // ■1ⓒ: 시작점 순환(지난 실행이 마지막으로 마친 소스 다음부터) · ■2: 막힌 피드는 주·월 1회만 원 피드
+  const narrowed = typeFilter.length > 0 || maxSrc > 0;
+  const lastId = RUN.flags.crawlRuns && !narrowed ? await lastRunLastSourceId(q, PROFILE.field) : null;
+  const plan = planSources(crawlSources, lastId);
+  progress.startIndex = plan.startIndex;
+  progress.startId = plan.startId;
+  progress.blockedSkipped = plan.skipped.map((s) => s.id);
+  progress.blockedFromHost = crawlSources.filter((s) => s.blocked?.kind === 'blocked_from_host').length;
+  const retryIds = new Set(plan.retrying.map((s) => s.id));
+  const order = plan.order;
+  console.log(
+    `📡 Crawling ${order.length} sources (동시 읽기 ${SOURCE_CONCURRENCY} · 소스 상한 ${SOURCE_CAP_MS / 1000}초 · 전체 ${Math.round(CRAWL_TIMEOUT_MS / 60000)}분)` +
+    ` · 시작 ${plan.startIndex + 1}번째(${plan.startId ?? '-'})${lastId ? ` ← 지난 실행 끝 ${lastId}` : ''}`,
+  );
+  if (plan.skipped.length) console.log(`   막힌 피드 오늘 건너뜀(대체 피드가 읽음): ${progress.blockedSkipped.join(', ')}`);
+  if (plan.retrying.length) console.log(`   막힌 피드 오늘 다시 해 봄(주·월 1회): ${[...retryIds].join(', ')}`);
+  console.log('');
+
+  await runSources<SourceConfig, ReadSource>(order, {
+    concurrency: SOURCE_CONCURRENCY,
+    capMs: SOURCE_CAP_MS,
+    canStart: () => Date.now() <= crawlDeadline,
+    read: (conf, ctx) => readSource(conf, ctx),
+    consume: async (conf, outcome, i) => {
+      if (Date.now() > crawlDeadline) return false;
+      console.log(`[${i + 1}/${order.length}] ${conf.sourceName} (${conf.category})`);
+      const retry = retryIds.has(conf.id);
+      const got = await judgeSource(conf, outcome, { blockedRetry: retry });
+      all.push(...got);
+      progress.reached = i + 1;
+      progress.lastId = conf.id;
+      if (retry) {
+        const ok = outcome.status === 'ok' || (outcome.status === 'timeout' && !!outcome.value);
+        const status = outcome.status === 'error' ? String(httpStatusOf(outcome.error) ?? 'ERR') : ok ? undefined : 'timeout';
+        progress.blockedRetried.push({ id: conf.id, ok, ...(status ? { status } : {}) });
+        console.log(`  🔁 막힌 피드 재시도 ${conf.id}: ${ok ? '성공 — 설정의 blocked 를 지워도 됨' : `실패(${status}) — 대체 피드 유지`}`);
+      }
+      return Date.now() <= crawlDeadline;
+    },
+  });
+  if (progress.reached < order.length) {
+    timedOut = true;
+    progress.timedOut = true;
+    progress.stoppedAt = 'articles';
+    console.warn(
+      `\n⏱️ 상한 시간(${Math.round(CRAWL_TIMEOUT_MS / 60000)}분) 초과 — ${progress.reached}/${order.length} 소스에서 크롤 중단` +
+      `(마지막 ${progress.lastId ?? '-'} · 다음 실행은 그 다음부터) · 수집분 저장 진행\n`,
+    );
   }
 
   // 타임아웃이 아니면 Statory 후보도 수집
   if (!timedOut && Date.now() <= crawlDeadline) {
     const statoryCands = await loadStatoryCandidates();
     all.push(...statoryCands);
+  } else if (!timedOut) {
+    timedOut = true;
+    progress.timedOut = true;
+    progress.stoppedAt = 'statory';
   }
-
-  // NEWS-Q1 ■4: 방송은 기사 통계(한국 비중 등)에 섞지 않고 저장만 함께 한다.
-  // CRAWL_SOURCE_TYPES 로 좁힌 실행에서는 broadcast 가 들어 있을 때만 돈다.
-  let broadcasts: Candidate[] = [];
-  const broadcastWanted = !typeFilter.length || typeFilter.includes(BROADCAST_SOURCE_TYPE);
-  if (broadcastWanted && !timedOut && Date.now() <= crawlDeadline) {
-    try {
-      broadcasts = await crawlBroadcastSources();
-    } catch (e) {
-      console.warn('[broadcast] 방송 추적 실패(기사 저장은 계속):', (e as Error).message);
-    }
-  }
+  progress.timeouts = [...crawlStats.sourceTimeouts];
 
   const result = await saveCandidates([...all, ...broadcasts]);
   // v5.4: 거부 기사 격리 저장(자동 블랙리스트는 다음 실행 시작 시 rejected 집계로 재평가)
@@ -1856,8 +2043,17 @@ async function main() {
     perSource: RUN.perSource,
     urlBackfill,
     clusterStats,
+    progress: RUN.progress,
   };
   for (const line of feedHealthLines(summary)) console.log(`   ${line}`);
+  if (RUN.progress) {
+    const p = RUN.progress;
+    console.log(
+      `   순서·상한: 시작 ${p.startId ?? '-'} → 마지막 ${p.lastId ?? '-'} · 닿음 ${p.reached}/${p.total - p.blockedSkipped.length}` +
+      ` · 소스 상한 걸림 ${p.timeouts.length} · 막힌 피드 건너뜀 ${p.blockedSkipped.length} · 방송 ${p.broadcastMs != null ? `${Math.round(p.broadcastMs / 1000)}초` : '안 돎'}` +
+      `${p.timedOut ? ` · 전체 상한(${p.deadlineMin}분) 걸림(${p.stoppedAt})` : ''}`,
+    );
+  }
   if (RUN.flags.crawlRuns) {
     try {
       await recordCrawlRun(q, summary, { clusterStatsColumn: RUN.flags.clusterStats });

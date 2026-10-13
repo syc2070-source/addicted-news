@@ -23,12 +23,35 @@ describe('AppController', () => {
   });
 
   describe('health', () => {
-    it('ok · commit · startedAt · lastRun 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null)', async () => {
+    it('ok · commit · startedAt · lastRun · schema · feeds 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null · 열 인식 null)', async () => {
       const health = await appController.getHealth();
-      expect(Object.keys(health).sort()).toEqual(['commit', 'lastRun', 'ok', 'startedAt']);
+      expect(Object.keys(health).sort()).toEqual(['commit', 'feeds', 'lastRun', 'ok', 'schema', 'startedAt']);
       expect(health.ok).toBe(true);
       expect(health.lastRun).toBeNull();
+      expect(health.schema).toEqual({ cluster_columns: null });
+      // NEWS-Q4 ■2: 설정의 막힌 피드(Render 망에서만 4 + 어디서나 403 SAMHSA 1) · 대체 검색 피드 5
+      expect(health.feeds).toEqual({ blocked_from_host: 4, blocked: 5, substitutes: 5 });
       expect(Number.isNaN(Date.parse(health.startedAt))).toBe(false);
+    });
+
+    it('schema.cluster_columns = articles.cluster_id·cluster_size 둘 다 있으면 true', async () => {
+      const cols = new Set(['cluster_id', 'cluster_size']);
+      const query = jest.fn(async (_sql: string, params?: unknown[]) => (cols.has(String(params?.[1])) ? [{ x: 1 }] : []));
+      const svc = new AppService({ isInitialized: true, query } as any);
+      expect(await svc.schema(1000)).toEqual({ cluster_columns: true });
+      cols.delete('cluster_size');
+      expect(await svc.schema(1500)).toEqual({ cluster_columns: true }); // 60초 기억
+      expect(await svc.schema(99_000)).toEqual({ cluster_columns: false });
+    });
+
+    it('lastRun 에 소요·소스 수·소스 상한 걸린 수·막힌 피드 수(per_source.__run)', async () => {
+      const query = jest.fn(async (sql: string) => {
+        if (sql.includes('information_schema.tables')) return [{ x: 1 }];
+        return [{ started_at: '2026-10-14T03:00:00Z', finished_at: '2026-10-14T03:30:00Z', sources_total: 116, timed_out: false,
+          per_source: { 'kr-a': { read: 3, timeout: true, readMs: 60000 }, '__run': { blockedSkipped: ['x', 'y'], blockedFromHost: 4 } } }];
+      });
+      const svc = new AppService({ isInitialized: true, query } as any);
+      expect(await svc.lastRun(1000)).toMatchObject({ durationSec: 1800, sourcesTotal: 116, timedOut: false, timeouts: 1, blocked: 2, blockedFromHost: 4 });
     });
 
     it('lastRun 은 crawl_runs 표가 있을 때 숫자만 · 60초 기억', async () => {

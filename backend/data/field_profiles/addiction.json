@@ -546,6 +546,67 @@
     },
     "google_news": [
       {
+        "id": "kr-google-site-donga",
+        "substitute_for": "kr-press-동아일보",
+        "grade": "press",
+        "lang": "ko",
+        "priority": 49,
+        "outlet_id": "동아일보",
+        "url": "https://news.google.com/rss/search?q=site:donga.com+(중독+OR+마약+OR+도박+OR+알코올+OR+음주+OR+금연)+when:7d&hl=ko&gl=KR&ceid=KR:ko",
+        "region": "kr",
+        "source_name": "동아일보",
+        "max_age_days": 7
+      },
+      {
+        "id": "kr-google-site-pressian",
+        "substitute_for": "kr-press-프레시안",
+        "grade": "press",
+        "lang": "ko",
+        "priority": 49,
+        "outlet_id": "프레시안",
+        "url": "https://news.google.com/rss/search?q=site:pressian.com+(중독+OR+마약+OR+도박+OR+알코올+OR+음주+OR+금연)+when:7d&hl=ko&gl=KR&ceid=KR:ko",
+        "region": "kr",
+        "source_name": "프레시안",
+        "max_age_days": 7
+      },
+      {
+        "id": "wp-google-site-clarin",
+        "substitute_for": "wp-wpr-014",
+        "grade": "press",
+        "lang": "es",
+        "priority": 49,
+        "outlet_id": "clarin",
+        "url": "https://news.google.com/rss/search?q=site:clarin.com+(adicción+OR+drogas+OR+alcohol+OR+apuestas+OR+ludopatía)+when:7d&hl=es-419&gl=AR&ceid=AR:es-419",
+        "region": "latin_america",
+        "source_name": "Clarín",
+        "max_age_days": 7
+      },
+      {
+        "id": "wp-google-site-politico-eu",
+        "substitute_for": "wp-wpr-029",
+        "grade": "press",
+        "lang": "en",
+        "priority": 49,
+        "outlet_id": "politico_eu",
+        "url": "https://news.google.com/rss/search?q=site:politico.eu+(addiction+OR+drugs+OR+alcohol+OR+gambling+OR+tobacco+OR+opioid)+when:7d&hl=en-GB&gl=GB&ceid=GB:en",
+        "region": "europe",
+        "source_name": "Politico Europe",
+        "max_age_days": 7
+      },
+      {
+        "id": "inst-google-site-samhsa",
+        "substitute_for": "inst-samhsa",
+        "grade": "institution",
+        "lang": "en",
+        "priority": 49,
+        "outlet_id": "samhsa",
+        "category": "알코올·약물중독",
+        "url": "https://news.google.com/rss/search?q=site:samhsa.gov+(substance+OR+opioid+OR+overdose+OR+addiction+OR+alcohol+OR+gambling)+when:30d&hl=en-US&gl=US&ceid=US:en",
+        "region": "north_america",
+        "source_name": "SAMHSA",
+        "max_age_days": 30
+      },
+      {
         "id": "kr-google-policy",
         "lang": "ko",
         "category": "중독정책",
@@ -920,8 +981,13 @@
         "source_name": "SAMHSA",
         "outlet_id": "samhsa",
         "url": "https://www.samhsa.gov/newsroom",
-        "active": false,
-        "inactive_reason": "미측: samhsa.gov 전체가 이 PC 에서 403(홈페이지 포함) — 피드·목록 확인 못 함",
+        "blocked": {
+          "kind": "blocked_everywhere",
+          "retry": "monthly",
+          "since": "2026-10-13",
+          "substitute": "inst-google-site-samhsa",
+          "note": "samhsa.gov 전체 403(이 PC 3회 · awselb) — 월 1회(KST 1일)만 다시 해 봄 · 평소는 site:samhsa.gov 검색 피드"
+        },
         "category": "알코올·약물중독",
         "region": "north_america",
         "lang": "en",

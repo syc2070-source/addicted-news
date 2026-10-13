@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fieldProfile, FieldProfile, ProfileFeed, SourceGrade } from './field_profile';
+import type { BlockedInfo } from './crawl_schedule';
 
 /** 광고·홍보 감점 낱말(분야 설정 keywords.ad_penalty). */
 export function adPenaltyKeywords(): string[] {
@@ -43,6 +44,22 @@ export interface SourceConfig {
   format?: 'rss' | 'html' | 'json';
   listPattern?: string;
   jsonMap?: ProfileFeed['json_map'];
+  /** NEWS-Q4 ■2: 막힌 피드 — 원 피드는 주·월 1회만(crawl_schedule.planSources) · 비활성 아님 */
+  blocked?: BlockedInfo | null;
+  /** NEWS-Q4 ■2: 대신 읽는 원 피드 id(구글뉴스 site: 검색) */
+  substituteFor?: string;
+  /** 이보다 오래된 항목은 건너뜀(대체 검색 피드용) */
+  maxAgeDays?: number;
+}
+
+/** 피드 항목의 blocked 칸(꼴이 틀리면 무시). */
+export function blockedOf(f: Record<string, unknown> | ProfileFeed): BlockedInfo | null {
+  const b = (f as Record<string, unknown>).blocked as Partial<BlockedInfo> | undefined;
+  if (!b || typeof b !== 'object') return null;
+  const kind = b.kind === 'blocked_from_host' || b.kind === 'blocked_everywhere' ? b.kind : null;
+  const retry = b.retry === 'weekly' || b.retry === 'monthly' ? b.retry : null;
+  if (!kind || !retry) return null;
+  return { kind, retry, since: b.since, local_ok: b.local_ok, substitute: b.substitute };
 }
 
 export const GRADE_RANK: Record<SourceGrade, number> = { institution: 0, academic: 1, press: 2, aggregator: 3 };
@@ -104,6 +121,7 @@ function loadWorldPress(p: FieldProfile): SourceConfig[] {
       isSpecialized: true,
       priority: 20,
       grade: 'press',
+      blocked: blockedOf(f),
       ...activeOf(f),
     });
   });
@@ -132,6 +150,7 @@ function loadKrPress(p: FieldProfile): SourceConfig[] {
       isSpecialized: true,
       priority: 10,
       grade: 'press',
+      blocked: blockedOf(f),
       ...activeOf(f),
     });
   });
@@ -165,6 +184,7 @@ function loadSpecialtyPress(p: FieldProfile): SourceConfig[] {
       isSpecialized: true,
       priority: 5,
       grade: 'press',
+      blocked: blockedOf(f),
       ...activeOf(f),
     });
   });
@@ -198,6 +218,9 @@ export function profileFeedsToSources(
       format: f.format,
       listPattern: f.list_pattern,
       jsonMap: f.json_map,
+      blocked: blockedOf(f),
+      substituteFor: f.substitute_for,
+      maxAgeDays: f.max_age_days,
     }));
 }
 

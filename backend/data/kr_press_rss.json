@@ -40,7 +40,15 @@
       "region_id": "kr",
       "lang_primary": "ko",
       "rss_url": "https://rss.donga.com/total.xml",
-      "items_seen": 50
+      "items_seen": 50,
+      "blocked": {
+        "kind": "blocked_from_host",
+        "retry": "weekly",
+        "since": "2026-10-11",
+        "local_ok": "2026-10-13",
+        "substitute": "kr-google-site-donga",
+        "note": "Render(싱가포르)에서 3회 연속 socket hang up · 이 PC 200(0.13초)"
+      }
     },
     {
       "outlet_id": "국민일보",
@@ -61,7 +69,15 @@
       "region_id": "kr",
       "lang_primary": "ko",
       "rss_url": "https://www.pressian.com/api/v3/site/rss/news",
-      "items_seen": 25
+      "items_seen": 25,
+      "blocked": {
+        "kind": "blocked_from_host",
+        "retry": "weekly",
+        "since": "2026-10-11",
+        "local_ok": "2026-10-13",
+        "substitute": "kr-google-site-pressian",
+        "note": "Render 에서 3회 연속 timeout 15000ms · 이 PC 200(0.13초)"
+      }
     },
     {
       "outlet_id": "세계일보",

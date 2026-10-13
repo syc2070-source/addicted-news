@@ -6,6 +6,7 @@
 // ============================================================
 import * as fs from 'fs';
 import * as path from 'path';
+import type { BlockedInfo } from './crawl_schedule';
 
 export const FIELD_PROFILE_DIR = path.join(__dirname, '../../data/field_profiles');
 
@@ -42,6 +43,12 @@ export interface ProfileFeed {
   list_pattern?: string;
   /** json 목록: 칸 이름(items·title·link·date) · link_prefix */
   json_map?: { items: string; title: string; link: string; date?: string; link_prefix?: string };
+  /** NEWS-Q4 ■2: 막힌 피드(Render 망에서만 막힘 · 어디서나 403) — 원 피드는 주·월 1회만 다시 해 봄 */
+  blocked?: BlockedInfo;
+  /** NEWS-Q4 ■2: 이 피드가 대신 읽는 원 피드 id(구글뉴스 site: 검색) */
+  substitute_for?: string;
+  /** 이보다 오래된 항목은 건너뜀(대체 검색 피드용) */
+  max_age_days?: number;
 }
 
 export interface FieldProfile {

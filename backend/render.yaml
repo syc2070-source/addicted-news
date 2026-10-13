@@ -67,9 +67,10 @@ services:
       # 하루 1회 제한 명시 해제(Cron 스케줄이 곧 1회/일 역할). RENDER=true 로도 자동 해제됨.
       - key: SKIP_DAILY_CHECK
         value: "true"
-      # 상한 시간(분*60*1000). 기본 40분. 초과 시 수집분 저장 후 정상 종료.
+      # 상한 시간(분*60*1000). NEWS-Q4: 55분(하루 1회 cron · Render cron 실행 한도 12시간). 초과 시 수집분 저장 후 정상 종료.
+      # 대시보드에 옛 값 2400000(40분)이 남아 있어도 코드가 무시하고 55분으로 돈다(crawl_schedule.crawlTimeoutMs).
       - key: CRAWL_TIMEOUT_MS
-        value: "2400000"
+        value: "3300000"
       - key: DB_HOST
         sync: false
       - key: DB_PORT

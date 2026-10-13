@@ -5,7 +5,7 @@
 //  · backfillClusters: 묶음 SQL 3(cluster_id·cluster_size) 있을 때만, 최근 30일 publish 기사를 다시 묶어
 //    바뀐 행의 cluster_id·cluster_size 두 열만 고친다(다른 열 0 · 지우기 0).
 // ============================================================
-import { ClusterPool, clusterDocs, docTs, leadOf } from './event_cluster';
+import { ClusterPool, clusterDocs, docTs, leadOf, paraOf } from './event_cluster';
 import type { SchemaFlags } from './schema_probe';
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
@@ -55,7 +55,7 @@ export async function loadClusterPool(
     const ts = docTs(r.published_ts, r.published_at);
     if (!Number.isFinite(ts)) continue;
     pool.add(
-      { id: Number(r.id), title: r.title, altTitle: r.original_title, lead: leadOf(r.summary), ts, grade: null },
+      { id: Number(r.id), title: r.title, altTitle: r.original_title, lead: leadOf(r.summary), para: paraOf(r.summary), ts, grade: null },
       { tier: r.tier === 'archive' ? 'archive' : 'publish', category: r.category, articleId: Number(r.id) },
     );
   }
@@ -96,6 +96,7 @@ export async function backfillClusters(
     title: r.title,
     altTitle: r.original_title,
     lead: leadOf(r.summary || r.teaser),
+    para: paraOf(r.summary || r.teaser),
     ts: docTs(r.published_ts, r.published_at),
     grade: r.source_grade ?? null,
   }));

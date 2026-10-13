@@ -117,11 +117,15 @@ GET /articles/rapha            # 라파뉴스
 GET /articles/issue            # 중독이슈
 GET /articles/category/:slug   # 카테고리별
 GET /articles/search?q=...     # 검색
-GET /articles/cluster/:id      # 사건 묶음 하나 — 대표 + 매체별 제목·시각·원문
+GET /articles/cluster/:id      # 사건 묶음 하나 — 대표 + 매체별 제목·시각·원문 + 기사별 근거 rule(seed|jaccard|noun|entity)
 GET /articles/:id              # 상세
-GET /api/health                # 상태 + 마지막 수집 실행 숫자
-GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 40분 넘김 · 실패 피드 이름 · 묶음 절감)
+GET /api/health                # 상태 + 마지막 수집 실행 숫자(소요·소스 수·소스 상한·막힌 피드) + schema.cluster_columns + feeds(막힌 피드 수)
+GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 상한 걸림 · 실패 피드 이름 · 묶음 절감 · progress(순환 시작·끝 · 소스 상한) · sources(방송 읽힘 · 느린 소스 5))
 ```
+
+수집(매일 12:00 KST · NEWS-Q4): 방송 9채널 먼저(5분 몫) → 기사 소스는 **읽기 동시 4 · 소스별 60초 · 판정(DeepSeek)은 순서대로 하나씩**
+→ 전체 상한 55분. 시작점은 날마다 지난 실행이 끝난 소스 다음부터(crawl_runs `per_source.__run`). Render 망에서만 막힌 피드는
+`blocked`(피드 파일) — 원 피드는 주 1회(KST 월)·월 1회(KST 1일)만 다시 해 보고, 평소는 구글뉴스 `site:` 대체 피드가 읽는다.
 
 목록(latest·latest-paged·category·search·issue)은 기본 **사건 묶음 단위**(`?group=cluster`)다 — 같은 사건을 다룬
 기사는 대표 1건 + `clusterMembers`(같은 소식)로 접히고, 응답 칸 `clusterId`·`clusterSize`·`representative` 가 붙는다.

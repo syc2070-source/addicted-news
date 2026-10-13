@@ -1,6 +1,6 @@
 import {
-  ClusterDoc, ClusterPool, clusterDocs, docTs, leadOf, multiClusters, normalizeClusterText, pickRepresentative,
-  stripOutletSuffix, titleGrams, jaccard,
+  ClusterDoc, ClusterPool, clusterDocs, clusterRules, docTs, entitiesOf, leadOf, multiClusters, normalizeClusterText, paraOf,
+  pickRepresentative, sharedEntities, stripOutletSuffix, titleGrams, jaccard,
 } from './event_cluster';
 
 // NEWS-Q3 ■1: 사건 묶기(LLM 0)
@@ -134,5 +134,56 @@ describe('event_cluster — 보도 시각', () => {
     expect(docTs(null, '2026-10-12')).toBe(Date.parse('2026-10-12T03:00:00Z'));
     expect(docTs(null, '2026-10-12T00:00:00.000Z')).toBe(Date.parse('2026-10-12T03:00:00Z'));
     expect(Number.isNaN(docTs(null, null))).toBe(true);
+  });
+});
+
+// NEWS-Q4 ■3: 고유명사 규칙(정밀 우선) — 실데이터(10-12 줄퇴사 쌍 · 8-26 같은 대학 센터의 서로 다른 행사)
+const P5399 =
+  '마약 중독자의 상담과 재활을 지원하는 한국마약퇴치운동본부에서 지난해 7월 7일 같은 날 채용된 직원 22명 가운데 14명(64%)이 근무 8개월 이내에 퇴사한 것으로 나타났다. ' +
+  '국회 보건복지위원회 소속 허종식 더불어민주당 의원이 이 단체에서 제출받은 입·퇴사자 현황에 따르면 당시 채용 인력 중 17명은 지역 중독재활센터인 함께한걸음센터와 1342 용기한걸음센터 등 재활·상담 관련 부서에 배치됐으며';
+const P5410 =
+  '국회 보건복지위원회 소속 더불어민주당 이수진 의원이 한국마약퇴치운동본부에서 제출받은 자료에 따르면, 이 기관은 지난해 7월 7일 하루에 신입 직원 22명을 채용했는데 이 가운데 14명(64%)이 8개월을 채우지 못하고 퇴사했다. ' +
+  '채용 당시 이들 중 17명은 중독재활센터와 1342 상담 등 중독재활 업무 부서에 배치됐다.';
+const QUIT_A = doc(5410, '마약퇴치운동본부 신입 22명 중 14명 퇴사…원인 파악 못해 - 국제신문', 0, { lead: leadOf(P5410), para: paraOf(P5410) });
+const QUIT_B = doc(5399, '입사 다음 날 짐 쌌다…마약퇴치운동본부 줄퇴사, 왜', 1.2, { lead: leadOf(P5399), para: paraOf(P5399) });
+const P4659 =
+  '부산가톨릭대학교 중독회복이음센터가 경북교육청과 함께 진행한 ‘청소년 도박중독 예방 전문강사 양성 기본 교육’ 수료식이 성황리에 마무리됐다. ' +
+  '이번 교육은 청소년 도박중독 문제의 심각성이 커지는 가운데, 학교 현장에서 예방 활동을 이끌어갈 전문 인력을 양성하기 위해 마련됐다.';
+const P4656 =
+  '부산가톨릭대학교 중독회복이음센터가 부산사상구청소년상담복지센터와 청소년 중독 예방을 위한 협력 체계를 강화했다. ' +
+  '이번 협력은 지역 청소년들의 중독 문제에 대응하기 위해 두 기관이 힘을 모은 것으로, 예방 활동과 상담 지원 등에서의 연계가 기대된다.';
+const UNI_A = doc(4659, '부산가톨릭대학교 중독회복이음센터, 경북교육청과 함께 ‘청소년 도박중독 예방 전문강사 양성 기본 교육’수료식 성료 - 국제신문', 0, { lead: leadOf(P4659), para: paraOf(P4659) });
+const UNI_B = doc(4656, '부산가톨릭대학교 중독회복이음센터, 부산사상구청소년상담복지센터와 청소년 중독 예방 협력 강화 - 국제신문', 0, { lead: leadOf(P4656), para: paraOf(P4656) });
+
+describe('event_cluster — 고유명사 규칙(NEWS-Q4 ■3)', () => {
+  it('기관명·인명을 뽑는다(앞 「한국」 뗌 · 「○○○ 의원」)', () => {
+    const e = entitiesOf('국회 보건복지위원회 소속 허종식 의원이 한국마약퇴치운동본부에서');
+    expect(e).toEqual(expect.arrayContaining(['보건복지위원회', '人허종식', '마약퇴치운동본부']));
+  });
+  it('「경남경찰」⊂「경남경찰청」은 하나로 센다', () => {
+    expect(sharedEntities(['경남경찰청', '함양산삼축제'], ['경남경찰', '경남경찰청', '함양산삼축제'])).toHaveLength(2);
+    expect(sharedEntities(['경북경찰청'], ['경북경찰', '경북경찰청'])).toHaveLength(1);
+  });
+  it('공통 고유명사 2개 + 제목+첫 문단 Jaccard 0.25 이상 → 묶음(근거 entity) · 규칙 끄면 따로', () => {
+    const on = clusterDocs([QUIT_A, QUIT_B], { fieldStopwords: STOP });
+    expect(on.get(5399)!.clusterId).toBe(on.get(5410)!.clusterId);
+    expect(clusterRules([QUIT_A, QUIT_B], { fieldStopwords: STOP }).get(5399)).toBe('entity');
+    const off = clusterDocs([QUIT_A, QUIT_B], { fieldStopwords: STOP, entityRule: false });
+    expect(off.get(5399)!.clusterId).not.toBe(off.get(5410)!.clusterId);
+  });
+  it('같은 기관(대학+부설 센터)의 서로 다른 행사는 묶지 않는다(오묶음 0)', () => {
+    const idx = clusterDocs([UNI_A, UNI_B], { fieldStopwords: STOP });
+    expect(idx.get(4659)!.clusterId).not.toBe(idx.get(4656)!.clusterId);
+  });
+  it('첫 문단이 없으면 고유명사 규칙도 제목 Jaccard(0.35)로만 본다', () => {
+    const a = doc(1, '경찰청·국방부, 군 장병 불법도박 합동 단속 착수', 0);
+    const b = doc(2, '강원랜드 불법도박 근절 세미나…경찰청 국방부 참석', 1);
+    const idx = clusterDocs([a, b]);
+    expect(idx.get(1)!.clusterId).not.toBe(idx.get(2)!.clusterId);
+  });
+  it('묶음 근거: 가장 이른 기사 = seed · 나머지 = jaccard|noun|entity', () => {
+    const r = clusterRules(SEOUL.slice(0, 4), { fieldStopwords: STOP });
+    expect(r.get(5421)).toBe('seed');
+    for (const id of [5423, 5425, 5424]) expect(['jaccard', 'noun', 'entity']).toContain(r.get(id));
   });
 });

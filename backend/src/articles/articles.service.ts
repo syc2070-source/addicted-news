@@ -5,7 +5,7 @@ import { FindOptionsWhere, In, IsNull, LessThan, Like, Not, Or, Repository } fro
 import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile } from '../crawler/field_profile';
-import { ClusterInfo, clusterDocs, docTs, leadOf, pickRepresentative } from '../crawler/event_cluster';
+import { ClusterInfo, clusterDocs, clusterRules, docTs, leadOf, paraOf, pickRepresentative } from '../crawler/event_cluster';
 import { GroupMode, LightRow, groupIds, membersOf, rankTop, shownId, visibleSql } from './cluster_view';
 
 /** 카테고리 slug → 이름(분야 설정 categories.slugs · NEWS-Q2 ■1). */
@@ -216,6 +216,7 @@ export class ArticlesService implements OnModuleInit {
           title: r.title,
           altTitle: r.original_title,
           lead: leadOf(r.summary || r.teaser),
+          para: paraOf(r.summary || r.teaser),
           ts: light.get(Number(r.id))!.ts,
           grade: r.source_grade ?? null,
         })),
@@ -447,9 +448,12 @@ export class ArticlesService implements OnModuleInit {
     const repId = info && info.size > 1 ? info.representativeId : id;
     const rep = await this.getOne(repId);
     if (!rep) return null;
-    const members = info && info.size > 1
+    const light = info && info.size > 1
       ? info.memberIds.map((m) => st.light.get(m)).filter((r): r is LightRow => !!r)
       : [];
+    // NEWS-Q4 ■3: 기사마다 같은 사건으로 본 근거(jaccard·noun·entity · 가장 이른 기사 = seed). 화면은 쓰지 않음.
+    const rules = await this.memberRules(light.map((m) => m.id)).catch(() => new Map<number, string>());
+    const members = light.map((m) => ({ ...m, rule: rules.get(m.id) ?? null }));
     return {
       clusterId: info && info.size > 1 ? info.clusterId : null,
       clusterSize: info?.size || 1,
@@ -457,6 +461,26 @@ export class ArticlesService implements OnModuleInit {
       members,
       mode: st.mode,
     };
+  }
+
+  /** 묶음 기사들의 근거(묶음 하나 · 작은 읽기). */
+  private async memberRules(ids: number[]): Promise<Map<number, string>> {
+    if (ids.length < 2) return new Map();
+    const prof = fieldProfile();
+    const rows: any[] = await this.q(
+      `SELECT id, title, original_title, summary, teaser, published_at,
+              ${this.flags.publishedTs ? 'published_ts' : 'NULL AS published_ts'}
+         FROM articles WHERE id = ANY($1::int[])`,
+      [ids],
+    );
+    return clusterRules(
+      rows.map((r) => ({
+        id: Number(r.id), title: r.title, altTitle: r.original_title,
+        lead: leadOf(r.summary || r.teaser), para: paraOf(r.summary || r.teaser),
+        ts: docTs(r.published_ts, r.published_at),
+      })),
+      { fieldStopwords: prof.keywords.dup_stopwords, ignoreLeads: [prof.prompts.fallback_summary_line] },
+    );
   }
 
   // 기사 상세 (종류·층 무관 · soft 삭제는 숨김)

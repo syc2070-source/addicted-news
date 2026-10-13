@@ -15,7 +15,31 @@ export interface SourceRunStat {
   failed?: string;
   /** NEWS-Q3: 묶음 상속(관문 건너뜀) */
   inherited?: number;
+  /** NEWS-Q4 ■1: 읽기(가져오기·해석·원문 추출) · 판정 걸린 시간(ms) */
+  readMs?: number;
+  judgeMs?: number;
+  /** 소스별 60초 상한에 걸림 */
+  timeout?: boolean;
+  /** ■2: 막힌 피드 재시도 실패(실패 피드로 세지 않음) */
+  blocked?: boolean;
 }
+
+/** NEWS-Q4 ■1: 순서·상한 기록 — per_source.__run 칸(묶음 SQL 0 · 기존 jsonb). crawl_schedule.RunProgress 와 같은 꼴. */
+export interface RunProgressLike {
+  startId: string | null;
+  lastId: string | null;
+  reached: number;
+  total: number;
+  timedOut: boolean;
+  stoppedAt: string | null;
+  timeouts: string[];
+  blockedSkipped: string[];
+  blockedRetried: Array<{ id: string; ok: boolean; status?: string }>;
+  blockedFromHost: number;
+  broadcastMs: number | null;
+}
+
+export const RUN_PROGRESS_KEY = '__run';
 
 export interface CrawlRunSummary {
   field: string;
@@ -41,6 +65,8 @@ export interface CrawlRunSummary {
   urlBackfill: Record<string, number> | null;
   /** NEWS-Q3 ■1: 묶음 상속·되짚기 숫자(crawl_runs.cluster_stats 열 · 묶음 SQL 3 있을 때만 기록) */
   clusterStats?: ClusterRunStats | null;
+  /** NEWS-Q4 ■1: 순서·상한 기록(per_source.__run 로 함께 저장) */
+  progress?: RunProgressLike | null;
 }
 
 export interface ClusterRunStats {
@@ -78,7 +104,8 @@ export async function recordCrawlRun(query: QueryFn, s: CrawlRunSummary, opts: {
     [
       s.field, s.startedAt, s.finishedAt, s.readOnly, s.sourcesTotal, s.feedsOk, s.feedsFailed, JSON.stringify(s.failedFeeds),
       s.itemsSeen, s.candidates, s.dupSkipped, s.deepseekCalls, s.promptTokens, s.completionTokens, s.costUsd,
-      s.saved, s.archived, s.rejected, s.timedOut, JSON.stringify(s.perSource),
+      s.saved, s.archived, s.rejected, s.timedOut,
+      JSON.stringify(s.progress ? { ...s.perSource, [RUN_PROGRESS_KEY]: s.progress } : s.perSource),
       s.urlBackfill ? JSON.stringify(s.urlBackfill) : null,
       ...(withCluster ? [s.clusterStats ? JSON.stringify(s.clusterStats) : null] : []),
     ],
@@ -105,6 +132,53 @@ export interface RunPublic {
   rejected: number;
   urlBackfill: Record<string, number> | null;
   clusterStats: ClusterRunStats | null;
+  /** NEWS-Q4 ■1·■4: 순서·상한 기록(없던 실행은 null) */
+  progress: RunProgressLike | null;
+  /** NEWS-Q4: per_source 에서 뽑은 숫자(방송 읽힘 · 오래 걸린 소스 5) */
+  sources: PerSourceDigest;
+}
+
+export interface PerSourceDigest {
+  /** 방송 채널: 읽은 채널 수 / 항목 수 */
+  broadcastChannelsRead: number;
+  broadcastItems: number;
+  /** 소스별 60초 상한에 걸린 수 */
+  timeouts: number;
+  /** 막힌 피드(재시도 실패 · 오늘 건너뜀) 수 */
+  blocked: number;
+  /** 읽기+판정 오래 걸린 소스 5(초) */
+  slowest: Array<{ id: string; readSec: number; judgeSec: number }>;
+}
+
+/** per_source jsonb → 순서·상한 기록 + 숫자 요약(소스 id 와 숫자만). */
+export function digestPerSource(raw: unknown): { progress: RunProgressLike | null; sources: PerSourceDigest } {
+  let ps: Record<string, any> = {};
+  try {
+    ps = (typeof raw === 'string' ? JSON.parse(raw) : raw) || {};
+  } catch {
+    ps = {};
+  }
+  const progress = ps[RUN_PROGRESS_KEY] && typeof ps[RUN_PROGRESS_KEY] === 'object' ? (ps[RUN_PROGRESS_KEY] as RunProgressLike) : null;
+  let broadcastChannelsRead = 0;
+  let broadcastItems = 0;
+  let timeouts = 0;
+  let blocked = 0;
+  const timing: Array<{ id: string; readSec: number; judgeSec: number }> = [];
+  for (const [id, st] of Object.entries(ps)) {
+    if (id === RUN_PROGRESS_KEY || !st || typeof st !== 'object') continue;
+    if (id.startsWith('broadcast:')) {
+      if (!st.failed) { broadcastChannelsRead++; broadcastItems += Number(st.read || 0); }
+      continue;
+    }
+    if (st.timeout) timeouts++;
+    if (st.blocked) blocked++;
+    if (st.readMs != null || st.judgeMs != null) {
+      timing.push({ id, readSec: Math.round(Number(st.readMs || 0) / 100) / 10, judgeSec: Math.round(Number(st.judgeMs || 0) / 100) / 10 });
+    }
+  }
+  if (progress) blocked += Array.isArray(progress.blockedSkipped) ? progress.blockedSkipped.length : 0;
+  timing.sort((a, b) => b.readSec + b.judgeSec - (a.readSec + a.judgeSec));
+  return { progress, sources: { broadcastChannelsRead, broadcastItems, timeouts, blocked, slowest: timing.slice(0, 5) } };
 }
 
 /** NEWS-Q3 ■0·■5: 최근 실행 n 개(공개 · 숫자와 실패 피드 이름만 · 열쇠·본문 0). 표가 없거나 실패면 []. */
@@ -112,7 +186,7 @@ export async function recentCrawlRuns(query: QueryFn, n: number, opts: { cluster
   try {
     const rows = await query(
       `SELECT started_at, finished_at, timed_out, sources_total, feeds_ok, feeds_failed, failed_feeds, items_seen, candidates,
-              dup_skipped, deepseek_calls, cost_usd_est, saved, archived, rejected, url_backfill
+              dup_skipped, deepseek_calls, cost_usd_est, saved, archived, rejected, url_backfill, per_source
               ${opts.clusterStatsColumn ? ', cluster_stats' : ', NULL AS cluster_stats'}
          FROM crawl_runs WHERE read_only = false ORDER BY started_at DESC LIMIT $1`,
       [Math.max(1, Math.min(20, Math.floor(n) || 5))],
@@ -135,6 +209,7 @@ export async function recentCrawlRuns(query: QueryFn, n: number, opts: { cluster
         saved: num(r.saved), archived: num(r.archived), rejected: num(r.rejected),
         urlBackfill: json(r.url_backfill),
         clusterStats: json(r.cluster_stats),
+        ...digestPerSource(r.per_source),
       };
     });
   } catch {
@@ -154,6 +229,13 @@ export interface LastRunPublic {
   saved: number;
   archived: number;
   rejected: number;
+  /** NEWS-Q4 ■4: 소요(초) · 소스 수 · 전체 상한 걸림 · 소스 상한 걸린 수 · 막힌 피드 수 */
+  durationSec: number | null;
+  sourcesTotal: number;
+  timedOut: boolean;
+  timeouts: number;
+  blocked: number;
+  blockedFromHost: number | null;
 }
 
 /** health 용 마지막 실행 요약(숫자만). 표가 없거나 실패면 null. */
@@ -161,7 +243,7 @@ export async function lastCrawlRun(query: QueryFn, field?: string): Promise<Last
   try {
     const rows = await query(
       `SELECT started_at, finished_at, feeds_ok, feeds_failed, items_seen, dup_skipped, deepseek_calls, cost_usd_est,
-              saved, archived, rejected
+              saved, archived, rejected, sources_total, timed_out, per_source
          FROM crawl_runs WHERE read_only = false ${field ? 'AND field = $1' : ''}
         ORDER BY started_at DESC LIMIT 1`,
       field ? [field] : [],
@@ -169,12 +251,21 @@ export async function lastCrawlRun(query: QueryFn, field?: string): Promise<Last
     const r = rows?.[0];
     if (!r) return null;
     const n = (v: unknown) => Number(v || 0);
+    const s = new Date(r.started_at);
+    const f = r.finished_at ? new Date(r.finished_at) : null;
+    const { progress, sources } = digestPerSource(r.per_source);
     return {
-      startedAt: new Date(r.started_at).toISOString(),
-      finishedAt: r.finished_at ? new Date(r.finished_at).toISOString() : null,
+      startedAt: s.toISOString(),
+      finishedAt: f ? f.toISOString() : null,
       feedsOk: n(r.feeds_ok), feedsFailed: n(r.feeds_failed), itemsSeen: n(r.items_seen), dupSkipped: n(r.dup_skipped),
       deepseekCalls: n(r.deepseek_calls), costUsd: n(r.cost_usd_est),
       saved: n(r.saved), archived: n(r.archived), rejected: n(r.rejected),
+      durationSec: f ? Math.round((f.getTime() - s.getTime()) / 1000) : null,
+      sourcesTotal: n(r.sources_total),
+      timedOut: !!r.timed_out,
+      timeouts: sources.timeouts,
+      blocked: sources.blocked,
+      blockedFromHost: progress ? n(progress.blockedFromHost) : null,
     };
   } catch {
     return null;
