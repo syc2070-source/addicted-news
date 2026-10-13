@@ -287,16 +287,18 @@ function loadRaphaNews() {
   var container = document.getElementById('rapha-news');
   if (!container) return;
   
+  // NEWS-Q3 ■2: 라파뉴스가 0건(또는 못 읽음)이면 빈 상자를 두지 않고 상자째 숨긴다.
+  var box = container.closest('.sidebar-box');
   fetch(API_BASE + '/articles/rapha')
     .then(function(res) { return res.json(); })
     .then(function(data) {
       var articles = Array.isArray(data) ? data : (data ? [data] : []);
-      
+
       if (articles.length === 0) {
-        container.innerHTML = '<p class="no-articles-small">등록된 기사가 없습니다.</p>';
+        if (box) box.style.display = 'none';
         return;
       }
-      
+
       container.innerHTML = '';
       articles.slice(0, 2).forEach(function(article, index) {
         container.innerHTML += createSidebarItem(article, index + 1);
@@ -304,7 +306,7 @@ function loadRaphaNews() {
     })
     .catch(function(e) {
       console.error('라파뉴스 로드 실패:', e);
-      container.innerHTML = '<p class="no-articles-small">불러올 수 없습니다.</p>';
+      if (box) box.style.display = 'none';
     });
 }
 
@@ -423,12 +425,18 @@ function loadTopNews() {
 
 function renderTopNews(container, data) {
   var articles = Array.isArray(data) ? data : (data ? [data] : []);
-  
+
   if (articles.length === 0) {
     container.innerHTML = '<p class="no-articles">뉴스가 없습니다.</p>';
     return;
   }
-  
+
+  // NEWS-Q3 ■2: TOP = 72시간 안 가장 많은 매체가 다룬 소식 · 72시간 안 기사가 없으면 최근 7일로 넓혔다고 표시
+  var note = document.getElementById('top-window');
+  if (note) {
+    note.textContent = articles[0].topWindow === '7d' ? '최근 7일' : (articles[0].topWindow === '72h' ? '최근 72시간' : '');
+  }
+
   container.innerHTML = '';
   articles.slice(0, 3).forEach(function(article, index) {
     container.innerHTML += createTopNewsCard(article, index === 0);
@@ -610,6 +618,63 @@ async function initCategoryPage() {
 // UI 컴포넌트
 // ========================================
 
+// ---------- NEWS-Q3 ■2: 같은 소식 묶음 · 「최신」 표시 ----------
+// 「최신」 = 보도 72시간 안(API isFresh). 지우지 않고 표시만.
+function freshBadge(article) {
+  return article && article.isFresh ? '<span class="badge-fresh">최신</span>' : '';
+}
+
+function safeHref(url) {
+  var u = String(url || '');
+  return /^https?:\/\//i.test(u) ? escapeHtml(u) : '#';
+}
+
+// 제목 꼬리 " - 매체명" 떼기(매체명은 따로 보임)
+function stripOutletTail(title) {
+  var t = String(title || '');
+  var i = t.lastIndexOf(' - ');
+  return i > 0 && t.length - i - 3 <= 30 ? t.slice(0, i) : t;
+}
+
+// 보도 시각(KST): 시각이 있으면 "10. 12. 09:50", 날짜만 있으면 날짜
+function formatDateTime(ts, fallbackDate) {
+  var d = ts ? new Date(ts) : null;
+  if (d && !isNaN(d.getTime())) {
+    return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  return formatDate(fallbackDate);
+}
+
+// 「같은 소식 N건 ▸」 — 펼치면 매체별 제목·시각·원문
+function clusterBlock(article) {
+  var members = (article && article.clusterMembers) || [];
+  var n = (article && article.clusterSize) || 1;
+  if (n < 2 || members.length === 0) return '';
+  var items = members.map(function(m) {
+    return '<li class="cluster-item">' +
+      '<span class="cluster-src">' + escapeHtml(m.source || '') + '</span>' +
+      '<span class="cluster-time">' + escapeHtml(formatDateTime(m.publishedTs, m.publishedAt)) + '</span>' +
+      '<a href="' + safeHref(m.sourceUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(stripOutletTail(m.title)) + '</a>' +
+    '</li>';
+  }).join('');
+  return '<div class="cluster-box">' +
+    '<button type="button" class="cluster-toggle" aria-expanded="false" data-n="' + n + '">같은 소식 ' + n + '건 ▸</button>' +
+    '<ul class="cluster-list" hidden>' + items + '</ul>' +
+  '</div>';
+}
+
+document.addEventListener('click', function(e) {
+  var btn = e.target && e.target.closest ? e.target.closest('.cluster-toggle') : null;
+  if (!btn) return;
+  e.preventDefault();
+  var list = btn.parentNode.querySelector('.cluster-list');
+  if (!list) return;
+  var open = list.hasAttribute('hidden');
+  if (open) list.removeAttribute('hidden'); else list.setAttribute('hidden', '');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.textContent = '같은 소식 ' + btn.getAttribute('data-n') + '건 ' + (open ? '▾' : '▸');
+});
+
 // 사이드바 아이템
 function createSidebarItem(article, rank) {
   var titleHtml = article.sourceUrl
@@ -619,7 +684,8 @@ function createSidebarItem(article, rank) {
     '<span class="sidebar-rank">' + rank + '</span>' +
     '<div class="sidebar-item-content">' +
       titleHtml +
-      '<p class="sidebar-item-meta">' + (article.source || '') + ' · ' + formatDate(article.publishedAt) + '</p>' +
+      '<p class="sidebar-item-meta">' + freshBadge(article) + (article.source || '') + ' · ' + formatDate(article.publishedAt) + '</p>' +
+      clusterBlock(article) +
     '</div>' +
   '</div>';
 }
@@ -636,9 +702,10 @@ function createTopNewsCard(article, isMain) {
     imageHtml +
     '<div class="top-news-content">' +
       '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="top-news-title">' + escapeHtml(article.title) + '</a>' +
-      '<p class="top-news-meta">' + formatDate(article.publishedAt) + ' · ' + (article.source || '') + '</p>' +
+      '<p class="top-news-meta">' + freshBadge(article) + formatDate(article.publishedAt) + ' · ' + (article.source || '') + '</p>' +
       '<p class="top-news-summary">' + escapeHtml(displaySummary) + '</p>' +
       '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="top-news-more">본문가기 →</a>' +
+      clusterBlock(article) +
     '</div>' +
   '</div>';
 }
@@ -656,7 +723,7 @@ function createArticleCard(article) {
     imageHtml +
     '<div class="article-body">' +
       '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="article-title">' + escapeHtml(article.title) + '</a>' +
-      '<p class="article-meta">' + formatDate(article.publishedAt) + ' · ' + (article.source || '') + '</p>' +
+      '<p class="article-meta">' + freshBadge(article) + formatDate(article.publishedAt) + ' · ' + (article.source || '') + '</p>' +
       '<div class="article-summary" data-full="' + escapeHtml(summary) + '" data-teaser="' + escapeHtml(teaser) + '" data-collapsed="true">' +
         '<p>' + teaserHtml + '</p>' +
       '</div>' +
@@ -664,6 +731,7 @@ function createArticleCard(article) {
         '<button class="btn-toggle">요약 보기</button>' +
         '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="btn-source">원문</a>' +
       '</div>' +
+      clusterBlock(article) +
     '</div>' +
   '</div>';
 }
@@ -686,7 +754,7 @@ function createFullArticleCard(article) {
     imageHtml +
     '<div class="full-article-body">' +
       titleHtml +
-      '<p class="full-article-meta">' + formatDate(article.publishedAt) + ' · ' + (article.source || '') + ' · ' + (article.category || '') + '</p>' +
+      '<p class="full-article-meta">' + freshBadge(article) + formatDate(article.publishedAt) + ' · ' + (article.source || '') + ' · ' + (article.category || '') + '</p>' +
       '<div class="full-article-summary" data-full="' + escapeHtml(summary) + '" data-teaser="' + escapeHtml(teaser) + '" data-collapsed="true">' +
         '<p>' + teaserHtml + '</p>' +
       '</div>' +
@@ -694,6 +762,7 @@ function createFullArticleCard(article) {
         '<button class="btn-toggle">요약 보기</button>' +
         sourceBtnHtml +
       '</div>' +
+      clusterBlock(article) +
       // AN-LINK-1: 기사 하단 고정 안내(템플릿 레벨 — 전체 기사 일괄 적용)
       '<p class="article-observatory-note">이 기사의 통계·발표 일정은 ' +
         '<a href="https://addictionsociety.net/sources" target="_blank" rel="noopener noreferrer">중독사회 데이터 관측소</a>' +

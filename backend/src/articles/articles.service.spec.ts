@@ -12,6 +12,7 @@ function serviceWith(deletedAtColumn: boolean) {
     find: jest.fn(async (opts: Captured) => { calls.push(opts); return []; }),
     findAndCount: jest.fn(async (opts: Captured) => { calls.push(opts); return [[], 0]; }),
     findOne: jest.fn(async (opts: Captured) => { calls.push(opts); return null; }),
+    findBy: jest.fn(async () => []),
   };
   const service = new ArticlesService(repo as any);
   return { service, calls, repo };

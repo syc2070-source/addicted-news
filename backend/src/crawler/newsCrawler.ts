@@ -33,6 +33,8 @@ import { CrawlRunSummary, SourceRunStat, emptySourceStat, feedHealthLines, lastF
 import { backfillGoogleUrls, hostOf, isGoogleNewsLink, UrlResolveState } from './url_resolve';
 import { decodeGoogleNewsUrl } from './google_news_url';
 import { writeRowExtras } from './row_extras';
+import { ClusterPool, leadOf } from './event_cluster';
+import { PoolData, backfillClusters, loadClusterPool, savedPct } from './event_cluster_store';
 
 // NEWS-Q2 ■1: 분야 설정(FIELD_PROFILE, 기본 = data/field_profiles/DEFAULT). 없으면 여기서 시끄럽게 실패한다.
 const PROFILE = fieldProfile();
@@ -80,6 +82,8 @@ type Candidate = {
   sourceGrade?: SourceGrade | null;
   urlResolve?: UrlResolveState | null;
   sourceId?: string;
+  /** NEWS-Q3 ■1: 묶음 둘째 기사(관문 건너뛰고 대표 판정 상속) — 저장 때 제목 닮음 중복으로 버리지 않는다 */
+  clusterMember?: boolean;
 };
 
 const RSS_TIMEOUT = Number(process.env.RSS_TIMEOUT_MS ?? 15000);
@@ -141,6 +145,10 @@ let crawlStats = {
   urlResolveFail: 0,         // NEWS-Q2 ■3: 해석 실패(구글 링크 유지)
   feedsOk: 0,                // NEWS-Q2 ■4: 피드 읽기 성공
   feedsRepaired: 0,          // NEWS-Q2 ■4: 깨진 XML 고쳐 읽음
+  clusterInherit: 0,         // NEWS-Q3 ■1: 묶음 둘째 기사 — 관문 건너뛰고 대표 판정 상속(저장 후보)
+  clusterInheritRejected: 0, // NEWS-Q3 ■1: 대표가 거부라 함께 거부(호출 0)
+  clusterForeignSkip: 0,     // NEWS-Q3 ■1: 묶음 외국어 기사(번역 없이 싣지 않음 · 호출 0)
+  judgedForCluster: 0,       // NEWS-Q3 ■1: DeepSeek 로 판정한 기사 수(절감 % 분모)
   failedFeeds: [] as string[],
   // v5.4.1 작업5: 구조화된 피드 실패(상태코드별 분류·복구 판단용)
   feedFailures: [] as { id: string; source: string; sourceType: SourceType; status: number | null; retried: boolean }[],
@@ -385,13 +393,27 @@ type RunContext = {
   query: ((sql: string, params?: unknown[]) => Promise<any[]>) | null;
   budget: DeepseekBudget;
   perSource: Record<string, SourceRunStat>;
+  /** NEWS-Q3 ■1: 사건 묶음 기억(최근 저장분 + 이번 실행 판정분). 못 읽으면 null(옛 동작). */
+  pool: ClusterPool<PoolData> | null;
+  poolLoaded: number;
 };
 const RUN: RunContext = {
-  flags: { deletedAt: false, kind: false, tier: false, publishedTs: false, sourceGrade: false, urlResolve: false, crawlRuns: false },
+  flags: {
+    deletedAt: false, kind: false, tier: false, publishedTs: false, sourceGrade: false, urlResolve: false, crawlRuns: false,
+    cluster: false, clusterStats: false,
+  },
   known: new KnownIndex(),
   query: null,
   budget: new DeepseekBudget(dailyCap(process.env, PROFILE.gate.deepseek_daily_cap), 0),
   perSource: {},
+  pool: null,
+  poolLoaded: 0,
+};
+// 이번 실행 묶음 후보의 임시 id(음수 · DB id 와 겹치지 않음)
+let clusterTempId = 0;
+const CLUSTER_TEXT = {
+  fieldStopwords: PROFILE.keywords.dup_stopwords,
+  ignoreLeads: [PROFILE.prompts.fallback_summary_line],
 };
 
 function sourceStat(id: string): SourceRunStat {
@@ -739,19 +761,19 @@ function calculateTitleSimilarity(title1: string, title2: string): number {
 
 const seenTitles: Map<string, string> = new Map();
 
-function isDuplicateInSession(title: string): boolean {
+/**
+ * 이번 실행 안 중복: 'exact' = 같은 제목(바로 건너뜀) · 'similar' = 핵심어 50%+ 닮음 · null = 처음.
+ * NEWS-Q3: 'similar' 은 바로 버리지 않고 사건 묶음(■1)에 들면 묶음 기사로 싣는다. 묶음에 안 들면 예전처럼 건너뜀.
+ */
+function sessionDuplicate(title: string): 'exact' | 'similar' | null {
   const normalized = normalizeForDuplicateCheck(title);
-  if (seenTitles.has(normalized)) return true;
-  for (const [seenNorm, seenOrig] of seenTitles.entries()) {
+  if (seenTitles.has(normalized)) return 'exact';
+  for (const [, seenOrig] of seenTitles.entries()) {
     const similarity = calculateTitleSimilarity(title, seenOrig);
-    if (similarity >= 0.5) {
-      crawlStats.dupSkipKeyword++;
-      console.log(`  │   ⚠️ 유사 기사 스킵 (핵심어 ${Math.round(similarity * 100)}%): ${title.slice(0, 30)}...`);
-      return true;
-    }
+    if (similarity >= 0.5) return 'similar';
   }
   seenTitles.set(normalized, title);
-  return false;
+  return null;
 }
 
 /**
@@ -802,7 +824,14 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       crawlStats.itemsSeen++;
       const rawTitle = normalizeText(it.title || '');
       if (!rawTitle) continue;
-      if (isDuplicateInSession(rawTitle)) continue;
+      const sessionDup = sessionDuplicate(rawTitle);
+      if (sessionDup === 'exact') continue;
+      // 닮은 기사인데 묶음 기억이 없으면(옛 동작) 바로 건너뜀
+      if (sessionDup === 'similar' && !RUN.pool) {
+        crawlStats.dupSkipKeyword++;
+        console.log(`  │   ⚠️ 유사 기사 스킵(핵심어 50%+): ${rawTitle.slice(0, 30)}...`);
+        continue;
+      }
       const itemLink = it.link ? String(it.link) : '';
 
       // ■2: DeepSeek·본문 추출 앞 중복 확인(링크·제목 → 기억표 · DB)
@@ -913,6 +942,64 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       const lang = detectLanguage(rawTitle + ' ' + rawContent);
       const isForeign = lang !== 'ko';
 
+      // ■1(NEWS-Q3): 같은 사건 묶음의 둘째 기사부터 = DeepSeek 관문 건너뛰고 대표의 tier·분류 상속(LLM 0).
+      const clusterDoc = {
+        id: -(++clusterTempId), title: rawTitle, lead: leadOf(rawContent), ts: publishedTs.getTime(), grade: sourceGrade,
+      };
+      const hit = RUN.pool ? RUN.pool.match(clusterDoc) : null;
+      if (hit) {
+        const rep = hit.data;
+        const repLabel = rep.articleId ? `#${rep.articleId}` : '이번 실행';
+        if (rep.tier === 'reject' || (rep.tier === 'archive' && !RUN.flags.tier)) {
+          crawlStats.clusterInheritRejected++;
+          stat.rejected++;
+          console.log(`  │   🧩 묶음 상속 거부(대표 ${repLabel} ${rep.reason || rep.tier}): ${rawTitle.slice(0, 30)}...`);
+          if (rep.tier === 'reject') {
+            rejectedAll.push({
+              title: rawTitle, originalTitle: rawTitle, summary: null, category: rep.category, source: sourceName, sourceUrl, googleUrl,
+              publishedAt, lang, sourceType: conf.sourceType, rejectReason: `cluster_inherit:${rep.reason || 'rejected'}`.slice(0, 60),
+              confidence: null, domain: normalizeHost(sourceUrl) || normalizeHost(googleUrl || undefined) || null,
+            });
+          }
+          continue;
+        }
+        if (isForeign) {
+          // 번역 없이 외국어 제목·요약을 싣지 않는다(LANG-GUARD) — 호출도 하지 않고 건너뜀.
+          crawlStats.clusterForeignSkip++;
+          console.log(`  │   🧩 묶음 외국어 기사 건너뜀(대표 ${repLabel}): ${rawTitle.slice(0, 30)}...`);
+          continue;
+        }
+        const memberSummary = enforceThreeLines(rawContent.slice(0, 400), rawTitle);
+        // 묶음 기사도 저장 전 한국어 가드(LANG-GUARD) — 못 넘으면 싣지 않음
+        if (!isKoreanOutput(rawTitle, memberSummary).ok) {
+          crawlStats.clusterForeignSkip++;
+          continue;
+        }
+        crawlStats.clusterInherit++;
+        stat.inherited = (stat.inherited || 0) + 1;
+        console.log(`  │   🧩 같은 소식(대표 ${repLabel} · ${rep.tier}/${rep.category}) — 관문 건너뜀: ${rawTitle.slice(0, 30)}...`);
+        RUN.pool!.add(clusterDoc, { ...rep, articleId: rep.articleId ?? null });
+        if (rep.tier === 'archive') crawlStats.archiveTier++;
+        const imageUrlM = await getArticleImage(it, sourceUrl, ogImageHint);
+        const memberRow: Candidate = {
+          title: rawTitle, originalTitle: rawTitle, teaser: null, summary: memberSummary,
+          rawBody: rawContent.slice(0, 6000) || null,
+          keywords: [], category: normalizeCategory(rep.category), region: conf.region, source: sourceName,
+          sourceUrl, googleUrl, imageUrl: imageUrlM, origin: 'crawler', isTop: false, isFeature: false,
+          publishedAt, lang, isForeign, blocked: false, blockedReason: null,
+          sourceType: conf.sourceType, outletId,
+          tier: rep.tier, publishedTs, sourceGrade, urlResolve, sourceId: conf.id, clusterMember: true,
+        };
+        out.push(memberRow);
+        continue;
+      }
+      if (sessionDup === 'similar') {
+        // 닮았지만 묶음에는 안 듦 → 예전처럼 건너뜀(호출 늘지 않게)
+        crawlStats.dupSkipKeyword++;
+        console.log(`  │   ⚠️ 유사 기사 스킵(핵심어 50%+ · 묶음 아님): ${rawTitle.slice(0, 30)}...`);
+        continue;
+      }
+
       if (isForeign) {
         if (MAX_FOREIGN_ARTICLES === 0) continue;
         if (foreignArticleCount >= MAX_FOREIGN_ARTICLES) continue;
@@ -928,6 +1015,7 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       // 판정용 배정 카테고리(제목+본문 기준 잠정 분류) — category_fit 판정 기준
       const callsBefore = deepseekStats.calls;
       const provCategory = classifyCategory(rawTitle, rawContent, normalizeCategory(conf.category));
+      crawlStats.judgedForCluster++;
       const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
 
       // v5.4 2-2 · NEWS-Q2 ■6: 관문 두 층(publish / archive / reject). DeepSeek 가용 시에만 엄격 적용.
@@ -946,6 +1034,10 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
           stat.rejected++;
           stat.calls += deepseekStats.calls - callsBefore;
           console.log(`  │   🚫 입구 게이트 거부(${reason}): ${shortTitle}`);
+          // ■1: 내용 판정 거부만 묶음 기억에(같은 사건 다음 기사는 호출 없이 함께 거부). 판정 실패는 넣지 않음.
+          if (RUN.pool && reason !== 'judgment_missing') {
+            RUN.pool.add(clusterDoc, { tier: 'reject', category: provCategory, reason, articleId: null });
+          }
           // 격리 저장(rejected_articles) — 감사·프롬프트 개선 소재. 자동 블랙리스트는
           // 이 테이블 집계로 다음 실행 시작 시 재평가(in-memory 카운트 폐기, v5.4.1 작업2).
           rejectedAll.push({
@@ -1026,6 +1118,13 @@ async function crawlOneSource(conf: SourceConfig): Promise<Candidate[]> {
       stat.calls += deepseekStats.calls - callsBefore;
 
       const imageUrl = await getArticleImage(it, sourceUrl, ogImageHint);
+      // ■1: 판정을 마친 기사 = 이번 실행 묶음의 대표 후보(외국 기사는 원제로도 비교되게 한국어 제목을 altTitle 로)
+      if (RUN.pool) {
+        RUN.pool.add(
+          { ...clusterDoc, altTitle: finalTitle !== rawTitle ? finalTitle : null },
+          { tier, category: finalCategory, articleId: null },
+        );
+      }
 
       out.push({
         title: finalTitle, originalTitle: rawTitle, teaser: teaserKo, summary: finalSummary,
@@ -1135,7 +1234,8 @@ async function finalizeStatoryCandidate(
 ): Promise<Candidate | null> {
   const rawTitle = normalizeText(partial.originalTitle || partial.title);
   if (!rawTitle) return null;
-  if (isDuplicateInSession(rawTitle)) return null;
+  // Statory 후보는 묶음 상속 없이 예전대로: 같은 제목·닮은 제목이면 건너뜀
+  if (sessionDuplicate(rawTitle)) { crawlStats.dupSkipKeyword++; return null; }
 
   const rawContent = partial.summary || rawTitle;
   if (shouldBlockByDomain(partial.sourceUrl)) return null;
@@ -1318,6 +1418,8 @@ async function isDuplicateInDb(repo: any, c: Candidate): Promise<boolean> {
   if (c.sourceType === BROADCAST_SOURCE_TYPE) return false;
   if (c.googleUrl && await repo.findOne({ where: { googleUrl: c.googleUrl } })) return true;
   if (await repo.findOne({ where: { title: c.title, publishedAt: c.publishedAt, source: c.source } })) return true;
+  // NEWS-Q3 ■1: 묶음 기사는 "같은 사건 다른 매체"라서 싣는다(제목 닮음 중복 검사 건너뜀 · 같은 URL·같은 제목만 막음).
+  if (c.clusterMember) return false;
   // v5.2 #4: 같은 날짜만 → 최근 3일 창으로 확장(매체별 게재일 차이 흡수)
   const window = recentYmdWindow(c.publishedAt, 3);
   const nearbyArticles = await repo.find({ where: window.map((d) => ({ publishedAt: d })) });
@@ -1493,6 +1595,15 @@ async function main() {
   RUN.flags = await probeSchema(q);
   console.log(`[schema] ${Object.entries(RUN.flags).map(([k, v]) => `${k}=${v ? '있음' : '없음'}`).join(' · ')}`);
   RUN.known = await loadKnownIndex(q, 30);
+  // NEWS-Q3 ■1: 사건 묶음 기억(최근 108시간 저장분). 실패하면 묶음 없이 옛 동작.
+  try {
+    RUN.pool = await loadClusterPool(q, RUN.flags, CLUSTER_TEXT);
+    RUN.poolLoaded = RUN.pool.size;
+    console.log(`[cluster] 묶음 기억 ${RUN.poolLoaded}건(최근 저장분) · 묶음 열 ${RUN.flags.cluster ? '있음' : '없음(상속만 · 저장은 묶음 SQL 3 뒤)'}`);
+  } catch (e) {
+    RUN.pool = null;
+    console.warn('[cluster] 묶음 기억 읽기 실패(묶지 않고 진행):', (e as Error).message);
+  }
   const usedBefore = RUN.flags.crawlRuns ? await usedTodayFromRuns(q) : 0;
   RUN.budget = new DeepseekBudget(dailyCap(process.env, PROFILE.gate.deepseek_daily_cap), usedBefore);
   console.log(`[deepseek] 하루 상한 ${RUN.budget.cap}회 · 오늘 앞 실행 ${usedBefore}회 · 모델 ${DEEPSEEK_MODEL}`);
@@ -1596,6 +1707,29 @@ async function main() {
   } else {
     console.log('[url-backfill] url_resolve 열 없음 — 기존 행 해석은 묶음 SQL 2 적용 뒤부터');
   }
+  // NEWS-Q3 ■1: 최근 30일 다시 묶어 cluster_id·cluster_size 두 열만(묶음 SQL 3 있을 때만).
+  let clusterBackfill: { rows: number; clusters: number; updated: number } | null = null;
+  if (RUN.flags.cluster) {
+    try {
+      clusterBackfill = await backfillClusters(q, RUN.flags, CLUSTER_TEXT);
+      if (clusterBackfill) {
+        console.log(`[cluster-backfill] 최근 30일 ${clusterBackfill.rows}건 → 묶음(2건+) ${clusterBackfill.clusters} · 열 고침 ${clusterBackfill.updated}행`);
+      }
+    } catch (e) {
+      console.warn('[cluster-backfill] 실패(무시):', (e as Error).message);
+    }
+  } else {
+    console.log('[cluster-backfill] cluster_id 열 없음 — 공개 API 가 응답 때 최근 7일을 묶는다(묶음 SQL 3 적용 뒤 저장)');
+  }
+  const clusterSkipped = crawlStats.clusterInherit + crawlStats.clusterInheritRejected + crawlStats.clusterForeignSkip;
+  const clusterStats = {
+    poolLoaded: RUN.poolLoaded,
+    inherited: crawlStats.clusterInherit,
+    inheritedRejected: crawlStats.clusterInheritRejected,
+    foreignSkipped: crawlStats.clusterForeignSkip,
+    savedPct: savedPct(clusterSkipped, crawlStats.judgedForCluster),
+    backfill: clusterBackfill,
+  };
   const elapsed = Math.round((Date.now() - startTime) / 1000);
 
   // 통계 출력
@@ -1628,6 +1762,8 @@ async function main() {
   console.log(`   ├ 🔁 DeepSeek 앞 중복 건너뜀: ${crawlStats.dupPreSkip}건 · ⛔ 하루 상한 건너뜀: ${crawlStats.capSkip}건`);
   console.log(`   ├ 🗄️ 보관(archive) 판정: ${crawlStats.archiveTier}건 · 저장 중 보관 ${result.archived}건`);
   console.log(`   ├ 🔗 구글 링크 → 원문: ${crawlStats.urlResolved}건 / 해석 실패 ${crawlStats.urlResolveFail}건`);
+  console.log(`   ├ 🧩 묶음 상속(관문 건너뜀): 저장 후보 ${crawlStats.clusterInherit} · 함께 거부 ${crawlStats.clusterInheritRejected} · ` +
+    `외국어 건너뜀 ${crawlStats.clusterForeignSkip} / DeepSeek 판정 ${crawlStats.judgedForCluster} → 절감 ${clusterStats.savedPct}%`);
   console.log(`   ├ 📺 방송: 읽음 ${crawlStats.broadcastSeen} → 핵심어 ${crawlStats.broadcastKeywordPass} → DeepSeek 통과 ${crawlStats.broadcastAccepted} / 거부 ${crawlStats.broadcastRejected}`);
   const blSnap = getBlacklistSnapshot();
   console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);
@@ -1719,11 +1855,12 @@ async function main() {
     timedOut,
     perSource: RUN.perSource,
     urlBackfill,
+    clusterStats,
   };
   for (const line of feedHealthLines(summary)) console.log(`   ${line}`);
   if (RUN.flags.crawlRuns) {
     try {
-      await recordCrawlRun(q, summary);
+      await recordCrawlRun(q, summary, { clusterStatsColumn: RUN.flags.clusterStats });
       console.log('   crawl_runs 한 행 기록');
     } catch (e) {
       console.warn('[crawl_runs] 기록 실패(무시):', (e as Error).message);

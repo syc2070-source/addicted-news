@@ -4,7 +4,10 @@ import { BROADCAST_FETCH_ATTEMPTS, orderFailedFirst } from './broadcast';
 import { AdminService } from '../admin/admin.service';
 
 // NEWS-Q2 ■8: 집계 · 묶음 SQL 2 열 채우기 · 방송 재시도 · 관리자 soft 삭제
-const FLAGS = { deletedAt: true, kind: true, tier: true, publishedTs: true, sourceGrade: true, urlResolve: true, crawlRuns: true };
+const FLAGS = {
+  deletedAt: true, kind: true, tier: true, publishedTs: true, sourceGrade: true, urlResolve: true, crawlRuns: true,
+  cluster: false, clusterStats: false,
+};
 
 describe('crawl_runs', () => {
   const summary: CrawlRunSummary = {

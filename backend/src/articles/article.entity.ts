@@ -103,6 +103,13 @@ export class Article {
   @Column({ name: 'url_resolve', type: 'jsonb', nullable: true, select: false, insert: false, update: false })
   urlResolve: any; // jsonb(url_resolve.ts UrlResolveState) — 엔티티로는 읽고 쓰지 않음
 
+  // NEWS-Q3 묶음 SQL 3 — 사건 묶음(가장 이른 보도의 id · 묶음 기사 수). 열 확인 뒤 raw SQL 로만 읽고 쓴다.
+  @Column({ name: 'cluster_id', type: 'text', nullable: true, select: false, insert: false, update: false })
+  clusterIdCol: string | null;
+
+  @Column({ name: 'cluster_size', type: 'int', nullable: true, select: false, insert: false, update: false })
+  clusterSizeCol: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

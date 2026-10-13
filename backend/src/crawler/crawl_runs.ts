@@ -13,6 +13,8 @@ export interface SourceRunStat {
   archived: number;
   rejected: number;
   failed?: string;
+  /** NEWS-Q3: 묶음 상속(관문 건너뜀) */
+  inherited?: number;
 }
 
 export interface CrawlRunSummary {
@@ -37,6 +39,22 @@ export interface CrawlRunSummary {
   timedOut: boolean;
   perSource: Record<string, SourceRunStat>;
   urlBackfill: Record<string, number> | null;
+  /** NEWS-Q3 ■1: 묶음 상속·되짚기 숫자(crawl_runs.cluster_stats 열 · 묶음 SQL 3 있을 때만 기록) */
+  clusterStats?: ClusterRunStats | null;
+}
+
+export interface ClusterRunStats {
+  /** 묶음 기억에 넣은 최근 저장분 */
+  poolLoaded: number;
+  /** 둘째 기사부터 관문 건너뛰고 대표 판정 상속(저장 후보) */
+  inherited: number;
+  /** 대표가 거부라 함께 거부 */
+  inheritedRejected: number;
+  /** 외국어 묶음 기사(번역 없이 싣지 않음 → 건너뜀) */
+  foreignSkipped: number;
+  /** 절감 비율 = 상속(+함께 거부·외국 건너뜀) / (그것 + DeepSeek 판정 기사 수) */
+  savedPct: number;
+  backfill: { rows: number; clusters: number; updated: number } | null;
 }
 
 export function emptySourceStat(): SourceRunStat {
@@ -50,20 +68,78 @@ export function feedHealthLines(s: Pick<CrawlRunSummary, 'sourcesTotal' | 'feeds
   return lines;
 }
 
-export async function recordCrawlRun(query: QueryFn, s: CrawlRunSummary): Promise<boolean> {
+export async function recordCrawlRun(query: QueryFn, s: CrawlRunSummary, opts: { clusterStatsColumn?: boolean } = {}): Promise<boolean> {
+  const withCluster = !!opts.clusterStatsColumn;
   await query(
     `INSERT INTO crawl_runs (field, started_at, finished_at, read_only, sources_total, feeds_ok, feeds_failed, failed_feeds,
        items_seen, candidates, dup_skipped, deepseek_calls, deepseek_prompt_tokens, deepseek_completion_tokens, cost_usd_est,
-       saved, archived, rejected, timed_out, per_source, url_backfill)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb)`,
+       saved, archived, rejected, timed_out, per_source, url_backfill${withCluster ? ', cluster_stats' : ''})
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21::jsonb${withCluster ? ',$22::jsonb' : ''})`,
     [
       s.field, s.startedAt, s.finishedAt, s.readOnly, s.sourcesTotal, s.feedsOk, s.feedsFailed, JSON.stringify(s.failedFeeds),
       s.itemsSeen, s.candidates, s.dupSkipped, s.deepseekCalls, s.promptTokens, s.completionTokens, s.costUsd,
       s.saved, s.archived, s.rejected, s.timedOut, JSON.stringify(s.perSource),
       s.urlBackfill ? JSON.stringify(s.urlBackfill) : null,
+      ...(withCluster ? [s.clusterStats ? JSON.stringify(s.clusterStats) : null] : []),
     ],
   );
   return true;
+}
+
+export interface RunPublic {
+  startedAt: string;
+  finishedAt: string | null;
+  durationSec: number | null;
+  timedOut: boolean;
+  sourcesTotal: number;
+  feedsOk: number;
+  feedsFailed: number;
+  failedFeeds: string[];
+  itemsSeen: number;
+  candidates: number;
+  dupSkipped: number;
+  deepseekCalls: number;
+  costUsd: number;
+  saved: number;
+  archived: number;
+  rejected: number;
+  urlBackfill: Record<string, number> | null;
+  clusterStats: ClusterRunStats | null;
+}
+
+/** NEWS-Q3 ■0·■5: 최근 실행 n 개(공개 · 숫자와 실패 피드 이름만 · 열쇠·본문 0). 표가 없거나 실패면 []. */
+export async function recentCrawlRuns(query: QueryFn, n: number, opts: { clusterStatsColumn?: boolean } = {}): Promise<RunPublic[]> {
+  try {
+    const rows = await query(
+      `SELECT started_at, finished_at, timed_out, sources_total, feeds_ok, feeds_failed, failed_feeds, items_seen, candidates,
+              dup_skipped, deepseek_calls, cost_usd_est, saved, archived, rejected, url_backfill
+              ${opts.clusterStatsColumn ? ', cluster_stats' : ', NULL AS cluster_stats'}
+         FROM crawl_runs WHERE read_only = false ORDER BY started_at DESC LIMIT $1`,
+      [Math.max(1, Math.min(20, Math.floor(n) || 5))],
+    );
+    const num = (v: unknown) => Number(v || 0);
+    const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? null);
+    return rows.map((r) => {
+      const s = new Date(r.started_at);
+      const f = r.finished_at ? new Date(r.finished_at) : null;
+      const failed = json(r.failed_feeds);
+      return {
+        startedAt: s.toISOString(),
+        finishedAt: f ? f.toISOString() : null,
+        durationSec: f ? Math.round((f.getTime() - s.getTime()) / 1000) : null,
+        timedOut: !!r.timed_out,
+        sourcesTotal: num(r.sources_total), feedsOk: num(r.feeds_ok), feedsFailed: num(r.feeds_failed),
+        failedFeeds: Array.isArray(failed) ? failed.map((x: unknown) => String(x).slice(0, 160)) : [],
+        itemsSeen: num(r.items_seen), candidates: num(r.candidates), dupSkipped: num(r.dup_skipped),
+        deepseekCalls: num(r.deepseek_calls), costUsd: num(r.cost_usd_est),
+        saved: num(r.saved), archived: num(r.archived), rejected: num(r.rejected),
+        urlBackfill: json(r.url_backfill),
+        clusterStats: json(r.cluster_stats),
+      };
+    });
+  } catch {
+    return [];
+  }
 }
 
 export interface LastRunPublic {

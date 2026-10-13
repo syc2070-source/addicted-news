@@ -1,10 +1,12 @@
 // backend/src/articles/articles.service.ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, IsNull, LessThan, Like, Not, Or, Repository } from 'typeorm';
+import { FindOptionsWhere, In, IsNull, LessThan, Like, Not, Or, Repository } from 'typeorm';
 import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile } from '../crawler/field_profile';
+import { ClusterInfo, clusterDocs, docTs, leadOf, pickRepresentative } from '../crawler/event_cluster';
+import { GroupMode, LightRow, groupIds, membersOf, rankTop, shownId, visibleSql } from './cluster_view';
 
 /** 카테고리 slug → 이름(분야 설정 categories.slugs · NEWS-Q2 ■1). */
 export function categoryKeyFor(slug: string): string {
@@ -64,12 +66,38 @@ export function isFresh(publishedTs: Date | null | undefined, publishedAt: strin
   return now.getTime() - t <= hours * 3600 * 1000 && t <= now.getTime() + 3600 * 1000;
 }
 
-type Flags = { deletedAt: boolean; tier: boolean; publishedTs: boolean };
+type Flags = { deletedAt: boolean; tier: boolean; publishedTs: boolean; sourceGrade: boolean; clusterId: boolean };
+
+/** NEWS-Q3: 묶음 계산 기억(10분). 열(cluster_id) 없으면 최근 7일을 응답 때 계산한다. */
+export const CLUSTER_TTL_MS = 10 * 60 * 1000;
+export const CLUSTER_COMPUTE_DAYS = 7;
+/** 묶음 단위 목록에서 훑는 최대 행 수(새 것부터). */
+const GROUP_SCAN_MAX = 4000;
+
+interface ClusterState {
+  at: number;
+  mode: 'column' | 'computed';
+  index: Map<number, ClusterInfo>;
+  light: Map<number, LightRow>;
+}
+
+type Decorated = Article & {
+  publishedTs: Date | null;
+  sourceGrade: string | null;
+  isFresh: boolean;
+  clusterId?: string | null;
+  clusterSize?: number;
+  representative?: boolean;
+  clusterMembers?: LightRow[];
+  topWindow?: '72h' | '7d';
+};
 
 @Injectable()
 export class ArticlesService implements OnModuleInit {
   private readonly logger = new Logger(ArticlesService.name);
-  private flags: Flags = { deletedAt: false, tier: false, publishedTs: false };
+  private flags: Flags = { deletedAt: false, tier: false, publishedTs: false, sourceGrade: false, clusterId: false };
+  private cluster: ClusterState | null = null;
+  private clusterLoading: Promise<ClusterState> | null = null;
 
   constructor(
     @InjectRepository(Article)
@@ -83,15 +111,18 @@ export class ArticlesService implements OnModuleInit {
   /** 묶음 SQL 열이 섰는지 확인(시작할 때 한 번). 확인 실패는 "없음"(옛 동작). */
   async refreshSchemaFlags() {
     const q = (sql: string, params?: unknown[]) => this.articleRepo.query(sql, params);
-    const [deletedAt, tier, publishedTs] = await Promise.all([
+    const [deletedAt, tier, publishedTs, sourceGrade, clusterId] = await Promise.all([
       columnExists(q, 'articles', 'deleted_at'),
       columnExists(q, 'articles', 'tier'),
       columnExists(q, 'articles', 'published_ts'),
+      columnExists(q, 'articles', 'source_grade'),
+      columnExists(q, 'articles', 'cluster_id'),
     ]);
-    this.flags = { deletedAt, tier, publishedTs };
+    this.flags = { deletedAt, tier, publishedTs, sourceGrade, clusterId };
     this.logger.log(
       `articles 열: deleted_at ${deletedAt ? '있음(soft 삭제 숨김)' : '없음'} · tier ${tier ? '있음(보관 숨김)' : '없음'} · ` +
-      `published_ts ${publishedTs ? '있음' : '없음'}`,
+      `published_ts ${publishedTs ? '있음' : '없음'} · source_grade ${sourceGrade ? '있음' : '없음'} · ` +
+      `cluster_id ${clusterId ? '있음(저장된 묶음)' : '없음(응답 때 최근 7일 계산)'}`,
     );
   }
 
@@ -101,24 +132,138 @@ export class ArticlesService implements OnModuleInit {
     });
   }
 
-  /** 응답에 publishedTs(열 있을 때)·isFresh 칸을 붙인다. */
-  private async decorate<T extends Article>(items: T[]): Promise<Array<T & { publishedTs: Date | null; isFresh: boolean }>> {
+  // ---------- NEWS-Q3: 사건 묶음 ----------
+  private q(sql: string, params?: unknown[]): Promise<any[]> {
+    return this.articleRepo.query(sql, params);
+  }
+
+  private lightOf(r: any): LightRow {
+    const publishedAt = r.published_at instanceof Date ? r.published_at.toISOString() : String(r.published_at ?? '');
+    const publishedTs = r.published_ts ? new Date(r.published_ts) : null;
+    return {
+      id: Number(r.id),
+      title: r.title,
+      source: r.source,
+      sourceUrl: r.source_url,
+      publishedAt,
+      publishedTs,
+      sourceGrade: r.source_grade ?? null,
+      category: r.category ?? null,
+      ts: docTs(publishedTs, publishedAt),
+    };
+  }
+
+  /** 최근 7일 공개 기사(가벼운 칸 + 묶기 재료). */
+  private async recentRows(days: number): Promise<any[]> {
+    const f = this.flags;
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const ymd = since.toISOString().slice(0, 10);
+    const cols = [
+      'id', 'title', 'original_title', 'summary', 'teaser', 'source', 'source_url', 'published_at', 'category',
+      f.publishedTs ? 'published_ts' : 'NULL AS published_ts',
+      f.sourceGrade ? 'source_grade' : 'NULL AS source_grade',
+      f.clusterId ? 'cluster_id, cluster_size' : 'NULL AS cluster_id, 1 AS cluster_size',
+    ].join(', ');
+    const timeCond = f.publishedTs
+      ? `(published_ts >= $1 OR (published_ts IS NULL AND published_at::text >= $2))`
+      : `published_at::text >= $2`;
+    return this.q(`SELECT ${cols} FROM articles WHERE ${visibleSql(f)} AND ${timeCond} ORDER BY id DESC LIMIT 3000`, [since, ymd]);
+  }
+
+  private async buildClusterState(): Promise<ClusterState> {
+    const prof = fieldProfile();
+    const rows = await this.recentRows(CLUSTER_COMPUTE_DAYS);
+    const light = new Map<number, LightRow>(rows.map((r) => [Number(r.id), this.lightOf(r)]));
+    let mode: ClusterState['mode'] = 'computed';
+    let index = new Map<number, ClusterInfo>();
+
+    if (this.flags.clusterId) {
+      // 저장된 묶음(수집기가 최근 30일을 채움). 아직 비어 있으면 계산 길로.
+      const f = this.flags;
+      const stored: any[] = await this.q(
+        `SELECT id, title, source, source_url, published_at, category, cluster_id, cluster_size,
+                ${f.publishedTs ? 'published_ts' : 'NULL AS published_ts'}, ${f.sourceGrade ? 'source_grade' : 'NULL AS source_grade'}
+           FROM articles WHERE ${visibleSql(f)} AND cluster_id IS NOT NULL AND cluster_size > 1
+          ORDER BY id DESC LIMIT 5000`,
+      ).catch(() => []);
+      if (stored.length) {
+        mode = 'column';
+        const byCluster = new Map<string, LightRow[]>();
+        for (const r of stored) {
+          const lr = this.lightOf(r);
+          light.set(lr.id, lr);
+          const k = String(r.cluster_id);
+          (byCluster.get(k) || byCluster.set(k, []).get(k)!).push(lr);
+        }
+        for (const [clusterId, members] of byCluster) {
+          if (members.length < 2) continue;
+          const docs = members.map((m) => ({ id: m.id, title: m.title, ts: m.ts, grade: m.sourceGrade }));
+          const sorted = [...members].sort((a, b) => a.ts - b.ts || a.id - b.id);
+          const info: ClusterInfo = {
+            clusterId,
+            size: members.length,
+            representativeId: pickRepresentative(docs).id,
+            memberIds: sorted.map((m) => m.id),
+          };
+          for (const m of members) index.set(m.id, info);
+        }
+      }
+    }
+    if (mode === 'computed') {
+      index = clusterDocs(
+        rows.map((r) => ({
+          id: Number(r.id),
+          title: r.title,
+          altTitle: r.original_title,
+          lead: leadOf(r.summary || r.teaser),
+          ts: light.get(Number(r.id))!.ts,
+          grade: r.source_grade ?? null,
+        })),
+        { fieldStopwords: prof.keywords.dup_stopwords, ignoreLeads: [prof.prompts.fallback_summary_line] },
+      );
+    }
+    return { at: Date.now(), mode, index, light };
+  }
+
+  /** 묶음 상태(10분 기억 · 동시에 여럿이 불러도 한 번만 계산). 실패하면 빈 묶음(옛 꼴로 보임). */
+  async clusterState(): Promise<ClusterState> {
+    if (this.cluster && Date.now() - this.cluster.at < CLUSTER_TTL_MS) return this.cluster;
+    if (!this.clusterLoading) {
+      this.clusterLoading = this.buildClusterState()
+        .catch((e) => {
+          this.logger.warn(`묶음 계산 실패(묶지 않고 보임): ${(e as Error).message}`);
+          return { at: Date.now(), mode: 'computed' as const, index: new Map(), light: new Map() };
+        })
+        .then((s) => {
+          this.cluster = s;
+          this.clusterLoading = null;
+          return s;
+        });
+    }
+    return this.clusterLoading;
+  }
+
+  /** 응답에 publishedTs·sourceGrade(열 있을 때)·isFresh 칸을 붙인다. */
+  private async decorate<T extends Article>(items: T[]): Promise<Decorated[]> {
     const hours = fieldProfile().freshness_hours;
-    const ts = new Map<number, Date | null>();
-    if (this.flags.publishedTs && items.length) {
+    const extra = new Map<number, { ts: Date | null; grade: string | null }>();
+    if ((this.flags.publishedTs || this.flags.sourceGrade) && items.length) {
       try {
-        const rows: Array<{ id: number; published_ts: Date | null }> = await this.articleRepo.query(
-          `SELECT id, published_ts FROM articles WHERE id = ANY($1::int[])`,
+        const rows: Array<{ id: number; published_ts: Date | null; source_grade: string | null }> = await this.articleRepo.query(
+          `SELECT id, ${this.flags.publishedTs ? 'published_ts' : 'NULL AS published_ts'},
+                  ${this.flags.sourceGrade ? 'source_grade' : 'NULL AS source_grade'}
+             FROM articles WHERE id = ANY($1::int[])`,
           [items.map((a) => a.id)],
         );
-        for (const r of rows) ts.set(Number(r.id), r.published_ts);
+        for (const r of rows) extra.set(Number(r.id), { ts: r.published_ts, grade: r.source_grade });
       } catch (e) {
-        this.logger.warn(`published_ts 읽기 실패(날짜로 대신): ${(e as Error).message}`);
+        this.logger.warn(`published_ts·source_grade 읽기 실패(날짜로 대신): ${(e as Error).message}`);
       }
     }
     return items.map((a) => {
-      const p = ts.get(a.id) ?? null;
-      return Object.assign(a, { publishedTs: p, isFresh: isFresh(p, a.publishedAt, hours) });
+      const x = extra.get(a.id);
+      const p = x?.ts ?? null;
+      return Object.assign(a, { publishedTs: p, sourceGrade: x?.grade ?? null, isFresh: isFresh(p, a.publishedAt, hours) });
     });
   }
 
@@ -128,22 +273,99 @@ export class ArticlesService implements OnModuleInit {
     return d;
   }
 
-  // 최신 기사
-  async getLatest(limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish') {
-    return this.decorate(await this.articleRepo.find({
-      where: this.where({}, kind, tier),
-      order: { publishedAt: 'DESC', id: 'DESC' },
-      take: limit,
-    }));
+  /** 묶음 칸(clusterId·clusterSize·representative)을 붙인다(group=none 에도 · 접지는 않음). */
+  private withClusterFields(items: Decorated[], st: ClusterState): Decorated[] {
+    for (const a of items) {
+      const info = st.index.get(a.id);
+      a.clusterId = info && info.size > 1 ? info.clusterId : null;
+      a.clusterSize = info?.size || 1;
+      a.representative = !info || info.size < 2 || info.representativeId === a.id;
+    }
+    return items;
   }
 
-  // TOP 뉴스
+  /**
+   * 묶음 단위 목록(■2·■3): 조건에 맞는 id 를 새 것부터 훑어 묶음으로 접고, 페이지만큼 대표를 읽는다.
+   * 반환 items 마다 clusterMembers(같은 소식 · 매체별 제목·시각·원문) 를 붙인다.
+   */
+  private async groupedPage(
+    where: FindOptionsWhere<Article> | FindOptionsWhere<Article>[],
+    page: number,
+    limit: number,
+  ): Promise<{ items: Decorated[]; total: number }> {
+    const st = await this.clusterState();
+    const idRows = await this.articleRepo.find({
+      select: { id: true },
+      where,
+      order: { publishedAt: 'DESC', id: 'DESC' },
+      take: GROUP_SCAN_MAX,
+    });
+    const groups = groupIds(idRows.map((r) => r.id), st.index);
+    const pageGroups = groups.slice((page - 1) * limit, (page - 1) * limit + limit);
+    const shown = pageGroups.map((g) => shownId(g));
+    const rows = shown.length ? await this.articleRepo.findBy({ id: In(shown) }) : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = shown.map((id) => byId.get(id)).filter((a): a is Article => !!a);
+    const items = this.withClusterFields(await this.decorate(ordered), st);
+    pageGroups.forEach((g, i) => {
+      const a = items.find((x) => x.id === shown[i]);
+      if (!a) return;
+      a.clusterMembers = membersOf(g.info, a.id, st.light);
+      if (g.info) {
+        a.clusterSize = g.info.size;
+        a.representative = g.info.representativeId === a.id;
+      }
+    });
+    return { items, total: groups.length };
+  }
+
+  private async plainList(where: FindOptionsWhere<Article> | FindOptionsWhere<Article>[], take: number, skip = 0) {
+    const [items, total] = await this.articleRepo.findAndCount({
+      where,
+      order: { publishedAt: 'DESC', id: 'DESC' },
+      skip,
+      take,
+    });
+    const st = await this.clusterState();
+    return { items: this.withClusterFields(await this.decorate(items), st), total };
+  }
+
+  /** 묶음으로 접을지: 기사 · publish 층 · group=cluster 일 때만(방송·보관은 옛 꼴). */
+  private grouping(kind: ArticleKind, tier: ArticleTier, group: GroupMode): boolean {
+    return group === 'cluster' && kind === 'article' && tier === 'publish';
+  }
+
+  // 최신 기사
+  async getLatest(limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster') {
+    const where = this.where({}, kind, tier);
+    if (this.grouping(kind, tier, group)) return (await this.groupedPage(where, 1, limit)).items;
+    return (await this.plainList(where, limit)).items;
+  }
+
+  /**
+   * TOP 뉴스(NEWS-Q3 ■2): 72시간 안 묶음을 cluster_size 큰 순(동률 = source_grade → 새 보도).
+   * 72시간 안 기사가 없으면 최근 7일로 넓히고 topWindow='7d' 로 표시. 관리자가 고른 isTop 은 72시간 안 것만 맨 앞에.
+   */
   async getTopNews() {
-    return this.decorate(await this.articleRepo.find({
+    const st = await this.clusterState();
+    const manual = (await this.decorate(await this.articleRepo.find({
       where: this.where({ isTop: true }),
       order: { publishedAt: 'DESC' },
       take: 3,
-    }));
+    }))).filter((a) => a.isFresh);
+    const picks = rankTop(st.light, st.index, Date.now(), 3);
+    const ids = picks.map((p) => p.id).filter((id) => !manual.some((m) => m.id === id));
+    const rows = ids.length ? await this.articleRepo.findBy({ id: In(ids) }) : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const auto = await this.decorate(ids.map((id) => byId.get(id)).filter((a): a is Article => !!a));
+    const window = picks[0]?.window || '72h';
+    const out = this.withClusterFields([...manual, ...auto].slice(0, 3), st);
+    for (const a of out) {
+      const info = st.index.get(a.id) || null;
+      a.clusterMembers = membersOf(info && info.size > 1 ? info : null, a.id, st.light);
+      a.topWindow = manual.includes(a) ? '72h' : window;
+    }
+    return out;
   }
 
   // 기획기사
@@ -164,72 +386,76 @@ export class ArticlesService implements OnModuleInit {
     }));
   }
 
-  // 이슈
-  async getIssueNews(limit: number = 5) {
-    return this.decorate(await this.articleRepo.find({
+  // 이슈: 관리자가 고른 isIssue · 없으면 묶음 단위 최신(같은 소식은 한 줄)
+  async getIssueNews(limit: number = 5, group: GroupMode = 'cluster') {
+    const picked = await this.articleRepo.find({
       where: this.where({ isIssue: true }),
       order: { publishedAt: 'DESC' },
       take: limit,
-    }));
+    });
+    if (picked.length) return this.withClusterFields(await this.decorate(picked), await this.clusterState());
+    return this.getLatest(limit, 'article', 'publish', group);
   }
 
   // 카테고리별 기사
-  async getByCategory(slug: string, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish') {
-    return this.decorate(await this.articleRepo.find({
-      where: this.where({ category: categoryKeyFor(slug) }, kind, tier),
-      order: { publishedAt: 'DESC', id: 'DESC' },
-      take: limit,
-    }));
+  async getByCategory(slug: string, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster') {
+    const where = this.where({ category: categoryKeyFor(slug) }, kind, tier);
+    if (this.grouping(kind, tier, group)) return (await this.groupedPage(where, 1, limit)).items;
+    return (await this.plainList(where, limit)).items;
   }
 
   // 카테고리별 기사 (페이징)
-  async getByCategoryPaged(slug: string, page: number, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish') {
-    const [items, total] = await this.articleRepo.findAndCount({
-      where: this.where({ category: categoryKeyFor(slug) }, kind, tier),
-      order: { publishedAt: 'DESC', id: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
-
-    return {
-      items: await this.decorate(items),
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+  async getByCategoryPaged(
+    slug: string, page: number, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster',
+  ) {
+    const where = this.where({ category: categoryKeyFor(slug) }, kind, tier);
+    const { items, total } = this.grouping(kind, tier, group)
+      ? await this.groupedPage(where, page, limit)
+      : await this.plainList(where, limit, (page - 1) * limit);
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit), group: this.grouping(kind, tier, group) ? 'cluster' : 'none' };
   }
 
   // 기사 검색
-  async search(q: string, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish') {
+  async search(q: string, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster') {
     if (!q || q.trim().length < 2) {
       return [];
     }
-    return this.decorate(await this.articleRepo.find({
-      where: [
-        this.where({ title: Like(`%${q}%`) }, kind, tier),
-        this.where({ summary: Like(`%${q}%`) }, kind, tier),
-      ],
-      order: { publishedAt: 'DESC' },
-      take: limit,
-    }));
+    const where = [
+      this.where({ title: Like(`%${q}%`) }, kind, tier),
+      this.where({ summary: Like(`%${q}%`) }, kind, tier),
+    ];
+    if (this.grouping(kind, tier, group)) return (await this.groupedPage(where, 1, limit)).items;
+    return (await this.plainList(where, limit)).items;
   }
 
-  // 최신 기사 (페이징)
-  async getLatestPaged(page: number, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish') {
-    const [items, total] = await this.articleRepo.findAndCount({
-      where: this.where({}, kind, tier),
-      order: { publishedAt: 'DESC', id: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+  // 최신 기사 (페이징) — 기본 묶음 단위(group=cluster) · group=none 은 옛 꼴(랩·Statory 입구)
+  async getLatestPaged(page: number, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster') {
+    const where = this.where({}, kind, tier);
+    const { items, total } = this.grouping(kind, tier, group)
+      ? await this.groupedPage(where, page, limit)
+      : await this.plainList(where, limit, (page - 1) * limit);
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit), group: this.grouping(kind, tier, group) ? 'cluster' : 'none' };
+  }
 
+  /** 묶음 한 개(■3): id = 묶음 열쇠(cluster_id) 또는 묶음 안 아무 기사 id. 대표 + 매체 목록. */
+  async getCluster(id: number) {
+    const st = await this.clusterState();
+    let info: ClusterInfo | null = st.index.get(id) || null;
+    if (!info) {
+      for (const v of st.index.values()) if (v.clusterId === String(id)) { info = v; break; }
+    }
+    const repId = info && info.size > 1 ? info.representativeId : id;
+    const rep = await this.getOne(repId);
+    if (!rep) return null;
+    const members = info && info.size > 1
+      ? info.memberIds.map((m) => st.light.get(m)).filter((r): r is LightRow => !!r)
+      : [];
     return {
-      items: await this.decorate(items),
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      clusterId: info && info.size > 1 ? info.clusterId : null,
+      clusterSize: info?.size || 1,
+      representative: rep,
+      members,
+      mode: st.mode,
     };
   }
 

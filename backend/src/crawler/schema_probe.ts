@@ -41,10 +41,14 @@ export interface SchemaFlags {
   sourceGrade: boolean;
   urlResolve: boolean;
   crawlRuns: boolean;
+  /** NEWS-Q3 묶음 SQL 3: articles.cluster_id·cluster_size(둘 다 있을 때만 true) */
+  cluster: boolean;
+  /** NEWS-Q3 묶음 SQL 3: crawl_runs.cluster_stats */
+  clusterStats: boolean;
 }
 
 export async function probeSchema(query: QueryFn): Promise<SchemaFlags> {
-  const [deletedAt, kind, tier, publishedTs, sourceGrade, urlResolve, crawlRuns] = await Promise.all([
+  const [deletedAt, kind, tier, publishedTs, sourceGrade, urlResolve, crawlRuns, clusterId, clusterSize, clusterStats] = await Promise.all([
     columnExists(query, 'articles', 'deleted_at'),
     columnExists(query, 'articles', 'kind'),
     columnExists(query, 'articles', 'tier'),
@@ -52,6 +56,13 @@ export async function probeSchema(query: QueryFn): Promise<SchemaFlags> {
     columnExists(query, 'articles', 'source_grade'),
     columnExists(query, 'articles', 'url_resolve'),
     tableExists(query, 'crawl_runs'),
+    columnExists(query, 'articles', 'cluster_id'),
+    columnExists(query, 'articles', 'cluster_size'),
+    columnExists(query, 'crawl_runs', 'cluster_stats'),
   ]);
-  return { deletedAt, kind, tier, publishedTs, sourceGrade, urlResolve, crawlRuns };
+  return {
+    deletedAt, kind, tier, publishedTs, sourceGrade, urlResolve, crawlRuns,
+    cluster: clusterId && clusterSize,
+    clusterStats,
+  };
 }

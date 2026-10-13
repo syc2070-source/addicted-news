@@ -110,14 +110,23 @@ C:\addicted-news\
 
 ```
 GET /articles/latest           # 최신 기사
-GET /articles/top              # TOP 뉴스
+GET /articles/latest-paged     # 최신 기사(페이지)
+GET /articles/top              # TOP 뉴스 — 72시간 안 가장 많은 매체가 다룬 사건 묶음(없으면 7일 · topWindow)
 GET /articles/featured         # 기획기사
 GET /articles/rapha            # 라파뉴스
 GET /articles/issue            # 중독이슈
 GET /articles/category/:slug   # 카테고리별
 GET /articles/search?q=...     # 검색
+GET /articles/cluster/:id      # 사건 묶음 하나 — 대표 + 매체별 제목·시각·원문
 GET /articles/:id              # 상세
+GET /api/health                # 상태 + 마지막 수집 실행 숫자
+GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 40분 넘김 · 실패 피드 이름 · 묶음 절감)
 ```
+
+목록(latest·latest-paged·category·search·issue)은 기본 **사건 묶음 단위**(`?group=cluster`)다 — 같은 사건을 다룬
+기사는 대표 1건 + `clusterMembers`(같은 소식)로 접히고, 응답 칸 `clusterId`·`clusterSize`·`representative` 가 붙는다.
+`?group=none` 은 옛 꼴(한 기사 한 줄). **Statory LT15 입구는 묶음 = 이슈 단위로 읽는다**(묶음 열쇠 `clusterId` ·
+매체 목록은 `/articles/cluster/:id`).
 
 관리자 API는 `Bearer` 인증 필요 (현재 단순 토큰, 추후 JWT 강화 예정).
 
