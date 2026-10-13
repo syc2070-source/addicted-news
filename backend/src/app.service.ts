@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { lastCrawlRun, LastRunPublic, recentCrawlRuns, RunPublic } from './crawler/crawl_runs';
+import { alertFactsOf, evaluateRunAlerts, RunAlert } from './crawler/run_alerts';
 import { columnExists, tableExists } from './crawler/schema_probe';
 import { buildAllSources } from './crawler/sourceConfig';
 
@@ -11,7 +12,13 @@ export type Health = { ok: true; commit: string; startedAt: string };
 /** NEWS-Q4 ■4: 묶음 열(묶음 SQL 3) 인식 · 피드 건강(설정 기준 막힌 피드 수) */
 export type HealthSchema = { cluster_columns: boolean | null };
 export type HealthFeeds = { blocked_from_host: number; blocked: number; substitutes: number };
-export type HealthWithRun = Health & { lastRun: LastRunPublic | null; schema: HealthSchema; feeds: HealthFeeds | null };
+/** NEWS-Q5 ■1: alerts = 마지막 실행의 경보(코드·값 · 없으면 [] · DB 못 닿으면 null) */
+export type HealthWithRun = Health & {
+  lastRun: LastRunPublic | null;
+  schema: HealthSchema;
+  feeds: HealthFeeds | null;
+  alerts: RunAlert[] | null;
+};
 
 /** 설정(피드 파일·분야 설정)의 막힌 피드 수 — 한 번만 센다. */
 let feedsCache: HealthFeeds | null | undefined;
@@ -69,7 +76,10 @@ export class AppService {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
         if (await tableExists(q, 'crawl_runs')) {
-          value = await recentCrawlRuns(q, lim, { clusterStatsColumn: await columnExists(q, 'crawl_runs', 'cluster_stats') });
+          value = await recentCrawlRuns(q, lim, {
+            clusterStatsColumn: await columnExists(q, 'crawl_runs', 'cluster_stats'),
+            rejectReasons: await tableExists(q, 'rejected_articles'),
+          });
         }
       }
     } catch {
@@ -96,6 +106,31 @@ export class AppService {
     return value;
   }
 
+  private alertsCache: { at: number; value: RunAlert[] | null } | null = null;
+
+  /**
+   * NEWS-Q5 ■1: 마지막 실행의 경보. 수집기가 저장한 per_source.__run.alerts 가 있으면 그대로,
+   * 없는 옛 실행은 최근 6 행 숫자로 같은 규칙을 다시 센다(429 칸은 기록이 없어 건너뜀). 60초 기억.
+   */
+  async alerts(now = Date.now()): Promise<RunAlert[] | null> {
+    if (this.alertsCache && now - this.alertsCache.at < LAST_RUN_TTL_MS) return this.alertsCache.value;
+    let value: RunAlert[] | null = null;
+    try {
+      if (this.dataSource?.isInitialized) {
+        const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
+        if (await tableExists(q, 'crawl_runs')) {
+          const runs = await recentCrawlRuns(q, 6);
+          const stored = runs[0]?.progress?.alerts;
+          value = Array.isArray(stored) ? (stored as RunAlert[]) : evaluateRunAlerts(runs.map(alertFactsOf));
+        }
+      }
+    } catch {
+      value = null;
+    }
+    this.alertsCache = { at: now, value };
+    return value;
+  }
+
   async getHealthWithRun(env: NodeJS.ProcessEnv = process.env): Promise<HealthWithRun> {
     let lastRun: LastRunPublic | null = null;
     try {
@@ -103,6 +138,6 @@ export class AppService {
     } catch {
       lastRun = null;
     }
-    return { ...this.getHealth(env), lastRun, schema: await this.schema(), feeds: blockedFeeds() };
+    return { ...this.getHealth(env), lastRun, schema: await this.schema(), feeds: blockedFeeds(), alerts: await this.alerts() };
   }
 }

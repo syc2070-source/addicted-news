@@ -37,6 +37,10 @@ export interface RunProgressLike {
   blockedRetried: Array<{ id: string; ok: boolean; status?: string }>;
   blockedFromHost: number;
   broadcastMs: number | null;
+  broadcastFirst?: boolean;
+  /** NEWS-Q5 ■1: 구글 링크 해석 실패 수(대개 429) · 실행 끝 경보(run_alerts) */
+  urlResolveFail?: number;
+  alerts?: Array<{ code: string; value: number | string; limit?: number }>;
 }
 
 export const RUN_PROGRESS_KEY = '__run';
@@ -136,6 +140,8 @@ export interface RunPublic {
   progress: RunProgressLike | null;
   /** NEWS-Q4: per_source 에서 뽑은 숫자(방송 읽힘 · 오래 걸린 소스 5) */
   sources: PerSourceDigest;
+  /** NEWS-Q5 ■0: 그 실행 동안 격리된 거부 기사의 사유 분포(rejected_articles · 사유 앞머리별 수 · 표 없으면 null) */
+  rejectReasons: Record<string, number> | null;
 }
 
 export interface PerSourceDigest {
@@ -148,6 +154,35 @@ export interface PerSourceDigest {
   blocked: number;
   /** 읽기+판정 오래 걸린 소스 5(초) */
   slowest: Array<{ id: string; readSec: number; judgeSec: number }>;
+  /** NEWS-Q5 ■1: 세계신문(wp-* · 대체 검색 피드 포함) 저장 수 */
+  worldSaved: number;
+  /** NEWS-Q5 ■0: 소스 무리별 합(소스 수 · 읽음 · 후보 · 중복 · 판정 호출 · 저장/보관/거부 · 상한 · 실패) */
+  groups: Record<string, SourceGroupStat>;
+}
+
+export interface SourceGroupStat {
+  sources: number;
+  read: number;
+  candidates: number;
+  dup: number;
+  calls: number;
+  saved: number;
+  archived: number;
+  rejected: number;
+  timeouts: number;
+  failed: number;
+}
+
+/** 소스 id → 무리(id 꼴로만 · 옛 실행 행에도 그대로 쓴다). 대체 검색 피드는 원 피드의 무리로 센다. */
+export function sourceGroupOf(id: string): string {
+  if (id.startsWith('broadcast:')) return 'broadcast';
+  if (id.startsWith('wp-')) return 'world';
+  if (id.startsWith('kr-press-')) return 'kr_press';
+  if (id.startsWith('spec-')) return 'specialty';
+  if (id.startsWith('inst-')) return 'institution';
+  if (id.startsWith('acad-')) return 'academic';
+  if (id.includes('-google-')) return 'google';
+  return 'other';
 }
 
 /** per_source jsonb → 순서·상한 기록 + 숫자 요약(소스 id 와 숫자만). */
@@ -163,9 +198,18 @@ export function digestPerSource(raw: unknown): { progress: RunProgressLike | nul
   let broadcastItems = 0;
   let timeouts = 0;
   let blocked = 0;
+  let worldSaved = 0;
+  const groups: Record<string, SourceGroupStat> = {};
   const timing: Array<{ id: string; readSec: number; judgeSec: number }> = [];
   for (const [id, st] of Object.entries(ps)) {
     if (id === RUN_PROGRESS_KEY || !st || typeof st !== 'object') continue;
+    const gname = sourceGroupOf(id);
+    const g = (groups[gname] ||= { sources: 0, read: 0, candidates: 0, dup: 0, calls: 0, saved: 0, archived: 0, rejected: 0, timeouts: 0, failed: 0 });
+    g.sources++;
+    for (const k of ['read', 'candidates', 'dup', 'calls', 'saved', 'archived', 'rejected'] as const) g[k] += Number(st[k] || 0);
+    if (st.timeout) g.timeouts++;
+    if (st.failed) g.failed++;
+    if (gname === 'world') worldSaved += Number(st.saved || 0);
     if (id.startsWith('broadcast:')) {
       if (!st.failed) { broadcastChannelsRead++; broadcastItems += Number(st.read || 0); }
       continue;
@@ -178,11 +222,31 @@ export function digestPerSource(raw: unknown): { progress: RunProgressLike | nul
   }
   if (progress) blocked += Array.isArray(progress.blockedSkipped) ? progress.blockedSkipped.length : 0;
   timing.sort((a, b) => b.readSec + b.judgeSec - (a.readSec + a.judgeSec));
-  return { progress, sources: { broadcastChannelsRead, broadcastItems, timeouts, blocked, slowest: timing.slice(0, 5) } };
+  return { progress, sources: { broadcastChannelsRead, broadcastItems, timeouts, blocked, slowest: timing.slice(0, 5), worldSaved, groups } };
 }
 
 /** NEWS-Q3 ■0·■5: 최근 실행 n 개(공개 · 숫자와 실패 피드 이름만 · 열쇠·본문 0). 표가 없거나 실패면 []. */
-export async function recentCrawlRuns(query: QueryFn, n: number, opts: { clusterStatsColumn?: boolean } = {}): Promise<RunPublic[]> {
+/** 실행 한 번 동안 격리된 거부 기사 사유 분포(사유의 ':' 앞머리 · 많은 순 10). 실패면 null. */
+export async function rejectReasonsBetween(query: QueryFn, from: Date, to: Date): Promise<Record<string, number> | null> {
+  try {
+    const rows = await query(
+      `SELECT split_part(reject_reason, ':', 1) AS reason, count(*)::int AS n FROM rejected_articles
+        WHERE created_at >= $1 AND created_at <= $2 GROUP BY 1 ORDER BY 2 DESC LIMIT 10`,
+      [from, to],
+    );
+    const out: Record<string, number> = {};
+    for (const r of rows) out[String(r.reason).slice(0, 40)] = Number(r.n || 0);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+export async function recentCrawlRuns(
+  query: QueryFn,
+  n: number,
+  opts: { clusterStatsColumn?: boolean; rejectReasons?: boolean } = {},
+): Promise<RunPublic[]> {
   try {
     const rows = await query(
       `SELECT started_at, finished_at, timed_out, sources_total, feeds_ok, feeds_failed, failed_feeds, items_seen, candidates,
@@ -193,11 +257,13 @@ export async function recentCrawlRuns(query: QueryFn, n: number, opts: { cluster
     );
     const num = (v: unknown) => Number(v || 0);
     const json = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v ?? null);
-    return rows.map((r) => {
+    const out: RunPublic[] = [];
+    for (const r of rows) {
       const s = new Date(r.started_at);
       const f = r.finished_at ? new Date(r.finished_at) : null;
       const failed = json(r.failed_feeds);
-      return {
+      const rejectReasons = opts.rejectReasons && f ? await rejectReasonsBetween(query, s, new Date(f.getTime() + 60_000)) : null;
+      out.push({
         startedAt: s.toISOString(),
         finishedAt: f ? f.toISOString() : null,
         durationSec: f ? Math.round((f.getTime() - s.getTime()) / 1000) : null,
@@ -210,8 +276,10 @@ export async function recentCrawlRuns(query: QueryFn, n: number, opts: { cluster
         urlBackfill: json(r.url_backfill),
         clusterStats: json(r.cluster_stats),
         ...digestPerSource(r.per_source),
-      };
-    });
+        rejectReasons,
+      });
+    }
+    return out;
   } catch {
     return [];
   }

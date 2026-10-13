@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  BROADCAST_SHARE_MS, DEFAULT_CRAWL_MINUTES, LEGACY_TIMEOUT_MS, RUN_KEY, SOURCE_CAP_MS, SOURCE_CONCURRENCY,
+  BROADCAST_SHARE_MS, DEFAULT_CRAWL_MINUTES, RUN_KEY, SOURCE_CAP_MS, SOURCE_CONCURRENCY,
   blockedRetryDue, crawlTimeoutMs, emptyProgress, lastRunLastSourceId, planSources, rotateSources, runSources,
 } from './crawl_schedule';
 import { RUN_PROGRESS_KEY, digestPerSource, recordCrawlRun } from './crawl_runs';
@@ -160,12 +160,25 @@ describe('crawl_schedule — 방송 먼저(■1ⓓ) · 전체 상한(■1ⓔ)', 
     expect(BROADCAST_SHARE_MS).toBe(5 * 60_000);
     expect(emptyProgress(10, 55 * 60_000).broadcastFirst).toBe(true);
   });
-  it('전체 상한 55분 · 옛 기본 2400000 은 무시 · 다른 값은 그대로', () => {
+  it('■3 전체 상한: env 없으면 55분(로그 없음) · 55분보다 짧은 값은 어떤 숫자든 55분으로 올리고 로그 한 줄', () => {
     expect(DEFAULT_CRAWL_MINUTES).toBe(55);
-    expect(crawlTimeoutMs({} as NodeJS.ProcessEnv)).toBe(55 * 60_000);
-    expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: String(LEGACY_TIMEOUT_MS) } as NodeJS.ProcessEnv)).toBe(55 * 60_000);
-    expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: '600000' } as NodeJS.ProcessEnv)).toBe(600_000);
-    expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: 'abc' } as NodeJS.ProcessEnv)).toBe(55 * 60_000);
+    const log = jest.fn();
+    expect(crawlTimeoutMs({} as NodeJS.ProcessEnv, log)).toBe(55 * 60_000);
+    expect(log).not.toHaveBeenCalled();
+    for (const v of ['2400000', '600000', '3299999']) {
+      log.mockClear();
+      expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: v } as NodeJS.ProcessEnv, log)).toBe(55 * 60_000);
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(log.mock.calls[0][0]).toContain('55분으로 올림');
+    }
+  });
+  it('■3 전체 상한: 55분 이상은 그대로(로그 없음) · 틀린 값은 55분 + 로그', () => {
+    const log = jest.fn();
+    expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: '3300000' } as NodeJS.ProcessEnv, log)).toBe(3_300_000);
+    expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: '3600000' } as NodeJS.ProcessEnv, log)).toBe(3_600_000);
+    expect(log).not.toHaveBeenCalled();
+    expect(crawlTimeoutMs({ CRAWL_TIMEOUT_MS: 'abc' } as NodeJS.ProcessEnv, log)).toBe(55 * 60_000);
+    expect(log).toHaveBeenCalledTimes(1);
   });
 });
 

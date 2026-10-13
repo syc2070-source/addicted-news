@@ -3,7 +3,7 @@
 //  · 소스 읽기(피드 가져오기·해석·원문 추출) = 동시 4 · 소스별 상한 60초(넘으면 그때까지 읽은 것만 · 같은 실행 재시도 0).
 //    판정(DeepSeek)·저장은 소스 순서대로 하나씩(하루 상한 400 · 중복 검사 순서 보존) — runSources 의 consume.
 //  · 시작점 순환: 지난 실행이 마지막으로 마친 소스 다음부터 한 바퀴(crawl_runs.per_source.__run.lastId).
-//  · 전체 상한 55분(CRAWL_TIMEOUT_MS · 옛 기본 2400000 은 「설정 안 함」으로 본다 — 대시보드에 남아 있어도 55분).
+//  · 전체 상한 55분(CRAWL_TIMEOUT_MS 가 그보다 짧으면 55분으로 올리고 로그 한 줄 — NEWS-Q5 ■3).
 //  · 막힌 피드(blocked): Render 망에서만 막힘(blocked_from_host) = 주 1회(KST 월요일) · 어디서나 403 = 월 1회(KST 1일)만
 //    원 피드를 다시 해 본다. 그 밖의 날은 건너뛰고 대체 피드(구글뉴스 site: 검색)가 읽는다.
 // ============================================================
@@ -12,16 +12,27 @@ export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 export const SOURCE_CONCURRENCY = 4;
 export const SOURCE_CAP_MS = 60_000;
 export const DEFAULT_CRAWL_MINUTES = 55;
-/** 옛 render.yaml 기본(40분). 대시보드에 그대로 남아 있으면 무시하고 55분. */
-export const LEGACY_TIMEOUT_MS = 2_400_000;
 /** 방송 9채널 몫(맨 앞) */
 export const BROADCAST_SHARE_MS = 5 * 60_000;
 /** per_source 안 실행 기록 열쇠(소스 id 와 겹치지 않음) */
 export const RUN_KEY = '__run';
 
-export function crawlTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+/**
+ * 전체 상한(ms). NEWS-Q5 ■3: env CRAWL_TIMEOUT_MS 가 없거나 틀리면 55분, 55분보다 짧으면 55분으로 올리고 로그 한 줄,
+ * 더 길면 그 값. (서비스가 Blueprint 로 묶여 있지 않아 push 로 대시보드 env 가 바뀌지 않는다 — 옛 값이 남아 있어도 55분.)
+ */
+export function crawlTimeoutMs(env: NodeJS.ProcessEnv = process.env, log: (msg: string) => void = () => {}): number {
+  const floor = DEFAULT_CRAWL_MINUTES * 60_000;
   const raw = Number(env.CRAWL_TIMEOUT_MS);
-  if (!Number.isFinite(raw) || raw <= 0 || raw === LEGACY_TIMEOUT_MS) return DEFAULT_CRAWL_MINUTES * 60_000;
+  if (env.CRAWL_TIMEOUT_MS == null || env.CRAWL_TIMEOUT_MS === '') return floor;
+  if (!Number.isFinite(raw) || raw <= 0) {
+    log(`[crawl] CRAWL_TIMEOUT_MS 값이 틀림 — 전체 상한 ${DEFAULT_CRAWL_MINUTES}분`);
+    return floor;
+  }
+  if (raw < floor) {
+    log(`[crawl] CRAWL_TIMEOUT_MS ${Math.round(raw / 60_000)}분 < ${DEFAULT_CRAWL_MINUTES}분 — ${DEFAULT_CRAWL_MINUTES}분으로 올림`);
+    return floor;
+  }
   return raw;
 }
 
@@ -208,6 +219,9 @@ export interface RunProgress {
   concurrency: number;
   sourceCapSec: number;
   deadlineMin: number;
+  /** NEWS-Q5 ■1: 구글 링크 해석 실패 수 · 실행 끝 경보(run_alerts) */
+  urlResolveFail?: number;
+  alerts?: Array<{ code: string; value: number | string; limit?: number }>;
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

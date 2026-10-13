@@ -119,13 +119,22 @@ GET /articles/category/:slug   # 카테고리별
 GET /articles/search?q=...     # 검색
 GET /articles/cluster/:id      # 사건 묶음 하나 — 대표 + 매체별 제목·시각·원문 + 기사별 근거 rule(seed|jaccard|noun|entity)
 GET /articles/:id              # 상세
-GET /api/health                # 상태 + 마지막 수집 실행 숫자(소요·소스 수·소스 상한·막힌 피드) + schema.cluster_columns + feeds(막힌 피드 수)
-GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 상한 걸림 · 실패 피드 이름 · 묶음 절감 · progress(순환 시작·끝 · 소스 상한) · sources(방송 읽힘 · 느린 소스 5))
+GET /api/health                # 상태 + 마지막 수집 실행 숫자(소요·소스 수·소스 상한·막힌 피드) + schema.cluster_columns + feeds(막힌 피드 수) + alerts(경보 코드·값)
+GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 상한 걸림 · 실패 피드 이름 · 묶음 절감 · progress(순환 시작·끝 · 소스 상한 · alerts) · sources(방송 읽힘 · 느린 소스 5 · 무리별 합) · rejectReasons)
 ```
 
 수집(매일 12:00 KST · NEWS-Q4): 방송 9채널 먼저(5분 몫) → 기사 소스는 **읽기 동시 4 · 소스별 60초 · 판정(DeepSeek)은 순서대로 하나씩**
 → 전체 상한 55분. 시작점은 날마다 지난 실행이 끝난 소스 다음부터(crawl_runs `per_source.__run`). Render 망에서만 막힌 피드는
 `blocked`(피드 파일) — 원 피드는 주 1회(KST 월)·월 1회(KST 1일)만 다시 해 보고, 평소는 구글뉴스 `site:` 대체 피드가 읽는다.
+
+상한 설정(NEWS-Q5): `backend/render.yaml` 은 초안이고 Render 서비스는 Blueprint 로 묶여 있지 않다(서비스 이름부터 다름) — push 해도
+대시보드 env 는 그대로다. 그래서 코드가 규칙으로 막는다: `CRAWL_TIMEOUT_MS` 가 없거나 틀리면 55분, **55분보다 짧으면 55분으로 올리고
+로그 한 줄**, 더 길면 그 값. 대시보드 값을 손볼 필요는 없다.
+
+경보(NEWS-Q5 · LLM 0): 실행 끝에 소요 ≥ 50분 · 전체 상한 걸림 · 방송 읽힘 0 · 세계신문 저장 0 이틀 연속 · 구글 링크 해석 실패 ≥ 10 ·
+DeepSeek 하루 ≥ 380 · 저장 0 을 보고 `per_source.__run.alerts` 에 남기고 Discord 한 줄(웹훅 없으면 로그). `/api/health` 의 `alerts` 로 보인다.
+묶음 표본 검사: `cd backend && npm run cluster:sample` — 공개 API 만 읽어 최근 7일 묶음(2건+) 전부 + 단독 20건을
+`docs/reports/<YYYYMM>/cluster_sample_<MMDD>.md` 로(맞음/틀림 빈칸).
 
 목록(latest·latest-paged·category·search·issue)은 기본 **사건 묶음 단위**(`?group=cluster`)다 — 같은 사건을 다룬
 기사는 대표 1건 + `clusterMembers`(같은 소식)로 접히고, 응답 칸 `clusterId`·`clusterSize`·`representative` 가 붙는다.

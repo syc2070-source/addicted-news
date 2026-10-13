@@ -23,11 +23,12 @@ describe('AppController', () => {
   });
 
   describe('health', () => {
-    it('ok · commit · startedAt · lastRun · schema · feeds 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null · 열 인식 null)', async () => {
+    it('ok · commit · startedAt · lastRun · schema · feeds · alerts 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null · 열 인식 null)', async () => {
       const health = await appController.getHealth();
-      expect(Object.keys(health).sort()).toEqual(['commit', 'feeds', 'lastRun', 'ok', 'schema', 'startedAt']);
+      expect(Object.keys(health).sort()).toEqual(['alerts', 'commit', 'feeds', 'lastRun', 'ok', 'schema', 'startedAt']);
       expect(health.ok).toBe(true);
       expect(health.lastRun).toBeNull();
+      expect(health.alerts).toBeNull();
       expect(health.schema).toEqual({ cluster_columns: null });
       // NEWS-Q4 ■2: 설정의 막힌 피드(Render 망에서만 4 + 어디서나 403 SAMHSA 1) · 대체 검색 피드 5
       expect(health.feeds).toEqual({ blocked_from_host: 4, blocked: 5, substitutes: 5 });
@@ -72,14 +73,34 @@ describe('AppController', () => {
       const query = jest.fn(async (sql: string, params?: unknown[]) => {
         if (sql.includes('information_schema.tables')) return [{ x: 1 }];
         if (sql.includes('information_schema.columns')) return [];
+        if (sql.includes('FROM rejected_articles')) return [{ reason: 'category_fit_false', n: 7 }, { reason: 'low_confidence', n: 3 }];
         expect(params).toEqual([20]);
         return [{ started_at: '2026-10-12T03:00:28Z', finished_at: '2026-10-12T03:42:06Z', timed_out: true, feeds_ok: 90 }];
       });
       const svc = new AppService({ isInitialized: true, query } as any);
       const runs = await svc.recentRuns(99, 1000);
-      expect(runs[0]).toMatchObject({ timedOut: true, durationSec: 2498, feedsOk: 90, clusterStats: null });
+      expect(runs[0]).toMatchObject({
+        timedOut: true, durationSec: 2498, feedsOk: 90, clusterStats: null,
+        rejectReasons: { category_fit_false: 7, low_confidence: 3 },
+      });
       await svc.recentRuns(99, 2000);
-      expect(query).toHaveBeenCalledTimes(3);
+      expect(query).toHaveBeenCalledTimes(5);
+    });
+
+    it('NEWS-Q5 ■1 alerts: 저장된 경보가 있으면 그대로 · 옛 실행은 행 숫자로 다시 센다', async () => {
+      const rows = [
+        { started_at: '2026-10-13T03:00:31Z', finished_at: '2026-10-13T03:42:12Z', timed_out: true, saved: 15, deepseek_calls: 69,
+          per_source: { 'wp-wpr-001': { read: 5, saved: 0 }, 'kr-press-a': { read: 3, saved: 2 } } },
+        { started_at: '2026-10-12T03:00:28Z', finished_at: '2026-10-12T03:42:06Z', timed_out: true, saved: 27, deepseek_calls: 112,
+          per_source: { 'wp-wpr-001': { read: 5, saved: 0 } } },
+      ];
+      const query = jest.fn(async (sql: string) => (sql.includes('information_schema.tables') ? [{ x: 1 }] : rows));
+      const svc = new AppService({ isInitialized: true, query } as any);
+      expect((await svc.alerts(1000))!.map((a) => a.code)).toEqual(['timed_out', 'broadcast_zero', 'world_zero_2d']);
+
+      rows[0].per_source = { __run: { alerts: [{ code: 'saved_zero', value: 0 }] } } as any;
+      expect((await svc.alerts(2000))!.map((a) => a.code)).toEqual(['timed_out', 'broadcast_zero', 'world_zero_2d']); // 60초 기억
+      expect(await svc.alerts(99_000)).toEqual([{ code: 'saved_zero', value: 0 }]);
     });
 
     it('commit = RENDER_GIT_COMMIT, 없으면 "local"', () => {

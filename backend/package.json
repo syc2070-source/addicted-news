@@ -31,7 +31,8 @@
     "judge:cleanup": "ts-node src/crawler/judge_cleanup.ts",
     "judge:restore": "ts-node src/crawler/judge_restore.ts",
     "cleanup:entities": "ts-node src/crawler/entity_cleanup.ts",
-    "cleanup:dates": "ts-node src/crawler/date_cleanup.ts"
+    "cleanup:dates": "ts-node src/crawler/date_cleanup.ts",
+    "cluster:sample": "ts-node src/crawler/cluster_sample.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

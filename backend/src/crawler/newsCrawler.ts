@@ -29,7 +29,10 @@ import { fetchFeed } from './feed_fetch';
 import { KnownIndex, loadKnownIndex, preDuplicate } from './dedup';
 import { DeepseekBudget, dailyCap, estimateCostUsd, priceOf, usedTodayFromRuns } from './deepseek_budget';
 import { decideTier, effectiveTier, Tier } from './tier';
-import { CrawlRunSummary, SourceRunStat, emptySourceStat, feedHealthLines, lastFailedBroadcastOutlets, recordCrawlRun } from './crawl_runs';
+import {
+  CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedBroadcastOutlets, recentCrawlRuns, recordCrawlRun,
+} from './crawl_runs';
+import { alertFactsOf, alertLine, evaluateRunAlerts } from './run_alerts';
 import { backfillGoogleUrls, hostOf, isGoogleNewsLink, UrlResolveState } from './url_resolve';
 import { decodeGoogleNewsUrl } from './google_news_url';
 import { writeRowExtras } from './row_extras';
@@ -114,8 +117,8 @@ const SKIP_DAILY_CHECK =
   process.env.SKIP_DAILY_CHECK === 'true' || process.env.RENDER === 'true';
 // v5.2 #3: 본문 최소 길이. 미만이면 추측 요약 방지를 위해 스킵.
 const MIN_BODY_CHARS = Number(process.env.MIN_BODY_CHARS ?? 300);
-// Cron 안전장치: 전체 크롤 상한 시간(NEWS-Q4 ■1ⓔ: 기본 55분 · 옛 기본 2400000 은 무시). 초과 시 그때까지 수집분을 저장하고 종료.
-const CRAWL_TIMEOUT_MS = crawlTimeoutMs(process.env);
+// Cron 안전장치: 전체 크롤 상한 시간(NEWS-Q4 ■1ⓔ 기본 55분 · NEWS-Q5 ■3 그보다 짧은 env 는 55분으로 올림). 초과 시 그때까지 수집분을 저장하고 종료.
+const CRAWL_TIMEOUT_MS = crawlTimeoutMs(process.env, (m) => console.log(m));
 let crawlDeadline = Number.POSITIVE_INFINITY;  // main()에서 startTime 기준 설정
 
 let foreignArticleCount = 0;
@@ -2046,6 +2049,39 @@ async function main() {
     progress: RUN.progress,
   };
   for (const line of feedHealthLines(summary)) console.log(`   ${line}`);
+  // NEWS-Q5 ■1: 실행 끝 경보(LLM 0) — per_source.__run.alerts 로 저장 + Discord 한 줄(웹훅 없으면 로그)
+  if (RUN.progress) {
+    RUN.progress.urlResolveFail = crawlStats.urlResolveFail;
+    try {
+      const prev = RUN.flags.crawlRuns ? await recentCrawlRuns(q, 6) : [];
+      const digest = digestPerSource(RUN.perSource).sources;
+      const alerts = evaluateRunAlerts([
+        {
+          startedAt: summary.startedAt.toISOString(),
+          durationSec: elapsed,
+          timedOut,
+          reachedOf: `${RUN.progress.reached}/${RUN.progress.total - RUN.progress.blockedSkipped.length}`,
+          broadcastExpected: RUN.progress.broadcastFirst,
+          broadcastChannelsRead: digest.broadcastChannelsRead,
+          worldSaved: digest.worldSaved,
+          urlResolveFail: crawlStats.urlResolveFail,
+          deepseekCalls: deepseekStats.calls,
+          saved: summary.saved,
+        },
+        ...prev.map(alertFactsOf),
+      ]);
+      RUN.progress.alerts = alerts;
+      const line = alertLine(PROFILE.messages.notify_prefix, alerts);
+      if (line) {
+        console.warn(`   ${line}`);
+        await notifyDiscord(line);
+      } else {
+        console.log('   경보 없음');
+      }
+    } catch (e) {
+      console.warn('[alerts] 경보 계산 실패(무시):', (e as Error).message);
+    }
+  }
   if (RUN.progress) {
     const p = RUN.progress;
     console.log(
