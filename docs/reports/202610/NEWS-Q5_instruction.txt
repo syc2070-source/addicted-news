@@ -1,0 +1,31 @@
+NEWS-Q5 지시서 — 새 수집기 첫 실전 실측 · 경보 칸 · 묶음 표본 검사기 · 상한 설정 정리 (중독뉴스 · 2026-10-14 수)
+
+위치판
+
+저장소 D:\addicted-news · main = bf9ae4c(NEWS-Q4 보고서) ← 516d532(코드 · Render 배포 16:04 ✓ · schema.cluster_columns true · feeds 막힘 4/5·대체 5). 끝난 것 Q1~Q4.
+오늘 12:00 KST = Q3+Q4 코드 첫 실전(동시 4 · 소스 60초 · 순환 · 방송 먼저 · 55분 · 묶음 되짚기 첫 저장 · cluster_stats 첫 기록). 전 값 = 10-11 41:41 · 35/16/21 · DeepSeek 158 / 10-12 41:39 · 27/12/12 · 112 / 10-13(옛 코드) 41:42 · 15/6/10 · 69 · 방송 0 셋 다.
+실행자: 데스크탑 Claude Code(VS Code D:\addicted-news · --model opus) · 가지 claude/news-q5 · 오너 출장(하루) → 이 판은 두 토막: ■1~■3 = 지금 · ■4 = 12:50 뒤 한 번(기다림 한 번 · 폴링 0).
+
+목표 세 문장
+
+오늘 12:00 첫 실전을 숫자로 읽고(소요 · 어디까지 · 방송 · timeouts · 429 · 저장 · 묶음 절감 %) 어긋난 것은 오늘 고친다.
+수집이 상한에 걸리거나 방송·세계 저장이 0 이면 사람 없이도 알게 한다(health 경보 칸 + Discord 한 줄 · LLM 0).
+묶음 품질을 사람이 표본으로 볼 수 있는 읽기 전용 검사기를 두고, 55분 상한의 「옛 값만 무시」 꼼수를 일반 규칙으로 바꾼다(오너 손 없이 되는 길만).
+
+규율: 오너에게 묻지 말고 끝까지 계속 진행 · 오너 액션 0 · 열쇠 값 0 · .env* 0 · production DB 쓰기 0(코드만 · 스키마 0 · 묶음 SQL 0) · 지움 0 · 하드 삭제 0 · DeepSeek 400 그대로 · cron 횟수 변경 0 · Render 설정 화면 조작 0 · 설치 0 · Edit/Write 만 · 명령 하나씩 · git add 파일별 · rebase/force 0 · push 3j · 코드 push ⓑ 는 11:40 전에 끝내거나 13:00 뒤에(12:00 실행 중 재배포 금지).
+
+■0 〔마디 1·2·3〕 저장 + 실측(읽기만): 지시서 docs/reports/202610/NEWS-Q5_instruction.txt 저장·커밋 ⓐ · /api/health · /api/health/runs?limit=5 지금 값 · 저장 35→27→15 내리막 까닭 후보(소스별 항목 수 · 거부 사유 분포 · 상한에 잘린 소스 수 · 중복 비율) · render.yaml 과 대시보드 env 의 관계(Blueprint 로 만든 서비스인지 — 코드·yaml·README·Render 문서로만 판단) · 기존 Discord 경고 꼴 · 표.
+
+■1 〔마디 2〕 경보 칸(LLM 0): 실행 끝 규칙 — 소요 ≥ 50분 · timedOut · 방송 읽힘 0 · world 저장 0 이틀 연속 · 구글 링크 429(urlResolveFail) ≥ 10 · DeepSeek ≥ 380 · 저장 0 → /api/health alerts[](코드·값) + /api/health/runs 행에 저장 + Discord 한 줄(기존 웹훅 있으면 · 없으면 로그) · 시험 4.
+
+■2 〔마디 3〕 묶음 표본 검사기(읽기 전용): npm run cluster:sample → 최근 7일 2건+ 묶음 전부 + 단독 기사 무작위 20 → docs/reports/202610/cluster_sample_<MMDD>.md(묶음 id · 대표 · 구성 기사 제목·매체·시각·rule · 「맞음/틀림」 빈칸) · LLM 0 · 지금 1회 실행 → 보고서에 요약(묶음 n · 구성 n · rule 분포 · 실행자가 본 의심 ≤5) · 시험 2.
+
+■3 〔마디 3〕 상한 설정 정리: Blueprint 서비스라 push 가 env 를 갱신하면 「2400000 만 무시」 코드 제거 · 아니면 그 꼼수를 일반 규칙 「env < 55분이면 55분으로 올리고 로그 한 줄」로 바꿈(특정 숫자 0) · README 한 단락 · 시험 2.
+
+■4 〔마디 1〕 12:50 뒤 한 번(그 전에 ■1~■3 끝내고 ⓑ push 시각 규칙 지킴): /api/health/runs?limit=2 → 표 = 소요 · progress(시작·끝 소스 · reached/total · 상한) · 소스 닿음/못 닿음/timeouts · 방송 읽힘 채널·항목 · 후보 · urlResolveFail(429) · DeepSeek · 저장/보관/거부 · cluster_stats(inherited · savedPct · backfill) · 묶음 mode column 전환 · 느린 소스 5 · 전(10-11~13)/후 비교 · 「2회 cron 이면」 추정 갱신(오너 재료 · 변경 0) · 어긋남 있으면 원인·수리(코드) → ⓑ′ push 13:00 뒤 · 경보 칸이 실제로 섰는지.
+
+■5 시험·배포·보고: jest 192+ · nest build · tsc · push ⓑ(시각 규칙) · /api/health 25분(commit · alerts 칸) · 보고서 docs/reports/202610/NEWS-Q5_<MMDD>.txt(■0 · ■4 표 · 경보 규칙 · 표본 요약 · 상한 정리 · 건너뜀+사유 · 정직 표기) ⓒ [skip ci][skip render].
+
+하지 않는 것: cron 2회(오너) · 묶음 SQL · 하드 삭제·보존 정책 · frontend-v2 · 업로더 · 중독사회·Statory 저장소 · .env · 관문 기준 · Render 설정 화면.
+
+손님에게 달라지는 것: 소식이 빠지면 바로 드러남 · 묶음 품질이 사람 눈으로 검사됨 · 화면 변화 0. LLM 의존: 0(경보·표본·설정 전부 규칙).
