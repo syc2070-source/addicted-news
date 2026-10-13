@@ -1,0 +1,23 @@
+NEWS-Q3 — 사건 묶기 · 첫 화면 「오늘」 · 첫 실전 수치 (발행 2026-10-13 11:35 · D:\addicted-news · 가지 claude/news-q3)
+
+위치판: main 4c6e035(NEWS-Q2 보고서) ← 84123fa(코드 · Render 배포 health 확인) · 묶음 SQL 2 fc15ba1b 적용(tier·published_ts·source_grade·crawl_runs) · Render 재시작 10-10 19:04 · 첫 실전 12:00 cron 10-11·10-12 돎(수치 미읽음) · 활성 피드 110 · DeepSeek 하루 상한 400 · 오너 10-13 화면: 같은 사건(서울역 금주구역)이 매체별 5건 따로 · TOP NEWS 가 2026-01-20 경향 기사 · 「라파뉴스」 빈 상자 · 기획기사 2(07-03) · 중독백과 상자 정상.
+
+목표 세 문장: ① 같은 사건을 다룬 기사를 사건 묶음으로 묶어 대표 1건 + 「같은 소식 N건」으로 보인다(LLM 0). ② 첫 화면이 「오늘」을 보인다(TOP = 72시간 안 가장 많은 매체가 다룬 묶음 · 빈 상자 숨김). ③ 첫 실전 두 번의 수치를 읽어 수집 넓히기 결과를 적는다.
+
+손님에게 달라지는 것: 첫 화면이 「오늘의 중독 소식 묶음」이 되고 같은 소식은 한 줄에 「같은 소식 5건 ▸」로 접힘 · TOP 이 오늘 것으로 바뀜. LLM 의존: 줄어드는 곳 / 남는 곳: 묶기 = 낱말 겹침(LLM 0) · 묶음 안 둘째 기사부터 관문 호출을 건너뛰어 DeepSeek 호출이 줄어듦(실측 %) / 남는 곳 = 관문 판정.
+
+오너에게 묻지 말고 끝까지 계속 진행. 오너 액션 0(묶음 SQL 3 적용은 오너가 따로 · 적용 전에도 캐시 길로 돎). 설치 0 · .env*·열쇠 값 0 · production DB 쓰기 0(스키마는 묶음 SQL 파일로만) · 하드 삭제 0 · 지움 0 · Edit/Write 만 · 명령 하나씩 · git add 파일별 · rebase/force 0 · 머리 [skip render] 0(배포 필요).
+
+■0 〔③〕 실측·저장: 지시서 docs/reports/202610/NEWS-Q3_instruction.txt · 첫 실전 2회(10-11·12 12:00) = /api/health lastRun + crawl_runs(저장 · tier publish/archive/reject · 소요 · DeepSeek 호출 · 실패 피드 · 40분 상한 넘김 여부) · articles 총수(3,420 기준) · TOP NEWS 고르는 규칙 코드 · 홈 상자(라파뉴스·기획기사) 소스 · 「최신」 72h 표시 동작 · SAMHSA 403.
+
+■1 〔①〕 사건 묶기(LLM 0): event_cluster.ts — 제목·첫 문단 정규화(매체명·조사·숫자 꼴·괄호 제거 · 2-gram) · 겹침 = Jaccard ≥ 0.5 또는 핵심 명사 집합 겹침 ≥ 0.6 · published_ts ±36시간 · 같은 묶음 → cluster_id(가장 이른 보도의 id) · 대표 = source_grade 높은 매체 → 같으면 이른 보도 · 저장 = articles.cluster_id·cluster_size(■4 묶음 SQL 뒤) · 열 없을 때 = 응답 때 계산(최근 7일 · 10분 캐시) · 옛 행 되짚기 = 최근 30일(열 있을 때) · 수집기 = 같은 묶음의 둘째 기사부터 DeepSeek 관문 건너뛰고 대표의 tier·분류 상속(실측 호출 절감 %) · 묶음 품질 표본 50(묶음 수 · 잘못 묶인 것 · 못 묶인 것)을 보고(CTO 읽음) · 시험 8+.
+
+■2 〔②〕 화면: 중독이슈 · 섹션 목록 · 검색 = 묶음 단위(대표 1 + 「같은 소식 N건 ▸」 펼치면 매체별 제목·시각·원문) · TOP NEWS = 72h 안 cluster_size 큰 순(동률 = source_grade) · 72h 안 묶음 0 이면 「최근 7일」로 넓히고 그 표시 · 「라파뉴스」 0건이면 상자 숨김 · 기획기사는 그대로(오너 글) · 「최신」 72h 표시 유지 · ko/en 둘 다.
+
+■3 〔①〕 공개 API: /articles/latest-paged?group=cluster(기본) · ?group=none(옛 꼴 · 랩·Statory 입구용) · /articles/cluster/:id(매체 목록) · 응답에 cluster_id·cluster_size·representative · 문서 한 줄(Statory LT15 입구는 묶음 = 이슈 단위).
+
+■4 〔①〕 묶음 SQL 3 docs/governance/sql/APPLY_20261013_news_bundle3.sql(articles.cluster_id text · cluster_size int default 1 · 색인 · 되돌림 · 확인표 · 묶음 판 번호 = 본문 sha256 앞 8자리 · 복사 단추 안내) · 적용은 오너(CTO 읽은 뒤) · 코드는 열 확인 뒤에만 저장 길 켜짐.
+
+■5 〔③〕 첫 실전 수치 표: 2회 저장·archive·reject·소요·실패 피드 · 하루 상한 400 소비 · 40분 상한 · 죽은 피드 재점검 · cron 2회 선택은 오너(한 주 뒤) 그대로 · 방송 되짚기(YouTube API 열쇠)는 아직.
+
+■6 〔공통〕 시험(jest) · nest build · ff-merge main · push ⓑ(코드 머리 단독) · health 폴링 25분(commit) · 전/후 표(홈 묶음 수 · 중독이슈 5 중 중복 0 · TOP 날짜) · 보고서 NEWS-Q3_<MMDD>.txt [skip ci] [skip render]. 하지 않는 것 = 하드 삭제 · 보존 정책 · 랩 코드 합치기(ECO-LINK1) · frontend-v2 · 업로더 · 기획기사 내용.
