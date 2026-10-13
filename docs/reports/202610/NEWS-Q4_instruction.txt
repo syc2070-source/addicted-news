@@ -1,0 +1,57 @@
+NEWS-Q4 지시서 — 수집 시간 상한 수리 · 소스 순환 · 피드 우회 · 묶기 보강 (중독뉴스 · 2026-10-13 화)
+
+위치판
+
+제품 중독뉴스(addictionnews.net) · 저장소 D:\addicted-news(GitHub syc2070-source/addicted-news) · main = 0c2621f(NEWS-Q3 보고서 [skip ci][skip render]) ← aa5e294(코드 · Render addicted-news-backend 배포 12:02 ✓ · Vercel 프런트 ✓).
+끝난 것: NEWS-Q1(정리 fail-closed · health · 방송 RSS 9) · NEWS-Q2(분야 설정 파일 · 중복 검사 DeepSeek 앞 · 구글 링크 원문 해석 · 피드 건강 · 보관층 · crawl_runs · SQL 2) · NEWS-Q3(사건 묶기 LLM 0 · TOP 72h · 묶음 API · 묶음 SQL 3 = 오너 적용 15:30 ✓ 확인표 6/6 · Render 「Restart service」 눌림 · 열 인식 여부 미측).
+첫 실전 둘(10-11·10-12): 41분 41초 / 41분 39초 = 40분 상한에 걸림 → 끝 쪽 소스와 방송 9채널이 날마다 빠짐 · 피드 4(동아·프레시안·Clarín·Politico Europe)는 Render 망에서만 막힘 · SAMHSA 403 · 못 묶음 2(마약퇴치운동본부 줄퇴사).
+도는 것: 이 저장소에는 없음. 데스크탑 다른 세션 = D:\addiction-society SOC-R3 · D:\statory-lt14 덧 17 — 이 저장소 밖 쓰기 0.
+실행자: 데스크탑 Claude Code(VS Code 터미널 D:\addicted-news · claude --dangerously-skip-permissions --model opus) · 가지 claude/news-q4 · 10-14(수) 12:00 = 새 수집기 첫 실행(이 판이 먼저 배포되면 Q3+Q4 코드로 돎).
+
+목표 세 문장
+
+매일 12:00 수집이 상한에 걸려 끝 쪽 소스와 방송 9채널을 날마다 빠뜨리는 것을 없앤다(소스 읽기 동시 4 · 소스별 시간 상한 · 날마다 시작점 순환 · 방송 먼저).
+Render 망에서만 막히는 피드 4 와 SAMHSA 를 우회·표시해 「죽은 것처럼 보이는 산 피드」를 없앤다.
+못 묶인 같은 사건을 고유명사 규칙으로 묶되 오묶음 0 을 지키고, 모든 수치가 crawl_runs·health 에서 읽히게 한다.
+
+규율: 오너에게 묻지 말고 끝까지 계속 진행 · 오너 액션 0 · 열쇠 값 0 · .env* 0 · production DB 쓰기 0(코드만 · 이번 판 스키마 변경 0 · 묶음 SQL 0 — 새 값은 기존 jsonb 칸에) · 지움 0 · 하드 삭제 0 · DeepSeek 하루 400 상한 그대로 · cron 횟수 변경 0(오너 몫) · 설치 0 · Edit/Write 만 · 명령 하나씩 · git add 파일별 · rebase/force 0 · push 3j(ⓐ 지시서 [skip ci][skip render] → ⓑ 코드 머리 단독 → ⓒ 보고서 [skip ci][skip render]).
+
+■0 〔마디 1·2·3〕 저장 + 실측(읽기만)
+
+지시서를 docs/reports/202610/NEWS-Q4_instruction.txt 로 저장 → 커밋 ⓐ.
+/api/health 지금 값(commit · lastRun · cluster 열 인식 여부 — 항목이 없으면 ■4 에서 넣음) · /api/health/runs 최근 2회(소요 · 소스 수 · 실패 소스 목록 · DeepSeek 수) · crawl_runs 행 수.
+40분 상한이 어디 있는지(코드 상수 · render.yaml · 플랜 제한) · 소스 101 의 순서와 소스별 소요(crawl_runs 에 없으면 Render 로그) · 방송 9 의 자리 · 소스 읽기가 순차인지 · DeepSeek 호출이 어느 단계인지.
+피드 4 + SAMHSA 의 실패 꼴(상태코드 · 연속 횟수) · Q2 가 만든 구글뉴스 검색 피드 꼴에 site: 검색이 가능한지.
+전 값 표.
+
+■1 〔마디 1〕 시간 상한 수리
+
+ⓐ 소스 읽기(가져오기·해석) = 동시 4(네트워크 대기가 대부분) · DeepSeek 호출·DB 쓰기는 순차 그대로(상한 400 · 중복 검사 순서 보존).
+ⓑ 소스별 상한 60초 · 넘으면 그 소스 timeout 기록 후 다음 · 같은 실행 안 재시도 0.
+ⓒ 시작점 순환: 마지막 실행이 끝난 소스 위치를 crawl_runs 의 jsonb 칸에 기록 · 다음 실행은 그 다음부터 한 바퀴 → 한 소스가 늘 꼴찌가 되지 않음.
+ⓓ 방송 9채널 = 맨 앞(작고 빠름 · 5분 몫).
+ⓔ 전체 상한: 코드 상수면 40 → 55분(이유: 하루 1회 cron 에 15분 더 쓰는 비용 0 · 플랜 제한이 있으면 그 값 −5분 · 실측해 적음) · 상한에 걸리면 어디까지 돌았는지 기록.
+ⓕ 시험 6+(동시 4 결과 순서 무관 · 소스 상한 · 순환 · 방송 먼저 · 상한 기록).
+ⓖ DB 쓰기 끈 읽기 전용 손 실행 1회로 소요 전/후 — 그런 모드가 없으면 만들지 말고 10-14 12:00 실측으로 미룸(「미측」).
+
+■2 〔마디 2〕 피드 우회
+
+동아·프레시안·Clarín·Politico Europe: Render 에서 연속 실패 + 로컬 성공 = blocked_from_host 표시 · 대체 = 구글뉴스 검색 피드 site:<도메인>(Q2 꼴 · 같은 출처 등급) 등록 · 원 피드는 비활성 아님 · 「주 1회 재시도」.
+SAMHSA 403 3회: 「월 1회 재시도」 + site:samhsa.gov 검색 피드 대체.
+health 피드 건강 표에 blocked_from_host 수.
+
+■3 〔마디 3〕 묶기 보강(정밀 우선)
+
+고유명사 규칙: 제목+첫 문단의 기관명·인명(기관 접미 본부·위원회·청·부·원·협회·재단·병원·대학교 등) 둘 이상 같고 ±36h 면 Jaccard 문턱 0.5 → 0.35.
+표본 50 재실행: 오묶음 0 유지가 조건(하나라도 생기면 규칙 끔 + 사유) · 못 묶음 2 → 0 목표.
+/articles/cluster/:id 에 rule(jaccard|noun) 표시 · 화면 변화 0.
+
+■4 〔마디 1·3〕 health 보강: /api/health 에 schema.cluster_columns(true/false) · 마지막 실행 소요 · 소스 수 · timeout 수 · blocked 수 · /api/health/runs 에 cluster_stats 그대로.
+
+■5 보고서 수치 표: 전(10-11·10-12) / 후(■1 ⓖ 또는 「10-14 12:00 미측」) · 소요 · 소스 닿음/못 닿음 · 방송 읽힘 · 저장/보관/거부 · DeepSeek 수 · 묶음 수 · 「하루 2회면 기대 저장 수」 추정 한 줄(오너 결정 재료 · 변경 0).
+
+■6 시험·배포·보고: jest 전량(170+) · nest build · tsc · 커밋 ⓑ 코드 머리([skip] 글자 0 → Render 자동 배포 + Vercel) · /api/health 25분 폴링(commit 바뀜 · cluster_columns true) · 보고서 docs/reports/202610/NEWS-Q4_<MMDD>.txt(■0 표 · 전/후 · ⓐ~ⓔ 값 · 피드 표 · 표본 50 결과 · health 주소 두 줄 · 건너뛴 것+사유 · 정직 표기) 커밋 ⓒ · 보고서 전문을 오너가 붙이면 CTO 판정.
+
+하지 않는 것: cron 2회(오너) · 묶음 SQL · 하드 삭제·보존 정책 · frontend-v2 · 업로더(.publisher-runtime) · 중독사회·Statory 저장소 · .env · 관문 기준 변경 · 랩 코드 합치기.
+
+손님에게 달라지는 것: 세계·방송 소식이 빠짐없이 매일 들어옴 · 같은 사건이 더 잘 접힘 · 화면 꼴 변화 0. LLM 의존: 줄어드는 곳 = 소스 읽기·순환·묶기 전부 LLM 0 / 남는 곳 = 기사 관문 판정(대표 기사 1회 · 400 상한).
