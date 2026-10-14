@@ -23,12 +23,15 @@ describe('AppController', () => {
   });
 
   describe('health', () => {
-    it('ok · commit · startedAt · lastRun · schema · feeds · alerts 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null · 열 인식 null)', async () => {
+    it('ok · commit · startedAt · lastRun · schema · feeds · alerts · broadcast 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null · 열 인식 null)', async () => {
       const health = await appController.getHealth();
-      expect(Object.keys(health).sort()).toEqual(['alerts', 'commit', 'feeds', 'lastRun', 'ok', 'schema', 'startedAt']);
+      expect(Object.keys(health).sort()).toEqual(['alerts', 'broadcast', 'commit', 'feeds', 'lastRun', 'ok', 'schema', 'startedAt']);
       expect(health.ok).toBe(true);
       expect(health.lastRun).toBeNull();
       expect(health.alerts).toBeNull();
+      // NEWS-Q6 ■4: 열쇠는 on|off 로만(값 0) · 기록 없으면 lastRun null
+      expect(health.broadcast).toEqual({ api: process.env.YOUTUBE_API_KEY ? 'on' : 'off', lastRun: null });
+      expect(JSON.stringify(health)).not.toContain(process.env.YOUTUBE_API_KEY || '\u0000none');
       expect(health.schema).toEqual({ cluster_columns: null });
       // NEWS-Q4 ■2: 설정의 막힌 피드(Render 망에서만 4 + 어디서나 403 SAMHSA 1) · 대체 검색 피드 5
       expect(health.feeds).toEqual({ blocked_from_host: 4, blocked: 5, substitutes: 5 });

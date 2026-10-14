@@ -1,4 +1,7 @@
-import { KnownIndex, normalizeTitleKey, normalizeUrl, preDuplicate, loadKnownIndex, urlKnownInDb } from './dedup';
+import {
+  KnownIndex, foldSameArticles, isSameArticle, normalizeTitleKey, normalizeUrl, preDuplicate, loadKnownIndex, titleSimilarity, urlKnownInDb,
+} from './dedup';
+import { LightRow, membersOf } from '../articles/cluster_view';
 import { DeepseekBudget, dailyCap, estimateCostUsd, usedTodayFromRuns } from './deepseek_budget';
 
 // NEWS-Q2 ■2: DeepSeek 앞 중복 확인 · 하루 상한
@@ -65,6 +68,78 @@ describe('dedup — 중복이면 DeepSeek 를 부르지 않는다', () => {
     const broken = await loadKnownIndex(async () => { throw new Error('down'); }, 30, () => undefined);
     expect(broken.size).toBe(0);
     expect(await urlKnownInDb(async () => { throw new Error('down'); }, ['https://a.com'])).toBe(false);
+  });
+});
+
+// NEWS-Q6 ■2: 같은 기사 두 번(10-12 경향 5398·5420 = RSS 원문 utm 꼬리 · 구글 피드 원문 · 1초 차 저장)
+describe('dedup — 같은 기사 두 번(NEWS-Q6 ■2)', () => {
+  const KHAN_RSS = 'https://www.khan.co.kr/article/202610121138001/?utm_source=khan_rss&utm_medium=rss&utm_campaign=total_news';
+  const KHAN_GOOGLE = 'https://www.khan.co.kr/article/202610121138001';
+  const T = Date.parse('2026-10-12T02:38:00Z');
+
+  it('URL 정규화: utm·끝 / · m.·mobile.·amp. · /amp 경로 · amp 쿼리 → 정본(앞머리만 남는 호스트는 그대로)', () => {
+    const canon = 'https://khan.co.kr/article/202610121138001';
+    for (const u of [KHAN_RSS, KHAN_GOOGLE, 'http://m.khan.co.kr/article/202610121138001', 'https://amp.khan.co.kr/article/202610121138001/amp',
+      'https://mobile.khan.co.kr/amp/article/202610121138001', 'https://www.khan.co.kr/article/202610121138001?outputType=amp&fbclid=x']) {
+      expect(normalizeUrl(u)).toBe(canon);
+    }
+    expect(normalizeUrl('https://amp.dev/x')).toBe('https://amp.dev/x');
+  });
+
+  it('경향 재현: 같은 실행에서 먼저 저장한 기사(utm 꼬리) 뒤 구글 피드 원문은 저장 직전에 걸린다', () => {
+    const idx = new KnownIndex();
+    expect(idx.sameArticle({ url: KHAN_RSS, title: '이제 서울역 광장서 술 못 마신다…적발 땐 과태료 5만 원[서울25]', source: '경향신문', ts: T })).toBeNull();
+    idx.addSaved({ url: KHAN_RSS, title: '이제 서울역 광장서 술 못 마신다…적발 땐 과태료 5만 원[서울25]', source: '경향신문', ts: T });
+    expect(idx.sameArticle({
+      url: KHAN_GOOGLE, googleUrl: 'https://news.google.com/rss/articles/CBMiWkFV', title: '이제 서울역 광장서 술못마신다…금주구역 지정예고[서울25] - 경향신문',
+      source: '경향신문', ts: T,
+    })).toBe('url');
+  });
+
+  it('같은 매체 + 24시간 + 닮은 제목 = 같은 기사 · 다른 매체 · 24시간 넘음 · 연재 ①② 는 따로', () => {
+    const idx = new KnownIndex();
+    idx.addSaved({ url: 'https://a.co.kr/1', title: '서울역 광장 음주없이 쾌적하게…서울 중구, 서울역 광장 금주구역 지정 예고', source: '문화일보', ts: T });
+    const c = { url: 'https://a.co.kr/2', title: '서울역 광장 음주없이 쾌적하게…중구, 서울역 광장 금주구역 지정 예고 - 문화일보', source: '문화 일보', ts: T + 3600_000 };
+    expect(idx.sameArticle(c)).toBe('outlet');
+    expect(idx.sameArticle({ ...c, source: '연합뉴스' })).toBeNull();           // 다른 매체(통신 전재) = 묶음이 맡는다
+    expect(idx.sameArticle({ ...c, ts: T + 25 * 3600_000 })).toBeNull();     // 24시간 넘음
+    expect(isSameArticle(
+      { title: '청소년 도박중독 실태 ① 학교가 뚫렸다', source: 'X', ts: T },
+      { title: '청소년 도박중독 실태 ② 치료는 어디서', source: 'X', ts: T },
+    )).toBe(false);
+    expect(titleSimilarity('서울역 광장 금주구역 지정 예고', '서울역 광장 금주구역 지정 예고 - 경향신문')).toBe(1);
+  });
+
+  it('이미 저장된 같은 기사 → 같은 묶음(지움 0): 혼자면 먼저 기사 묶음에 붙이고 · 이미 같으면 그대로 · 다른 여러 건 묶음이면 둠', () => {
+    const rows = [
+      { id: 1, title: '서울역 광장 금주구역 지정 예고 과태료 5만원', source: '경향신문', url: 'https://khan.co.kr/a/1?utm_source=x', ts: T },
+      { id: 2, title: '서울역 광장 금주구역 지정 예고…과태료 5만원 - 경향신문', source: '경향신문', url: 'https://khan.co.kr/a/1', ts: T + 1000 },
+      { id: 3, title: '다른 사건 기사 제목입니다', source: 'Y', url: 'https://y.com/3', ts: T },
+    ];
+    const solo = (id: number) => ({ clusterId: String(id), size: 1, representativeId: id, memberIds: [id] });
+    const index = new Map([[1, solo(1)], [2, solo(2)], [3, solo(3)]]);
+    expect(foldSameArticles(rows, index)).toEqual({ pairs: 1, together: 0, folded: 1, left: 0 });
+    expect(index.get(2)).toEqual({ clusterId: '1', size: 2, representativeId: 1, memberIds: [1, 2] });
+    expect(index.get(1)!.size).toBe(2);
+    expect(foldSameArticles(rows, index)).toEqual({ pairs: 1, together: 1, folded: 0, left: 0 });
+    const other = { clusterId: '9', size: 3, representativeId: 9, memberIds: [9, 2, 8] };
+    const index2 = new Map([[1, solo(1)], [2, other], [3, solo(3)]]);
+    expect(foldSameArticles(rows, index2)).toEqual({ pairs: 1, together: 0, folded: 0, left: 1 });
+  });
+
+  it('화면 접힘: 묶음 펼침에서 같은 기사 두 번은 하나만 · 기억표는 저장분의 매체·보도 시각도 싣는다', async () => {
+    const light = new Map<number, LightRow>([
+      [10, { id: 10, title: '서울역 광장 금주구역 지정 - 문화일보', source: '문화일보', sourceUrl: 'https://munhwa.com/1', publishedAt: '', publishedTs: null, sourceGrade: 'press', ts: T }],
+      [11, { id: 11, title: '이제 서울역 광장서 술 못 마신다[서울25]', source: '경향신문', sourceUrl: KHAN_RSS, publishedAt: '', publishedTs: null, sourceGrade: 'press', ts: T }],
+      [12, { id: 12, title: '이제 서울역 광장서 술못마신다…금주구역[서울25] - 경향신문', source: '경향신문', sourceUrl: KHAN_GOOGLE, publishedAt: '', publishedTs: null, sourceGrade: 'press', ts: T }],
+    ]);
+    const info = { clusterId: '10', size: 3, representativeId: 10, memberIds: [10, 11, 12] };
+    expect(membersOf(info, 10, light).map((r) => r.id)).toEqual([11]);
+    const idx = await loadKnownIndex(async (sql: string) => (sql.includes('FROM articles')
+      ? [{ source_url: KHAN_RSS, google_url: null, title: '경향 기사 제목입니다', original_title: null, source: '경향신문', ts: '2026-10-12T02:38:00Z' }]
+      : []), 30, () => undefined);
+    expect(idx.saved).toHaveLength(1);
+    expect(idx.sameArticle({ url: KHAN_GOOGLE, title: '전혀 다른 제목', source: '경향신문', ts: T })).toBe('url');
   });
 });
 

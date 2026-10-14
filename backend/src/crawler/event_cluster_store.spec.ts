@@ -25,7 +25,7 @@ describe('event_cluster_store', () => {
       return sql.startsWith('SELECT') ? rows : [];
     });
     const r = await backfillClusters(query, FLAGS, TEXT, 30, NOW);
-    expect(r).toEqual({ rows: 3, clusters: 1, updated: 2 });
+    expect(r).toEqual({ rows: 3, clusters: 1, updated: 2, sameArticle: { pairs: 0, together: 0, folded: 0, left: 0 } });
     expect(calls[0].sql).toContain("tier = 'publish'");
     expect(calls[0].sql).toContain('deleted_at IS NULL');
     const upd = calls.filter((c) => c.sql.includes('UPDATE'));

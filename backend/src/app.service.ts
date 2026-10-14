@@ -4,6 +4,7 @@ import { lastCrawlRun, LastRunPublic, recentCrawlRuns, RunPublic } from './crawl
 import { alertFactsOf, evaluateRunAlerts, RunAlert } from './crawler/run_alerts';
 import { columnExists, tableExists } from './crawler/schema_probe';
 import { buildAllSources } from './crawler/sourceConfig';
+import { youtubeApiMode } from './crawler/youtube_api';
 
 const STARTED_AT = new Date().toISOString();
 const LAST_RUN_TTL_MS = 60_000;
@@ -18,6 +19,15 @@ export type HealthWithRun = Health & {
   schema: HealthSchema;
   feeds: HealthFeeds | null;
   alerts: RunAlert[] | null;
+  broadcast: HealthBroadcast;
+};
+/** NEWS-Q6 ■4: 방송 되짚기(YouTube Data API) — 열쇠 유무(on|off)와 마지막 실행 되짚기 수 */
+export type HealthBroadcast = {
+  api: 'on' | 'off';
+  lastRun: {
+    mode: 'on' | 'off'; items: number | null; newItems: number | null; keywordPass: number | null;
+    units: number | null; quotaStopped: boolean;
+  } | null;
 };
 
 /** 설정(피드 파일·분야 설정)의 막힌 피드 수 — 한 번만 센다. */
@@ -106,7 +116,7 @@ export class AppService {
     return value;
   }
 
-  private alertsCache: { at: number; value: RunAlert[] | null } | null = null;
+  private alertsCache: { at: number; value: RunAlert[] | null; api: Record<string, unknown> | null } | null = null;
 
   /**
    * NEWS-Q5 ■1: 마지막 실행의 경보. 수집기가 저장한 per_source.__run.alerts 가 있으면 그대로,
@@ -115,6 +125,7 @@ export class AppService {
   async alerts(now = Date.now()): Promise<RunAlert[] | null> {
     if (this.alertsCache && now - this.alertsCache.at < LAST_RUN_TTL_MS) return this.alertsCache.value;
     let value: RunAlert[] | null = null;
+    let api: Record<string, unknown> | null = null;
     try {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
@@ -122,13 +133,32 @@ export class AppService {
           const runs = await recentCrawlRuns(q, 6);
           const stored = runs[0]?.progress?.alerts;
           value = Array.isArray(stored) ? (stored as RunAlert[]) : evaluateRunAlerts(runs.map(alertFactsOf));
+          const a = runs[0]?.progress?.broadcastApi;
+          api = a && typeof a === 'object' ? (a as Record<string, unknown>) : null;
         }
       }
     } catch {
       value = null;
     }
-    this.alertsCache = { at: now, value };
+    this.alertsCache = { at: now, value, api };
     return value;
+  }
+
+  /**
+   * NEWS-Q6 ■4: 방송 되짚기 — api = 이 서비스 env 에 YOUTUBE_API_KEY 가 있나(on|off · 값 0) ·
+   * 마지막 실행의 되짚기 수(영상 · RSS 에 없던 것 · 핵심어 통과 · 단위 · 할당량 멈춤). 기록 없으면 null.
+   */
+  async broadcast(env: NodeJS.ProcessEnv = process.env): Promise<HealthBroadcast> {
+    await this.alerts();
+    const a = this.alertsCache?.api ?? null;
+    const n = (k: string) => (a && typeof a[k] === 'number' ? (a[k] as number) : null);
+    return {
+      api: youtubeApiMode(env),
+      lastRun: a
+        ? { mode: a.mode === 'on' ? 'on' : 'off', items: n('items'), newItems: n('newItems'), keywordPass: n('keywordPass'),
+          units: n('units'), quotaStopped: a.quotaStopped === true }
+        : null,
+    };
   }
 
   async getHealthWithRun(env: NodeJS.ProcessEnv = process.env): Promise<HealthWithRun> {
@@ -138,6 +168,9 @@ export class AppService {
     } catch {
       lastRun = null;
     }
-    return { ...this.getHealth(env), lastRun, schema: await this.schema(), feeds: blockedFeeds(), alerts: await this.alerts() };
+    return {
+      ...this.getHealth(env), lastRun, schema: await this.schema(), feeds: blockedFeeds(), alerts: await this.alerts(),
+      broadcast: await this.broadcast(env),
+    };
   }
 }

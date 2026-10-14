@@ -19,7 +19,7 @@ export function defaultFieldProfileName(dir: string = FIELD_PROFILE_DIR): string
   }
 }
 
-type LangKeys = { ko?: string[]; en?: string[] };
+type LangKeys = { ko?: string[]; en?: string[]; [lang: string]: string[] | string | undefined };
 
 export type SourceGrade = 'institution' | 'academic' | 'press' | 'aggregator';
 export type TierRule = 'archive' | 'reject';
@@ -192,7 +192,9 @@ export function defaultDbName(env: NodeJS.ProcessEnv = process.env): string {
   return env.DB_NAME || fieldProfile().database_default;
 }
 
+/** 언어별 낱말 → 한 목록(ko·en 먼저, 그다음 es·pt 등 나머지 언어 · NEWS-Q6 ■1). '_' 로 시작하는 칸은 설명이라 뺀다. */
 export function flattenLang(block?: LangKeys): string[] {
   if (!block) return [];
-  return [...(block.ko || []), ...(block.en || [])].filter(Boolean);
+  const rest = Object.keys(block).filter((k) => k !== 'ko' && k !== 'en' && !k.startsWith('_'));
+  return ['ko', 'en', ...rest].flatMap((k) => (Array.isArray(block[k]) ? (block[k] as string[]) : [])).filter(Boolean);
 }

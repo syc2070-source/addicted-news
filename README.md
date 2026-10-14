@@ -119,7 +119,7 @@ GET /articles/category/:slug   # 카테고리별
 GET /articles/search?q=...     # 검색
 GET /articles/cluster/:id      # 사건 묶음 하나 — 대표 + 매체별 제목·시각·원문 + 기사별 근거 rule(seed|jaccard|noun|entity)
 GET /articles/:id              # 상세
-GET /api/health                # 상태 + 마지막 수집 실행 숫자(소요·소스 수·소스 상한·막힌 피드) + schema.cluster_columns + feeds(막힌 피드 수) + alerts(경보 코드·값)
+GET /api/health                # 상태 + 마지막 수집 실행 숫자(소요·소스 수·소스 상한·막힌 피드) + schema.cluster_columns + feeds(막힌 피드 수) + alerts(경보 코드·값) + broadcast(api on|off · 마지막 되짚기 수)
 GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 상한 걸림 · 실패 피드 이름 · 묶음 절감 · progress(순환 시작·끝 · 소스 상한 · alerts) · sources(방송 읽힘 · 느린 소스 5 · 무리별 합) · rejectReasons)
 ```
 
@@ -135,6 +135,14 @@ GET /api/health/runs?limit=5   # 최근 수집 실행(숫자 · 상한 걸림 ·
 DeepSeek 하루 ≥ 380 · 저장 0 을 보고 `per_source.__run.alerts` 에 남기고 Discord 한 줄(웹훅 없으면 로그). `/api/health` 의 `alerts` 로 보인다.
 묶음 표본 검사: `cd backend && npm run cluster:sample` — 공개 API 만 읽어 최근 7일 묶음(2건+) 전부 + 단독 20건을
 `docs/reports/<YYYYMM>/cluster_sample_<MMDD>.md` 로(맞음/틀림 빈칸).
+
+NEWS-Q6: 구글뉴스 **검색** 피드만 소스 상한 120초(나머지 60초 · 전체 55분). 분야 핵심어는 설정 파일(`keywords.strong`)의
+ko·en 에 더해 es·pt 칸도 읽는다(세계 신문 스페인어·포르투갈어 피드). 같은 기사 두 번 저장은 저장 직전에
+정규화 URL(utm·추적 쿼리·m./amp·끝 / 무시) ∪ 같은 매체 + 24시간 + 닮은 제목(0.6)으로 막고(이번 실행에 저장한 것까지),
+이미 저장된 것은 수집기의 묶음 되짚기가 같은 묶음으로 붙이며 묶음 펼침에서는 하나만 보인다(지움 0).
+방송 되짚기: Render env `YOUTUBE_API_KEY` 가 있으면 채널마다 하루 1회 YouTube Data API `search.list`(최근 30일 · 50편 · 100단위)
++ 핵심어 통과분 `videos.list`(1단위) → 기존 핵심어·DeepSeek 관문. 하루 2,000단위 넘을 것 같으면 멈추고 기록. 지난 실행에
+RSS 404 였던 채널은 RSS 를 한 번만 확인하고 API 로. 열쇠가 없으면 RSS 그대로. 열쇠 값은 로그·URL 에 남지 않는다(머리글로만).
 
 목록(latest·latest-paged·category·search·issue)은 기본 **사건 묶음 단위**(`?group=cluster`)다 — 같은 사건을 다룬
 기사는 대표 1건 + `clusterMembers`(같은 소식)로 접히고, 응답 칸 `clusterId`·`clusterSize`·`representative` 가 붙는다.

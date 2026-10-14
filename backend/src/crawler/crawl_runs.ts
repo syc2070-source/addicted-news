@@ -41,6 +41,9 @@ export interface RunProgressLike {
   /** NEWS-Q5 ■1: 구글 링크 해석 실패 수(대개 429) · 실행 끝 경보(run_alerts) */
   urlResolveFail?: number;
   alerts?: Array<{ code: string; value: number | string; limit?: number }>;
+  /** NEWS-Q6 ■3·■4: 구글 검색 피드 상한(초) · 방송 되짚기 기록 */
+  googleCapSec?: number;
+  broadcastApi?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';
@@ -342,6 +345,13 @@ export async function lastCrawlRun(query: QueryFn, field?: string): Promise<Last
 
 /** 지난 실행에서 실패한 방송 채널(outletId) — 이번 실행 맨 앞으로(■8). */
 export async function lastFailedBroadcastOutlets(query: QueryFn, field: string): Promise<string[]> {
+  return (await lastFailedFeeds(query, field))
+    .filter((s: string) => s.startsWith('broadcast:'))
+    .map((s: string) => s.slice('broadcast:'.length).split(' ')[0]);
+}
+
+/** 지난 실행(읽기 전용 제외)의 실패 피드 목록 그대로(NEWS-Q6 ■4: 방송 RSS 404 판별). 없거나 실패면 []. */
+export async function lastFailedFeeds(query: QueryFn, field: string): Promise<string[]> {
   try {
     const rows = await query(
       `SELECT failed_feeds FROM crawl_runs WHERE read_only = false AND field = $1 ORDER BY started_at DESC LIMIT 1`,
@@ -349,10 +359,7 @@ export async function lastFailedBroadcastOutlets(query: QueryFn, field: string):
     );
     const list: unknown = rows?.[0]?.failed_feeds;
     const arr = Array.isArray(list) ? list : typeof list === 'string' ? JSON.parse(list) : [];
-    return arr
-      .map((s: unknown) => String(s))
-      .filter((s: string) => s.startsWith('broadcast:'))
-      .map((s: string) => s.slice('broadcast:'.length).split(' ')[0]);
+    return arr.map((s: unknown) => String(s));
   } catch {
     return [];
   }

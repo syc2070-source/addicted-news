@@ -21,8 +21,13 @@ import { decodeEntities, crossMediaSimilarity } from './text_utils';
 import { crawlerConnectionOptions } from './crawler_db';
 import { insertArticleWithRawBody, RawBodyWriteState } from './raw_body_store';
 import {
-  BROADCAST_SOURCE_TYPE, buildBroadcastRow, decideBroadcast, fetchBroadcastItems, loadBroadcastSources, orderFailedFirst,
+  BROADCAST_SOURCE_TYPE, BroadcastItem, buildBroadcastRow, decideBroadcast, fetchBroadcastItems, loadBroadcastSources, orderFailedFirst,
+  passesBroadcastKeywordGate,
 } from './broadcast';
+import {
+  DAILY_UNIT_CAP, QuotaGuard, SEARCH_UNITS, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackChannel, planChannel,
+  rss404Outlets, youtubeApiKey,
+} from './youtube_api';
 import { probeSchema, SchemaFlags } from './schema_probe';
 import { fieldProfile, SourceGrade } from './field_profile';
 import { fetchFeed } from './feed_fetch';
@@ -30,7 +35,7 @@ import { KnownIndex, loadKnownIndex, preDuplicate } from './dedup';
 import { DeepseekBudget, dailyCap, estimateCostUsd, priceOf, usedTodayFromRuns } from './deepseek_budget';
 import { decideTier, effectiveTier, Tier } from './tier';
 import {
-  CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedBroadcastOutlets, recentCrawlRuns, recordCrawlRun,
+  CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, recentCrawlRuns, recordCrawlRun,
 } from './crawl_runs';
 import { alertFactsOf, alertLine, evaluateRunAlerts } from './run_alerts';
 import { backfillGoogleUrls, hostOf, isGoogleNewsLink, UrlResolveState } from './url_resolve';
@@ -39,6 +44,7 @@ import { writeRowExtras } from './row_extras';
 import { ClusterPool, leadOf, paraOf } from './event_cluster';
 import {
   BROADCAST_SHARE_MS, ReadCtx, ReadOutcome, RunProgress, SOURCE_CAP_MS, SOURCE_CONCURRENCY, crawlTimeoutMs,
+  GOOGLE_SEARCH_CAP_MS, sourceCapMs,
   emptyProgress, lastRunLastSourceId, planSources, runSources,
 } from './crawl_schedule';
 import { PoolData, backfillClusters, loadClusterPool, savedPct } from './event_cluster_store';
@@ -136,6 +142,7 @@ let crawlStats = {
   blacklistSkip: 0,     // v5.4: 블랙리스트 도메인 즉시 폐기(딥시크 호출 없음)
   quarantined: 0,       // v5.4: rejected_articles 격리 저장
   crossMediaDupSkip: 0, // v5.4.1 3-2: 크로스매체 동일 사건 중복 스킵
+  sameArticleSkip: 0, // NEWS-Q6 ■2: 같은 기사(정규화 URL · 같은 매체 24h) 스킵
   dateParseFail: 0,     // v5.4.1 3-3: published_at 파싱 실패(now 대체)
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
@@ -676,31 +683,76 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
   const out: Candidate[] = [];
   if (!sources.length) return out;
   // NEWS-Q2 ■8: 지난 실행에서 실패한 채널을 맨 앞으로(crawl_runs 있을 때)
+  let failedRaw: string[] = [];
   if (RUN.flags.crawlRuns && RUN.query) {
-    const failed = await lastFailedBroadcastOutlets(RUN.query, PROFILE.field);
+    failedRaw = await lastFailedFeeds(RUN.query, PROFILE.field);
+    const failed = failedRaw.filter((s) => s.startsWith('broadcast:')).map((s) => s.slice('broadcast:'.length).split(' ')[0]);
     if (failed.length) {
       sources = orderFailedFirst(sources, failed);
       console.log(`  📺 지난 실행 실패 채널 먼저: ${failed.join(', ')}`);
     }
   }
-  console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → DeepSeek 관문)`);
+  // NEWS-Q6 ■4: 되짚기(YouTube Data API) — 열쇠 있을 때만 · 채널당 하루 1회 · 하루 2,000 단위 가드 · 열쇠 값 로그 0
+  const apiKey = youtubeApiKey();
+  const today = apiKey && RUN.flags.crawlRuns && RUN.query ? await apiTodayFromRuns(RUN.query, PROFILE.field) : { units: 0, channels: [] };
+  const guard = new QuotaGuard(DAILY_UNIT_CAP, today.units);
+  const api = emptyApiRecord(apiKey ? 'on' : 'off', today.units);
+  if (RUN.progress) RUN.progress.broadcastApi = api;
+  const rssDown = new Set(rss404Outlets(failedRaw));
+  console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → DeepSeek 관문) · 되짚기 API ${api.mode}` +
+    (apiKey ? ` (오늘 앞서 ${today.units}단위 · 상한 ${DAILY_UNIT_CAP})` : ` (env ${YOUTUBE_API_ENV} 없음 → RSS 만)`));
   for (const source of sources) {
     if (Date.now() > deadline) {
       console.log('  ⏱️ 방송 몫 시간 도달 — 방송 추적 중단');
       break;
     }
     const stat = sourceStat(`broadcast:${source.outletId}`);
-    let items;
-    try {
-      items = await fetchBroadcastItems(source, 15);
-    } catch (e) {
-      const status = httpStatusOf(e);
-      console.warn(`  ├─ [${source.program}] ❌ RSS 실패(스킵)${status ? ` [${status}]` : ''}: ${(e as Error).message}`);
-      crawlStats.failedFeeds.push(`broadcast:${source.outletId}${status ? ` [${status}]` : ''}`);
-      stat.failed = String(status ?? 'ERR');
+    const plan = planChannel({
+      hasKey: !!apiKey, rss404LastRun: rssDown.has(source.outletId),
+      searchedToday: today.channels.includes(source.outletId), quotaLeft: !guard.stopped && guard.canSpend(SEARCH_UNITS),
+    });
+    let items: BroadcastItem[] = [];
+    let rssFailed: string | null = null;
+    if (plan.rss || plan.reason === 'api_only_rss404') {
+      // RSS 가 지난 실행에 404 였고 열쇠가 있으면 한 번만 물어본다(10회 재시도 대신) — 살아나면 다시 RSS
+      try {
+        items = await fetchBroadcastItems(source, 15, plan.rss ? undefined : 1);
+        crawlStats.feedsOk++;
+      } catch (e) {
+        const status = httpStatusOf(e);
+        rssFailed = String(status ?? 'ERR');
+        console.warn(`  ├─ [${source.program}] ❌ RSS 실패${plan.api ? '(API 로 되짚기)' : '(스킵)'}${status ? ` [${status}]` : ''}: ${(e as Error).message}`);
+        crawlStats.failedFeeds.push(`broadcast:${source.outletId}${status ? ` [${status}]` : ''}`);
+      }
+    }
+    if (plan.api && apiKey) {
+      const rssIds = new Set(items.map((it) => it.videoId));
+      const lb = await lookbackChannel(source.channelId, apiKey, guard, {
+        needFull: (it) => !rssIds.has(it.videoId) && passesBroadcastKeywordGate(it),
+      });
+      api.calls += lb.units > SEARCH_UNITS ? 2 : lb.units > 0 ? 1 : 0;
+      api.units += lb.units;
+      api.unitsToday = guard.used;
+      api.quotaStopped = guard.stopped;
+      if (lb.units > 0) api.channels.push(source.outletId);
+      if (plan.reason === 'api_only_rss404') api.apiOnly.push(source.outletId);
+      if (lb.error) {
+        api.errors.push(`${source.outletId}:${lb.error.status ?? ''}:${lb.error.reason}`);
+        console.warn(`  ├─ [${source.program}] ⚠️ 되짚기 실패 [${lb.error.status ?? '-'}] ${lb.error.reason}`);
+      }
+      api.items += lb.items.length;
+      for (const it of lb.items) {
+        if (rssIds.has(it.videoId)) continue;
+        items.push(it);
+        api.newItems++;
+        if (passesBroadcastKeywordGate(it)) api.keywordPass++;
+      }
+      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${lb.items.filter((it) => !rssIds.has(it.videoId)).length}) · ${lb.units}단위`);
+    }
+    if (rssFailed && !items.length) {
+      stat.failed = rssFailed;
       continue;
     }
-    crawlStats.feedsOk++;
     stat.read = items.length;
     let accepted = 0;
     for (const item of items) {
@@ -948,11 +1000,11 @@ async function judgeSource(
   if (outcome.status === 'timeout') {
     stat.timeout = true;
     crawlStats.sourceTimeouts.push(conf.id);
-    console.warn(`  ├─ [${conf.id}] ⏱️ 소스 상한 ${SOURCE_CAP_MS / 1000}초 — 읽은 ${maybe?.items.length ?? 0}/${maybe?.total ?? '?'}항목만 판정(재시도 0)`);
+    console.warn(`  ├─ [${conf.id}] ⏱️ 소스 상한 ${sourceCapMs(conf) / 1000}초 — 읽은 ${maybe?.items.length ?? 0}/${maybe?.total ?? '?'}항목만 판정(재시도 0)`);
     if (!maybe) {
       stat.failed = opts.blockedRetry ? 'blocked:timeout' : 'timeout';
       if (opts.blockedRetry) { stat.blocked = true; return []; }
-      crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName}) [timeout]: 소스 상한 ${SOURCE_CAP_MS / 1000}초`);
+      crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName}) [timeout]: 소스 상한 ${sourceCapMs(conf) / 1000}초`);
       return [];
     }
   }
@@ -1599,8 +1651,18 @@ async function saveCandidates(list: Candidate[]) {
     if (c.teaser) c.teaser = decodeEntities(c.teaser);
     if (c.originalTitle) c.originalTitle = decodeEntities(c.originalTitle);
 
-    if (await isDuplicateInDb(repo, c)) {
+    // NEWS-Q6 ■2: 정규화 URL(utm·m.·amp·끝 / 무시) ∪ 같은 매체 + 24시간 + 닮은 제목 — 이번 실행에 저장한 것까지
+    const isBroadcast = c.sourceType === BROADCAST_SOURCE_TYPE;
+    const sameHit = RUN.known.sameArticle({
+      url: c.sourceUrl, googleUrl: c.googleUrl, title: c.title, originalTitle: c.originalTitle,
+      source: isBroadcast ? null : c.source, ts: isBroadcast ? null : c.publishedTs?.getTime() ?? null,
+    });
+    if (sameHit || await isDuplicateInDb(repo, c)) {
       dup++;
+      if (sameHit) {
+        crawlStats.sameArticleSkip++;
+        console.log(`  │   🔁 같은 기사(${sameHit === 'url' ? '정규화 URL' : '같은 매체 24h'}) 스킵: ${c.title.slice(0, 30)}...`);
+      }
       if (c.sourceId) sourceStat(c.sourceId).dup++;
       continue;
     }
@@ -1612,6 +1674,10 @@ async function saveCandidates(list: Candidate[]) {
       urlResolve: c.urlResolve ?? null,
     };
     const afterInsert = async (id: number | null) => {
+      RUN.known.addSaved({
+        url: c.sourceUrl, googleUrl: c.googleUrl, title: c.title, originalTitle: c.originalTitle,
+        source: isBroadcast ? null : c.source, ts: isBroadcast ? null : c.publishedTs?.getTime() ?? null,
+      });
       await writeRowExtras(q, id, extras, RUN.flags, console.warn, c.sourceUrl);
       if (c.sourceId) {
         const st = sourceStat(c.sourceId);
@@ -1826,7 +1892,7 @@ async function main() {
   const retryIds = new Set(plan.retrying.map((s) => s.id));
   const order = plan.order;
   console.log(
-    `📡 Crawling ${order.length} sources (동시 읽기 ${SOURCE_CONCURRENCY} · 소스 상한 ${SOURCE_CAP_MS / 1000}초 · 전체 ${Math.round(CRAWL_TIMEOUT_MS / 60000)}분)` +
+    `📡 Crawling ${order.length} sources (동시 읽기 ${SOURCE_CONCURRENCY} · 소스 상한 ${SOURCE_CAP_MS / 1000}초 · 구글 검색 ${GOOGLE_SEARCH_CAP_MS / 1000}초 · 전체 ${Math.round(CRAWL_TIMEOUT_MS / 60000)}분)` +
     ` · 시작 ${plan.startIndex + 1}번째(${plan.startId ?? '-'})${lastId ? ` ← 지난 실행 끝 ${lastId}` : ''}`,
   );
   if (plan.skipped.length) console.log(`   막힌 피드 오늘 건너뜀(대체 피드가 읽음): ${progress.blockedSkipped.join(', ')}`);
@@ -1836,6 +1902,7 @@ async function main() {
   await runSources<SourceConfig, ReadSource>(order, {
     concurrency: SOURCE_CONCURRENCY,
     capMs: SOURCE_CAP_MS,
+    capFor: (conf) => sourceCapMs(conf),
     canStart: () => Date.now() <= crawlDeadline,
     read: (conf, ctx) => readSource(conf, ctx),
     consume: async (conf, outcome, i) => {
@@ -1959,6 +2026,7 @@ async function main() {
   console.log(`   ├ 도메인 블랙리스트: ${blSnap.size}개${blSnap.runtimeAdded.length ? ` (이번 자동추가 ${blSnap.runtimeAdded.length}: ${blSnap.runtimeAdded.join(',')})` : ''}`);
   console.log(`   ├ 핵심어 중복 스킵: ${crawlStats.dupSkipKeyword}건`);
   console.log(`   ├ 🔁 크로스매체 중복 스킵: ${crawlStats.crossMediaDupSkip}건`);
+  console.log(`   ├ 🔁 같은 기사 스킵(정규화 URL · 같은 매체 24h): ${crawlStats.sameArticleSkip}건`);
   console.log(`   ├ 📅 날짜 파싱 실패(now 대체): ${crawlStats.dateParseFail}건`);
   console.log(`   └ 본문부실 스킵: ${crawlStats.thinBodySkip}건`);
   const extractRate = crawlStats.bodyExtractTried > 0

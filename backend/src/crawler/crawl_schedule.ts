@@ -1,16 +1,26 @@
 // ============================================================
 // crawl_schedule.ts (NEWS-Q4 ■1·■2) — 수집 순서·시간 상한(LLM 0 · DB 쓰기 0 · 순수 함수 + 읽기 하나).
-//  · 소스 읽기(피드 가져오기·해석·원문 추출) = 동시 4 · 소스별 상한 60초(넘으면 그때까지 읽은 것만 · 같은 실행 재시도 0).
+//  · 소스 읽기(피드 가져오기·해석·원문 추출) = 동시 4 · 소스별 상한 60초 · 구글뉴스 검색 피드 120초(NEWS-Q6 ■3)
+//    (넘으면 그때까지 읽은 것만 · 같은 실행 재시도 0).
 //    판정(DeepSeek)·저장은 소스 순서대로 하나씩(하루 상한 400 · 중복 검사 순서 보존) — runSources 의 consume.
 //  · 시작점 순환: 지난 실행이 마지막으로 마친 소스 다음부터 한 바퀴(crawl_runs.per_source.__run.lastId).
 //  · 전체 상한 55분(CRAWL_TIMEOUT_MS 가 그보다 짧으면 55분으로 올리고 로그 한 줄 — NEWS-Q5 ■3).
 //  · 막힌 피드(blocked): Render 망에서만 막힘(blocked_from_host) = 주 1회(KST 월요일) · 어디서나 403 = 월 1회(KST 1일)만
 //    원 피드를 다시 해 본다. 그 밖의 날은 건너뛰고 대체 피드(구글뉴스 site: 검색)가 읽는다.
 // ============================================================
+import type { BroadcastApiRecord } from './youtube_api';
+
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
 export const SOURCE_CONCURRENCY = 4;
 export const SOURCE_CAP_MS = 60_000;
+/** NEWS-Q6 ■3: 구글뉴스 검색 피드만 120초(항목마다 원문 링크 풀기·본문 추출이 붙어 60초에 절반이 끊겼다 — 10-14 14/28). */
+export const GOOGLE_SEARCH_CAP_MS = 120_000;
+
+/** 소스별 읽기 상한: 구글뉴스 검색 피드 120초 · 나머지 60초. */
+export function sourceCapMs(s: { url?: string | null }): number {
+  return /^https?:\/\/news\.google\.com\/rss\/search/i.test(s.url || '') ? GOOGLE_SEARCH_CAP_MS : SOURCE_CAP_MS;
+}
 export const DEFAULT_CRAWL_MINUTES = 55;
 /** 방송 9채널 몫(맨 앞) */
 export const BROADCAST_SHARE_MS = 5 * 60_000;
@@ -114,6 +124,8 @@ export interface ReadCtx<V> {
 export interface RunSourcesOptions<T, V> {
   concurrency?: number;
   capMs?: number;
+  /** 소스마다 다른 상한(있으면 capMs 보다 먼저) — NEWS-Q6 ■3 */
+  capFor?: (item: T) => number;
   /** 판정이 밀릴 때 앞서 읽어 둘 소스 수(기본 concurrency × 2) */
   maxAhead?: number;
   /** 새 읽기를 시작해도 되나(전체 상한) */
@@ -137,7 +149,7 @@ export interface RunSourcesResult {
  */
 export async function runSources<T, V>(items: T[], o: RunSourcesOptions<T, V>): Promise<RunSourcesResult> {
   const conc = Math.max(1, o.concurrency ?? SOURCE_CONCURRENCY);
-  const cap = o.capMs ?? SOURCE_CAP_MS;
+  const capAll = o.capMs ?? SOURCE_CAP_MS;
   const ahead = Math.max(conc, o.maxAhead ?? conc * 2);
   const now = o.now ?? Date.now;
   const canStart = o.canStart ?? (() => true);
@@ -157,6 +169,7 @@ export async function runSources<T, V>(items: T[], o: RunSourcesOptions<T, V>): 
   function startOne(i: number): Promise<ReadOutcome<V>> {
     running++;
     const t0 = now();
+    const cap = o.capFor ? o.capFor(items[i]) : capAll;
     let last: V | null = null;
     let done = false;
     const ctx: ReadCtx<V> = { deadlineAt: t0 + cap, cancelled: () => done, partial: (v) => { last = v; } };
@@ -218,10 +231,14 @@ export interface RunProgress {
   broadcastMs: number | null;
   concurrency: number;
   sourceCapSec: number;
+  /** NEWS-Q6 ■3: 구글뉴스 검색 피드 상한(초) */
+  googleCapSec?: number;
   deadlineMin: number;
   /** NEWS-Q5 ■1: 구글 링크 해석 실패 수 · 실행 끝 경보(run_alerts) */
   urlResolveFail?: number;
   alerts?: Array<{ code: string; value: number | string; limit?: number }>;
+  /** NEWS-Q6 ■4: 방송 되짚기(YouTube Data API) 기록 */
+  broadcastApi?: BroadcastApiRecord;
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {
@@ -229,7 +246,7 @@ export function emptyProgress(total: number, deadlineMs: number): RunProgress {
     startId: null, startIndex: 0, lastId: null, reached: 0, total, timedOut: false, stoppedAt: null,
     timeouts: [], blockedSkipped: [], blockedRetried: [], blockedFromHost: 0,
     broadcastFirst: true, broadcastMs: null,
-    concurrency: SOURCE_CONCURRENCY, sourceCapSec: SOURCE_CAP_MS / 1000, deadlineMin: Math.round(deadlineMs / 60_000),
+    concurrency: SOURCE_CONCURRENCY, sourceCapSec: SOURCE_CAP_MS / 1000, googleCapSec: GOOGLE_SEARCH_CAP_MS / 1000, deadlineMin: Math.round(deadlineMs / 60_000),
   };
 }
 

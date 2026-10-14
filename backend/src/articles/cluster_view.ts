@@ -4,6 +4,7 @@
 //  · TOP = 72시간 안 묶음을 cluster_size 큰 순(동률 = 대표 source_grade → 새 보도) · 72시간 안 기사가 없으면 7일로 넓힘
 // ============================================================
 import { ClusterInfo, gradeRank } from '../crawler/event_cluster';
+import { isSameArticle } from '../crawler/dedup';
 
 export type GroupMode = 'cluster' | 'none';
 
@@ -55,14 +56,25 @@ export function shownId(g: Group): number {
   return g.ids[0];
 }
 
-/** 묶음의 나머지 기사(보도 시각 순 · 보이는 기사 뺌). */
+/**
+ * 묶음의 나머지 기사(보도 시각 순 · 보이는 기사 뺌).
+ * NEWS-Q6 ■2: 같은 기사 두 번(정규화 URL · 같은 매체 24h 닮은 제목)은 앞 것 하나만 보인다(지움 0 · 접기만).
+ */
 export function membersOf(info: ClusterInfo | null, shown: number, light: Map<number, LightRow>, max = 20): LightRow[] {
   if (!info) return [];
-  return info.memberIds
-    .filter((id) => id !== shown)
-    .map((id) => light.get(id))
-    .filter((r): r is LightRow => !!r)
-    .slice(0, max);
+  const kept: LightRow[] = [];
+  const shownRow = light.get(shown);
+  const asNear = (r: LightRow) => ({ title: r.title, source: r.source, url: r.sourceUrl, ts: r.ts });
+  for (const id of info.memberIds) {
+    if (id === shown) continue;
+    const r = light.get(id);
+    if (!r) continue;
+    const me = asNear(r);
+    if ((shownRow && isSameArticle(asNear(shownRow), me)) || kept.some((k) => isSameArticle(asNear(k), me))) continue;
+    kept.push(r);
+    if (kept.length >= max) break;
+  }
+  return kept;
 }
 
 export interface TopPick {
