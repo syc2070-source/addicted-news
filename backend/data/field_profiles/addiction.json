@@ -552,7 +552,7 @@
         "lang": "ko",
         "priority": 49,
         "outlet_id": "동아일보",
-        "url": "https://news.google.com/rss/search?q=site:donga.com+(중독+OR+마약+OR+도박+OR+알코올+OR+음주+OR+금연)+when:7d&hl=ko&gl=KR&ceid=KR:ko",
+        "url": "https://news.google.com/rss/search?q=site:www.donga.com+(중독+OR+마약+OR+도박+OR+알코올+OR+음주+OR+금연)+when:7d&hl=ko&gl=KR&ceid=KR:ko",
         "region": "kr",
         "source_name": "동아일보",
         "max_age_days": 7
