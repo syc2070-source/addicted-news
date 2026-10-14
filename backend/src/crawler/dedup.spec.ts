@@ -1,5 +1,5 @@
 import {
-  KnownIndex, foldSameArticles, isSameArticle, normalizeTitleKey, normalizeUrl, preDuplicate, loadKnownIndex, titleSimilarity, urlKnownInDb,
+  KnownIndex, foldSameArticles, isSameArticle, normalizeTitleKey, outletKey, normalizeUrl, preDuplicate, loadKnownIndex, titleSimilarity, urlKnownInDb,
 } from './dedup';
 import { LightRow, membersOf } from '../articles/cluster_view';
 import { DeepseekBudget, dailyCap, estimateCostUsd, usedTodayFromRuns } from './deepseek_budget';
@@ -101,7 +101,15 @@ describe('dedup — 같은 기사 두 번(NEWS-Q6 ■2)', () => {
     idx.addSaved({ url: 'https://a.co.kr/1', title: '서울역 광장 음주없이 쾌적하게…서울 중구, 서울역 광장 금주구역 지정 예고', source: '문화일보', ts: T });
     const c = { url: 'https://a.co.kr/2', title: '서울역 광장 음주없이 쾌적하게…중구, 서울역 광장 금주구역 지정 예고 - 문화일보', source: '문화 일보', ts: T + 3600_000 };
     expect(idx.sameArticle(c)).toBe('outlet');
-    expect(idx.sameArticle({ ...c, source: '연합뉴스' })).toBeNull();           // 다른 매체(통신 전재) = 묶음이 맡는다
+    expect(idx.sameArticle({ ...c, url: 'https://yna.co.kr/2', source: '연합뉴스' })).toBeNull(); // 다른 매체(통신 전재) = 묶음이 맡는다
+    // 옛 구글 기사: source 가 집계기 이름("Google News (KR)")이면 매체로 쓰지 않고 원문 호스트·제목 끝 매체명으로 가른다
+    expect(isSameArticle(
+      { title: '수원 마약영상 30대 필로폰 투약 혐의 인정 송치 - 연합뉴스', source: 'Google News (KR)', url: 'https://news.google.com/rss/articles/A', ts: T },
+      { title: '수원 마약영상 30대 송치 필로폰 투약 혐의 인정 - KBS 뉴스', source: 'Google News (KR)', url: 'https://news.google.com/rss/articles/B', ts: T },
+    )).toBe(false);
+    expect(outletKey({ source: 'Google News (KR)', url: 'https://v.daum.net/v/1', title: '어떤 기사 제목입니다 - 한국일보' })).toBe('name:한국일보');
+    expect(outletKey({ source: 'Google News (KR)', url: 'https://news.google.com/rss/articles/C', title: '어떤 기사 제목입니다 - v.daum.net' })).toBe('');
+    expect(outletKey({ source: '경향신문', url: KHAN_RSS, title: 'x' })).toBe('khan.co.kr');
     expect(idx.sameArticle({ ...c, ts: T + 25 * 3600_000 })).toBeNull();     // 24시간 넘음
     expect(isSameArticle(
       { title: '청소년 도박중독 실태 ① 학교가 뚫렸다', source: 'X', ts: T },

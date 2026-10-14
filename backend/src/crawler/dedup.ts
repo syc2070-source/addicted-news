@@ -61,13 +61,31 @@ export interface NearRow {
   ts: number;
 }
 
-/** 매체 열쇠: 매체 이름(공백·대소문자 무시) — 없으면 원문 호스트. */
-export function outletKey(r: Pick<NearRow, 'source' | 'url'>): string {
-  const name = normalize(r.source || '').toLowerCase().replace(/\s+/g, '');
-  if (name) return name;
+/** 여러 매체 기사가 한 호스트에 모이는 곳(포털·집계) — 호스트로 매체를 가르지 않는다. */
+const PORTAL_HOSTS = new Set([
+  'news.google.com', 'v.daum.net', 'news.v.daum.net', 'n.news.naver.com', 'news.naver.com', 'news.nate.com', 'news.zum.com',
+  'msn.com', 'flipboard.com', 'news.yahoo.com', 'yahoo.com', 'youtube.com',
+]);
+/** 집계기 이름(옛 구글 기사 source = "Google News (KR)") — 매체 이름으로 쓰지 않는다. */
+const GENERIC_SOURCE = /^(google ?news|구글 ?뉴스|naver|daum|msn|yahoo)\b/i;
+
+/**
+ * 매체 열쇠(NEWS-Q6 ■2): ① 원문 호스트(포털·집계 호스트 제외) → ② 제목 끝 " - 매체명"(구글뉴스 꼴) →
+ * ③ 매체 이름(집계기 이름 제외). 모르면 '' (같은 매체 검사 안 함 · 정규화 URL 검사만).
+ */
+export function outletKey(r: Pick<NearRow, 'source' | 'url' | 'title'>): string {
   const u = normalizeUrl(r.url);
-  const m = /^https:\/\/([^/:?]+)/.exec(u);
-  return m ? m[1] : '';
+  const host = /^https:\/\/([^/:?]+)/.exec(u)?.[1] || '';
+  if (host && !PORTAL_HOSTS.has(host)) return host;
+  const t = normalize(r.title || '');
+  const dash = t.lastIndexOf(' - ');
+  if (dash > 8 && t.length - dash <= 30) {
+    const suffix = t.slice(dash + 3).toLowerCase().replace(/\s+/g, '');
+    // " - v.daum.net" 처럼 포털 이름이 붙은 것은 매체가 아니다
+    if (suffix && !GENERIC_SOURCE.test(suffix) && !PORTAL_HOSTS.has(suffix.replace(/^(?:www|m)\./, ''))) return `name:${suffix}`;
+  }
+  const name = normalize(r.source || '').toLowerCase().replace(/\s+/g, '');
+  return name && !GENERIC_SOURCE.test(name) ? `name:${name}` : '';
 }
 
 function bigrams(raw: string | null | undefined): Set<string> {
