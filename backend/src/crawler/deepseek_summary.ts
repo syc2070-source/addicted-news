@@ -18,9 +18,25 @@ export const MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS || 2000);
 export const MAX_TOKENS_RETRY = Number(process.env.DEEPSEEK_MAX_TOKENS_RETRY || 3000);
 export const deepseekAvailable = !!DEEPSEEK_KEY;
 
+// NEWS-Q6 ⓑ′: SDK 기본값(요청당 10분 · 재시도 2)은 DeepSeek 가 응답 없이 멈추면 호출 하나가 30분을 잡는다
+// (10-15 방송 후보 2건 · 호출 4번에 62분 → 기사 소스 0). 요청당 60초 · 재시도 1.
+export const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS || 60_000);
 const deepseek = deepseekAvailable
-  ? new OpenAI({ apiKey: DEEPSEEK_KEY, baseURL: 'https://api.deepseek.com' })
+  ? new OpenAI({ apiKey: DEEPSEEK_KEY, baseURL: 'https://api.deepseek.com', timeout: DEEPSEEK_TIMEOUT_MS, maxRetries: 1 })
   : null;
+
+// 연결 실패(시간 초과·끊김 = status 없음)나 5xx 가 연달아 이만큼이면 이번 실행은 DeepSeek 를 더 부르지 않는다.
+// 4xx(요청 하나의 문제)는 세지 않는다. 판정 없이 남은 후보는 거부로 남기지 않고 건너뛴다(다음 실행이 다시 본다).
+export const DEEPSEEK_DOWN_AFTER = 3;
+let deepseekTransportFails = 0;
+export function noteDeepseekResult(err?: { status?: number } | null): void {
+  if (!err) { deepseekTransportFails = 0; return; }
+  const s = err.status;
+  if (s === undefined || s === null || s >= 500) deepseekTransportFails++;
+}
+export function deepseekDown(): boolean {
+  return deepseekTransportFails >= DEEPSEEK_DOWN_AFTER;
+}
 
 // v5.2 #6: DeepSeek 실제 호출 집계(비용 추적). 재시도 포함 매 API 요청을 calls로,
 // 성공/실패를 분리 집계한다. (기존 apiCallCount는 미호출 dead-code였음)
@@ -191,6 +207,7 @@ async function summarizeCombined(
       }
       const r = await deepseek.chat.completions.create(params);
       addUsage(r as any);
+      noteDeepseekResult(null);
       const choice = r.choices?.[0];
       let text = (choice?.message?.content || '').trim();
 
@@ -304,7 +321,8 @@ async function summarizeCombined(
         `[deepseek] 호출 예외 (attempt ${attempt}/2, model=${DEEPSEEK_MODEL}, ` +
         `status=${status}, code=${code}): ${err?.message ?? String(e)}`,
       );
-      if (attempt === 2) {
+      noteDeepseekResult({ status: typeof status === 'number' ? status : undefined });
+      if (attempt === 2 || deepseekDown()) {
         deepseekStats.fail++;
         return null;
       }
@@ -415,6 +433,7 @@ export async function judgeArticleFields(
       const r = await (deepseek.chat.completions.create as unknown as
         (p: unknown) => Promise<{ choices?: Array<{ finish_reason?: string; message?: { content?: string } }> }>)(params);
       addUsage(r as any);
+      noteDeepseekResult(null);
       const choice = r.choices?.[0];
       const text = (choice?.message?.content || '').trim();
       if (choice?.finish_reason === 'length') {
@@ -441,7 +460,9 @@ export async function judgeArticleFields(
     } catch (e) {
       const err = e as { status?: number; code?: string; message?: string };
       console.warn(`[deepseek][judge] 호출 예외(attempt ${attempt}/2, status=${err?.status ?? '?'}): ${err?.message ?? String(e)}`);
+      noteDeepseekResult(err);
       if (attempt === 2) deepseekStats.fail++;
+      if (deepseekDown()) break;
     }
   }
   return out;   // 미완성 → 게이트에서 judgment_missing 으로 거부(fail-closed)

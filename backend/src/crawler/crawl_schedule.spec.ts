@@ -90,13 +90,13 @@ describe('crawl_schedule — 소스별 상한(■1ⓑ)', () => {
     expect(sourceCapMs({ url: 'https://www.khan.co.kr/rss/rssdata/total_news.xml' })).toBe(SOURCE_CAP_MS);
     expect(sourceCapMs({ url: 'https://news.google.com/rss/articles/CBMi' })).toBe(SOURCE_CAP_MS); // 검색 피드만
     expect(crawlTimeoutMs({})).toBe(55 * 60_000);
-    // 축소 시계: 구글 120 → 40ms · 나머지 60 → 20ms · 둘 다 30ms 걸리는 읽기
+    // 축소 시계: 구글 120 → 400ms · 나머지 60 → 20ms · 둘 다 100ms 걸리는 읽기(타이머 흔들림에 넉넉히)
     const seen: Record<string, string> = {};
     const items = [{ id: 'kr-google-x', url: 'https://news.google.com/rss/search?q=a' }, { id: 'kr-press-y', url: 'https://y.kr/rss' }];
     await runSources(items, {
       capMs: 20,
-      capFor: (s) => (sourceCapMs(s) === GOOGLE_SEARCH_CAP_MS ? 40 : 20),
-      read: async () => { await sleep(30); return 1; },
+      capFor: (s) => (sourceCapMs(s) === GOOGLE_SEARCH_CAP_MS ? 400 : 20),
+      read: async () => { await sleep(100); return 1; },
       consume: async (s, o) => { seen[s.id] = o.status; return true; },
     });
     expect(seen).toEqual({ 'kr-google-x': 'ok', 'kr-press-y': 'timeout' });

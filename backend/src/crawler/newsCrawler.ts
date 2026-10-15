@@ -10,7 +10,10 @@ import * as path from 'path';
 import { Article } from '../articles/article.entity';
 import { RejectedArticle } from '../articles/rejected_article.entity';
 import { buildSources, SourceConfig, CategoryName, adPenaltyKeywords, SourceType, defaultGrade } from './sourceConfig';
-import { summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats, Confidence, DEEPSEEK_MODEL } from './deepseek_summary';
+import {
+  summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats, Confidence, DEEPSEEK_MODEL,
+  deepseekDown, DEEPSEEK_DOWN_AFTER, DEEPSEEK_TIMEOUT_MS,
+} from './deepseek_summary';
 import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extractor';
 import { isValidArticleImageUrl } from './image_validation';
 import { matchesFieldKeywords, hasFieldKeyword, isIncidentReport, normalize } from './field_filter';
@@ -143,6 +146,7 @@ let crawlStats = {
   quarantined: 0,       // v5.4: rejected_articles 격리 저장
   crossMediaDupSkip: 0, // v5.4.1 3-2: 크로스매체 동일 사건 중복 스킵
   sameArticleSkip: 0, // NEWS-Q6 ■2: 같은 기사(정규화 URL · 같은 매체 24h) 스킵
+  deepseekDownLogged: false, // NEWS-Q6 ⓑ′: DeepSeek 연결 실패 연속 → 이번 실행 판정 멈춤 로그 1회
   dateParseFail: 0,     // v5.4.1 3-3: published_at 파싱 실패(now 대체)
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
@@ -441,6 +445,14 @@ function sourceStat(id: string): SourceRunStat {
 /** 하루 DeepSeek 상한(■2) — 새 기사를 시작할 수 있으면 true, 아니면 그날 중단 로그 1회. */
 function deepseekRoomLeft(): boolean {
   if (!deepseekAvailable) return true;
+  if (deepseekDown()) {
+    if (!crawlStats.deepseekDownLogged) {
+      crawlStats.deepseekDownLogged = true;
+      console.warn(`  ⛔ DeepSeek 연결 실패 ${DEEPSEEK_DOWN_AFTER}회 연속(요청당 ${DEEPSEEK_TIMEOUT_MS / 1000}초) — 이번 실행 남은 후보는 판정 없이 건너뜀(거부 기록 0)`);
+    }
+    crawlStats.capSkip++;
+    return false;
+  }
   if (RUN.budget.canStart(deepseekStats.calls)) return true;
   if (RUN.budget.markExhausted()) {
     console.warn(`  ⛔ DeepSeek 하루 상한 도달(상한 ${RUN.budget.cap} · 오늘 앞 실행 ${RUN.budget.usedBefore} · 이번 ${deepseekStats.calls}) — 남은 후보는 판정 없이 건너뜀`);
@@ -772,12 +784,15 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         continue;
       }
       if (!deepseekRoomLeft()) break;
+      // NEWS-Q6 ⓑ′: 방송 몫 시간은 채널 사이만이 아니라 판정 하나마다 본다(10-15: 한 채널 안에서 62분)
+      if (Date.now() > deadline) break;
       const callsBefore = deepseekStats.calls;
       const provCategory = classifyCategory(item.title, item.description, DEFAULT_CATEGORY);
       const pack = await summarizeKoreanDeepSeek(item.title, item.description || item.title, {
         translate: false, category: provCategory,
       });
       stat.calls += deepseekStats.calls - callsBefore;
+      if (deepseekDown() && pack?.categoryFit === undefined) break;
       const judgment = pack
         ? { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence }
         : null;
@@ -1211,6 +1226,8 @@ async function judgeSource(
       const provCategory = classifyCategory(rawTitle, rawContent, normalizeCategory(conf.category));
       crawlStats.judgedForCluster++;
       const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
+      // NEWS-Q6 ⓑ′: DeepSeek 가 멈춰 판정이 없으면 거부로 남기지 않는다(다음 실행이 다시 본다)
+      if (deepseekDown() && pack.categoryFit === undefined) break;
 
       // v5.4 2-2 · NEWS-Q2 ■6: 관문 두 층(publish / archive / reject). DeepSeek 가용 시에만 엄격 적용.
       let tier: Tier = 'publish';
@@ -1455,6 +1472,7 @@ async function finalizeStatoryCandidate(
 
   const provCategory = classifyCategory(rawTitle, rawContent, partial.category);
   const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
+  if (deepseekDown() && pack.categoryFit === undefined) return null;
   // v5.4 2-2 · NEWS-Q2 ■6: 관문 두 층. DeepSeek 가용 시에만 엄격 적용.
   let tier: Tier = 'publish';
   if (deepseekAvailable) {
