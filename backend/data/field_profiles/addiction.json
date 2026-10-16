@@ -43,6 +43,16 @@
         "정부",
         "위원회",
         "입법",
+        "담배",
+        "흡연",
+        "니코틴",
+        "전자담배",
+        "금연",
+        "tobacco",
+        "smoking",
+        "nicotine",
+        "vaping",
+        "e-cigarette",
         "legislation",
         "regulation",
         "policy",
@@ -205,7 +215,11 @@
         "베팅사이트",
         "도박판",
         "음주운전",
-        "만취운전"
+        "만취운전",
+        "담배",
+        "흡연",
+        "니코틴",
+        "전자담배"
       ],
       "en": [
         "addiction",
@@ -281,7 +295,10 @@
         "alcohol-related",
         "minimum unit pricing",
         "binge drinking",
-        "sobriety"
+        "sobriety",
+        "smoking",
+        "nicotine",
+        "smoking cessation"
       ],
       "_comment_es_pt": "NEWS-Q6 ■1: 세계 신문 스페인어 8·포르투갈어 2 피드용(전에는 ko·en 만 읽어 이 피드들은 늘 0).",
       "es": [
@@ -811,6 +828,17 @@
         "source_name": "Google News (KR)"
       },
       {
+        "id": "kr-google-nicotine",
+        "lang": "ko",
+        "category": "중독정책",
+        "priority": 63,
+        "outlet_id": "google-kr-nicotine",
+        "url": "https://news.google.com/rss/search?q=\"니코틴\"+OR+\"흡연+예방\"+OR+\"금연+치료\"&hl=ko&gl=KR&ceid=KR:ko",
+        "max_items": 20,
+        "region": "kr",
+        "source_name": "Google News (KR)"
+      },
+      {
         "id": "kr-google-dopamine",
         "lang": "ko",
         "category": "게임·디지털중독",
@@ -917,6 +945,17 @@
         "priority": 77,
         "outlet_id": "google-en-vaping",
         "url": "https://news.google.com/rss/search?q=\"vaping\"+OR+\"e-cigarette\"&hl=en-US&gl=US&ceid=US:en",
+        "max_items": 20,
+        "source_name": "Google News (EN)"
+      },
+      {
+        "id": "en-google-smoking-cessation",
+        "lang": "en",
+        "region": "global",
+        "category": "중독정책",
+        "priority": 77,
+        "outlet_id": "google-en-smoking-cessation",
+        "url": "https://news.google.com/rss/search?q=\"smoking+cessation\"+OR+\"quit+smoking\"+OR+\"nicotine+pouches\"&hl=en-US&gl=US&ceid=US:en",
         "max_items": 20,
         "source_name": "Google News (EN)"
       },
@@ -1154,6 +1193,8 @@
         "도파민",
         "흡연",
         "담배",
+        "니코틴",
+        "금연",
         "의존",
         "단주",
         "재활"
@@ -1162,7 +1203,14 @@
         "재활용"
       ]
     },
-    "statory_query": "중독"
+    "statory_query": "중독",
+    "missed_day": {
+      "_comment": "NEWS-Q7 ■3: 기사 단계를 못 돈 실행이 있으면 다음 실행이 국내지마다 구글뉴스 site: 날짜 검색을 1회 읽는다(국내지 RSS 는 몇 시간 치만 들고 있음).",
+      "query": "(중독 OR 마약 OR 도박 OR 알코올 OR 음주 OR 금연 OR 흡연 OR 담배)",
+      "max_items": 20,
+      "max_days": 3,
+      "locale": "hl=ko&gl=KR&ceid=KR:ko"
+    }
   },
   "messages": {
     "notify_prefix": "중독뉴스"

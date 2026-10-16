@@ -51,6 +51,7 @@ import {
   emptyProgress, lastRunLastSourceId, planSources, runSources,
 } from './crawl_schedule';
 import { PoolData, backfillClusters, loadClusterPool, savedPct } from './event_cluster_store';
+import { missedDaySources, planMissedDay, recentRunBriefs } from './missed_day';
 
 // NEWS-Q2 ■1: 분야 설정(FIELD_PROFILE, 기본 = data/field_profiles/DEFAULT). 없으면 여기서 시끄럽게 실패한다.
 const PROFILE = fieldProfile();
@@ -1908,7 +1909,19 @@ async function main() {
   progress.blockedSkipped = plan.skipped.map((s) => s.id);
   progress.blockedFromHost = crawlSources.filter((s) => s.blocked?.kind === 'blocked_from_host').length;
   const retryIds = new Set(plan.retrying.map((s) => s.id));
-  const order = plan.order;
+  let order = plan.order;
+  // NEWS-Q7 ■3: 놓친 날 되짚기 1회 — 기사 단계를 못 돈 실행이 있으면 국내지 site: 날짜 검색을 맨 앞에(LLM 0 · 중복 검사·관문 그대로)
+  const missedCfg = PROFILE.sources.missed_day;
+  if (missedCfg?.query && RUN.flags.crawlRuns && !narrowed) {
+    const missed = planMissedDay(await recentRunBriefs(q, PROFILE.field), Date.now(), missedCfg.max_days ?? 3);
+    if (missed) {
+      const extra = missedDaySources(order, missed, missedCfg);
+      progress.missedLookback = { ...missed, sources: extra.length };
+      progress.total += extra.length;
+      order = [...extra, ...order];
+      console.log(`🩹 놓친 날 되짚기: 결손 실행 ${missed.covers.join(', ')} → 국내지 ${extra.length}곳 site: 검색 after:${missed.after} before:${missed.before}`);
+    }
+  }
   console.log(
     `📡 Crawling ${order.length} sources (동시 읽기 ${SOURCE_CONCURRENCY} · 소스 상한 ${SOURCE_CAP_MS / 1000}초 · 구글 검색 ${GOOGLE_SEARCH_CAP_MS / 1000}초 · 전체 ${Math.round(CRAWL_TIMEOUT_MS / 60000)}분)` +
     ` · 시작 ${plan.startIndex + 1}번째(${plan.startId ?? '-'})${lastId ? ` ← 지난 실행 끝 ${lastId}` : ''}`,

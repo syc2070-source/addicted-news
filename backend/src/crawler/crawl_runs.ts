@@ -44,6 +44,8 @@ export interface RunProgressLike {
   /** NEWS-Q6 ■3·■4: 구글 검색 피드 상한(초) · 방송 되짚기 기록 */
   googleCapSec?: number;
   broadcastApi?: object;
+  /** NEWS-Q7 ■3: 놓친 날 되짚기 기록(covers · after · before · sources) */
+  missedLookback?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';

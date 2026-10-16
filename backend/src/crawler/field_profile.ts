@@ -96,6 +96,8 @@ export interface FieldProfile {
     academic: ProfileFeed[];
     broadcast: { file: string; keywords: string[]; false_friends: string[] };
     statory_query: string;
+    /** NEWS-Q7 ■3: 놓친 날 되짚기(국내지 구글 site: 날짜 검색) — 없으면 끔 */
+    missed_day?: { query: string; max_items?: number; max_days?: number; locale?: string };
   };
   messages: { notify_prefix: string };
   smoke_samples: Array<{ label: string; title: string; content: string; category: string }>;
@@ -166,6 +168,7 @@ function withDefaults(p: any): FieldProfile {
       academic: s.academic || [],
       broadcast: { file: '', keywords: [], false_friends: [], ...(s.broadcast || {}) },
       statory_query: s.statory_query || '',
+      missed_day: s.missed_day && typeof s.missed_day.query === 'string' ? s.missed_day : undefined,
     },
     messages: { notify_prefix: p.site_name, ...(p.messages || {}) },
     smoke_samples: p.smoke_samples || [],

@@ -239,6 +239,8 @@ export interface RunProgress {
   alerts?: Array<{ code: string; value: number | string; limit?: number }>;
   /** NEWS-Q6 ■4: 방송 되짚기(YouTube Data API) 기록 */
   broadcastApi?: BroadcastApiRecord;
+  /** NEWS-Q7 ■3: 놓친 날 되짚기(이번 실행이 메운 결손 실행 · 범위 · 더한 소스 수) */
+  missedLookback?: { covers: string[]; after: string; before: string; sources: number };
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {
