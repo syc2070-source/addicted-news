@@ -1,0 +1,31 @@
+NEWS-Q7 지시서 — Q6 기사 단계 첫 실전 읽기 · 담배 핵심어 · 어제 결손 메움 · npm audit (중독뉴스 · 2026-10-16 금)
+
+위치판
+
+저장소 D:\addicted-news · main = 6ddbdbc(Q6 보고서) ← fef1f05(ⓑ″ · DeepSeek 60초·재시도 1·연속 3 실패 차단 · 13:11 배포) · health broadcast.api: on(오너 08:54 열쇠 · 머리 6ddbdbcc 로 재배포). 끝난 것 Q1~Q6.
+오늘 12:00 = Q6 기사 단계 첫 실전(세계 en_patterns 보강 · URL 정규화 중복 · 구글 120초 · 되짚기 Data API 첫 실행) — 결과 미측 = 이 판 ■0. 어제 12:00 은 저장 0(결손).
+실행자 · 가지 claude/news-q7 · 오너 액션 0.
+
+목표 세 문장
+
+오늘 12:00 실전을 숫자로 읽고(세계 후보/저장 · 120초 끊김 · 429 · 되짚기 · 경보 · 어제 결손 메움) 어긋난 것은 오늘 고친다.
+담배·흡연·니코틴·전자담배·금연이 중독 분야로 들어오게 분야 설정 파일을 보강한다(관문 프롬프트 변경 0 · 오탐 표본 조건).
+의존 패키지 보안 알림(critical 4 · high 46)을 운영 경로 기준으로 가려 lockfile 을 갱신한다(시험 전량 통과 조건).
+
+규율: 오너에게 묻지 말고 끝까지 계속 진행 · 오너 액션 0 · 열쇠 값 0 · .env* 0 · production DB 쓰기 0(스키마 0) · 지움 0 · 하드 삭제 0 · DeepSeek 400 · 관문 프롬프트 변경 0 · cron 변경 0 · Render 설정 화면 0 · 설치 0(npm audit fix 손 실행 0 · lockfile 은 갱신 범위 가린 뒤) · Edit/Write · 명령 하나씩 · git add 파일별 · rebase/force 0 · push 3j · ⓑ push 는 13:00 뒤(지금) 또는 내일 11:40 전.
+
+■0 저장 + 12:00 실측(읽기만): 지시서 docs/reports/202610/NEWS-Q7_instruction.txt ⓐ · /api/health · /api/health/runs?limit=3 → 표(10-14 · 10-15 · 10-16) = 소요 · progress · 소스 닿음/못 닿음/timeouts(구글 120초 끊김 수) · 방송 되짚기(mode api · items · newItems · keywordPass · units · quotaStopped) · 후보 · urlResolveFail(429) · DeepSeek 호출·차단 여부 · 저장/보관/거부 · 세계 후보/저장 · 묶음 상속 % · 같은 기사 짝 · 경보 · 오늘 저장 중 담배 관련 제목·tier ≤5 · 어제 결손: published_ts 10-15 인 저장 수 · 직접 피드(국내지·기관·학술)에서 어제 치가 몇 건 들어왔는지.
+
+■1 〔마디 2〕 담배 핵심어: field_profiles/addiction.json 핵심어·관문 사전 ko/en 에 담배·흡연·니코틴·전자담배·금연 / tobacco · smoking · nicotine · vaping · e-cigarette · smoking cessation · 구글뉴스 검색어 ko 1·en 1 추가 · 어제·오늘 떨어진 담배 기사 표본으로 전/후 통과 수 · 오탐 표본 20(통과했지만 무관) 늘지 않음 · 시험 3.
+
+■2 〔마디 1〕 12:00 어긋남 수리: 429 ≥10 이면 구글 링크 풀기 동시 4→2 · 120초 끊김 여전히 많으면 구글 피드만 항목 상한(최근 50) · 되짚기 할당·오류 · 경보 칸 실제 작동 · 시험 · ⓑ′ push(13:00 뒤).
+
+■3 〔마디 1〕 어제 결손 메움: 구글 검색 피드 when:7d 가 10-15 기사를 얼마나 메웠는지 · 직접 피드가 놓친 날은 「놓친 날 되짚기 1회」(다음 실행에 결손 날짜 범위를 한 번 더 읽음 · LLM 0 · 중복 검사 그대로) · 시험 2.
+
+■4 〔마디 3〕 npm audit: npm audit --json 읽기 → critical·high 를 운영 경로(수집기·API 런타임) / 개발용·간접으로 가름 → 운영 경로 것만 lockfile 갱신(semver 범위 안 · 큰 판 올림 0) · 전/후 수 · 시험 전량 통과 · 안 되는 것은 사유 · nest build ✓.
+
+■5 시험·배포·보고: jest 216+ · build · tsc · push ⓑ(13:00 뒤) · health 25분 · 보고서 docs/reports/202610/NEWS-Q7_<MMDD>.txt(■0 표 · 전/후 · 담배 표본 · audit 표 · 건너뜀+사유 · 정직 표기) ⓒ.
+
+하지 않는 것: cron 2회(오너 · 10-21) · SQL · 하드 삭제·보존 정책 · frontend-v2 · 업로더(재인증은 오너 줄 따로) · 다른 저장소 · .env · 관문 프롬프트 · Render 설정 화면.
+
+손님에게 달라지는 것: 담배·흡연 소식이 들어옴 · 어제 빠진 소식이 메워짐 · 세계 소식 실제 양(실측). LLM 의존: 0(핵심어·되짚기·audit 전부 규칙).
