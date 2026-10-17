@@ -67,6 +67,11 @@ export interface FieldProfile {
   keywords: {
     strong: LangKeys;
     negative: LangKeys;
+    /**
+     * NEWS-Q8 ■1: 한글 제외어는 낱말 경계에서만 맞춘다(「출입금지」 속 「입금」은 제외어 아님). 없으면 옛 부분문자열 맞춤.
+     * particles = 뒤에 붙어도 경계로 치는 조사 · anywhere = 경계 없이도 제외할 낱말 · allow_long = 제외어를 품어도 지나가는 긴 낱말.
+     */
+    negative_boundary?: { particles?: string[]; anywhere?: string[]; allow_long?: string[] };
     core: string[];
     ad_penalty: string[];
     dup_stopwords: string[];

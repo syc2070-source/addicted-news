@@ -31,6 +31,7 @@ import {
   DAILY_UNIT_CAP, QuotaGuard, SEARCH_UNITS, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackChannel, planChannel,
   rss404Outlets, youtubeApiKey,
 } from './youtube_api';
+import { feedStatusOf } from './broadcast_feeds';
 import { probeSchema, SchemaFlags } from './schema_probe';
 import { fieldProfile, SourceGrade } from './field_profile';
 import { fetchFeed } from './feed_fetch';
@@ -726,7 +727,9 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     });
     let items: BroadcastItem[] = [];
     let rssFailed: string | null = null;
-    if (plan.rss || plan.reason === 'api_only_rss404') {
+    let apiError: { status: number | null; reason: string } | null = null;
+    const rssTried = plan.rss || plan.reason === 'api_only_rss404';
+    if (rssTried) {
       // RSS 가 지난 실행에 404 였고 열쇠가 있으면 한 번만 물어본다(10회 재시도 대신) — 살아나면 다시 RSS
       try {
         items = await fetchBroadcastItems(source, 15, plan.rss ? undefined : 1);
@@ -750,6 +753,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       if (lb.units > 0) api.channels.push(source.outletId);
       if (plan.reason === 'api_only_rss404') api.apiOnly.push(source.outletId);
       if (lb.error) {
+        apiError = lb.error;
         api.errors.push(`${source.outletId}:${lb.error.status ?? ''}:${lb.error.reason}`);
         console.warn(`  ├─ [${source.program}] ⚠️ 되짚기 실패 [${lb.error.status ?? '-'}] ${lb.error.reason}`);
       }
@@ -761,6 +765,12 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         if (passesBroadcastKeywordGate(it)) api.keywordPass++;
       }
       console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${lb.items.filter((it) => !rssIds.has(it.videoId)).length}) · ${lb.units}단위`);
+    }
+    // NEWS-Q8 ■2: 채널별 마지막 읽기 결과(health broadcast.feeds[])
+    if (RUN.progress) {
+      (RUN.progress.broadcastFeeds ||= []).push(feedStatusOf({
+        id: source.outletId, plan, hasKey: !!apiKey, rssTried, rssFailed, apiError, items: items.length, at: new Date(),
+      }));
     }
     if (rssFailed && !items.length) {
       stat.failed = rssFailed;

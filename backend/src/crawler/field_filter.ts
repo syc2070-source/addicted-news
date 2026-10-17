@@ -2,18 +2,34 @@
 // NEWS-Q2 ■1: 분야 핵심어 거름망. 낱말 목록·사건 패턴·정책 맥락은 분야 설정(field_profiles/*.json)에서 읽는다.
 import { fieldProfile, flattenLang } from './field_profile';
 
-type Loaded = { strong: string[]; negative: string[]; incident: RegExp[]; policy: string[] };
+/** NEWS-Q8 ■1: 제외어 낱말 경계 설정(분야 설정 keywords.negative_boundary · 없으면 null = 옛 부분문자열). */
+export type NegativeBoundary = { particles: string[]; anywhere: Set<string>; allowLong: string[] };
+
+type Loaded = { strong: string[]; negative: string[]; incident: RegExp[]; policy: string[]; boundary: NegativeBoundary | null };
 
 let cached: { field: string; data: Loaded } | null = null;
+
+function lowerList(xs: unknown): string[] {
+  return Array.isArray(xs) ? xs.map((x) => String(x || '').toLowerCase().trim()).filter(Boolean) : [];
+}
 
 function loadKeywords(): Loaded {
   const p = fieldProfile();
   if (cached && cached.field === p.field) return cached.data;
+  const nb = p.keywords.negative_boundary;
   const data: Loaded = {
     strong: flattenLang(p.keywords.strong),
     negative: flattenLang(p.keywords.negative),
     incident: p.keywords.incident_patterns.map((s) => new RegExp(s)),
     policy: p.keywords.policy_context,
+    boundary: nb
+      ? {
+          // 긴 조사(에서·으로)를 먼저 맞춘다
+          particles: lowerList(nb.particles).sort((a, b) => b.length - a.length),
+          anywhere: new Set(lowerList(nb.anywhere)),
+          allowLong: lowerList(nb.allow_long),
+        }
+      : null,
   };
   cached = { field: p.field, data };
   return data;
@@ -41,6 +57,51 @@ function textHasKeyword(text: string, keyword: string): boolean {
   }
   const re = new RegExp(`(?:^|[^a-z0-9])${escapeRegex(key)}(?:[^a-z0-9]|$)`, 'i');
   return re.test(text);
+}
+
+const HANGUL_SYLLABLE = /[가-힣]/;
+
+function isHangul(ch: string): boolean {
+  return !!ch && HANGUL_SYLLABLE.test(ch);
+}
+
+/**
+ * NEWS-Q8 ■1: 한글 낱말이 경계에서 나오는가.
+ * 앞 = 문장 시작 또는 한글 음절이 아닌 글자(공백·문장부호·숫자·영문) ·
+ * 뒤 = 끝 · 한글 음절이 아닌 글자 · 또는 조사 하나(그 뒤가 다시 한글 음절이 아닐 때).
+ */
+export function hasKoreanWordAt(text: string, key: string, particles: string[]): boolean {
+  if (!key) return false;
+  let i = text.indexOf(key);
+  while (i !== -1) {
+    if (!isHangul(text.charAt(i - 1))) {
+      const rest = text.slice(i + key.length);
+      if (!isHangul(rest.charAt(0))) return true;
+      if (particles.some((pt) => rest.startsWith(pt) && !isHangul(rest.charAt(pt.length)))) return true;
+    }
+    i = text.indexOf(key, i + 1);
+  }
+  return false;
+}
+
+/** 제외어 맞춤 — 경계 설정이 있으면 한글 제외어는 낱말 경계에서만(anywhere 는 부분문자열 그대로). 영문은 옛 규칙. */
+function textHasNegative(text: string, keyword: string, boundary: NegativeBoundary | null): boolean {
+  const key = (keyword || '').toLowerCase().trim();
+  if (!boundary || !key || !/[가-힣]/.test(key) || boundary.anywhere.has(key)) return textHasKeyword(text, key);
+  return hasKoreanWordAt(text, key, boundary.particles);
+}
+
+/** 허용 긴 낱말을 공백으로 지운 글(제외어 맞춤 전용). */
+function withoutAllowedLong(text: string, boundary: NegativeBoundary | null): string {
+  if (!boundary || !boundary.allowLong.length) return text;
+  return boundary.allowLong.reduce((t, w) => t.split(w).join(' '), text);
+}
+
+/** 이 글을 막는 제외어(없으면 null) — 실측·시험용으로도 쓴다. */
+export function negativeHit(title: string, body: string): string | null {
+  const { negative, boundary } = loadKeywords();
+  const text = withoutAllowedLong(`${title || ''} ${body || ''}`.toLowerCase(), boundary);
+  return negative.find((k) => textHasNegative(text, k, boundary)) ?? null;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -124,11 +185,10 @@ export function isIncidentReport(title: string, _body?: string): boolean {
 export function matchesFieldKeywords(title: string, body: string, opts: { allowIncident?: boolean } = {}): boolean {
   const text = `${title || ''} ${body || ''}`.toLowerCase();
   if (!text.trim()) return false;
-  const { strong, negative } = loadKeywords();
+  const { strong } = loadKeywords();
   const strongHit = strong.some((k) => textHasKeyword(text, k));
   if (!strongHit) return false;
-  const negHit = negative.some((k) => textHasKeyword(text, k));
-  if (negHit) return false;
+  if (negativeHit(title, body) !== null) return false;
   // v5.2 #1: 단순 사건사고(정책·치료 맥락 없는) 제외
   // NEWS-Q2 ■6: allowIncident=true 면 통과시켜 DeepSeek 판정 뒤 보관(archive)으로 보낸다(tier 열 있을 때만).
   if (!opts.allowIncident && isIncidentReport(title, body)) return false;

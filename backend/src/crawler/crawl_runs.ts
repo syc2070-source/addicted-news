@@ -2,6 +2,8 @@
 // crawl_runs.ts (NEWS-Q2 ■8) — 실행마다 한 행 집계(crawl_runs 표 · 묶음 SQL 2).
 // 표가 없으면 기록하지 않는다(로그에만). 읽기 실패는 조용히 null/[].
 // ============================================================
+import { BroadcastFeedStatus, broadcastFeedsOf } from './broadcast_feeds';
+
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
 export interface SourceRunStat {
@@ -46,6 +48,8 @@ export interface RunProgressLike {
   broadcastApi?: object;
   /** NEWS-Q7 ■3: 놓친 날 되짚기 기록(covers · after · before · sources) */
   missedLookback?: object;
+  /** NEWS-Q8 ■2: 방송 채널별 마지막 읽기 결과 */
+  broadcastFeeds?: BroadcastFeedStatus[];
 }
 
 export const RUN_PROGRESS_KEY = '__run';
@@ -147,6 +151,8 @@ export interface RunPublic {
   sources: PerSourceDigest;
   /** NEWS-Q5 ■0: 그 실행 동안 격리된 거부 기사의 사유 분포(rejected_articles · 사유 앞머리별 수 · 표 없으면 null) */
   rejectReasons: Record<string, number> | null;
+  /** NEWS-Q8 ■2: 방송 채널별 마지막 읽기 결과(ok/404/500/api_quota · 읽은 길 api/rss · 항목 수 · 시각) */
+  broadcast: { feeds: BroadcastFeedStatus[] };
 }
 
 export interface PerSourceDigest {
@@ -191,13 +197,17 @@ export function sourceGroupOf(id: string): string {
 }
 
 /** per_source jsonb → 순서·상한 기록 + 숫자 요약(소스 id 와 숫자만). */
-export function digestPerSource(raw: unknown): { progress: RunProgressLike | null; sources: PerSourceDigest } {
-  let ps: Record<string, any> = {};
+export function parsePerSource(raw: unknown): Record<string, any> {
   try {
-    ps = (typeof raw === 'string' ? JSON.parse(raw) : raw) || {};
+    const ps: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return ps && typeof ps === 'object' ? (ps as Record<string, any>) : {};
   } catch {
-    ps = {};
+    return {};
   }
+}
+
+export function digestPerSource(raw: unknown): { progress: RunProgressLike | null; sources: PerSourceDigest } {
+  const ps = parsePerSource(raw);
   const progress = ps[RUN_PROGRESS_KEY] && typeof ps[RUN_PROGRESS_KEY] === 'object' ? (ps[RUN_PROGRESS_KEY] as RunProgressLike) : null;
   let broadcastChannelsRead = 0;
   let broadcastItems = 0;
@@ -267,21 +277,26 @@ export async function recentCrawlRuns(
       const s = new Date(r.started_at);
       const f = r.finished_at ? new Date(r.finished_at) : null;
       const failed = json(r.failed_feeds);
+      const failedList: string[] = Array.isArray(failed) ? failed.map((x: unknown) => String(x)) : [];
       const rejectReasons = opts.rejectReasons && f ? await rejectReasonsBetween(query, s, new Date(f.getTime() + 60_000)) : null;
+      const digest = digestPerSource(r.per_source);
       out.push({
         startedAt: s.toISOString(),
         finishedAt: f ? f.toISOString() : null,
         durationSec: f ? Math.round((f.getTime() - s.getTime()) / 1000) : null,
         timedOut: !!r.timed_out,
         sourcesTotal: num(r.sources_total), feedsOk: num(r.feeds_ok), feedsFailed: num(r.feeds_failed),
-        failedFeeds: Array.isArray(failed) ? failed.map((x: unknown) => String(x).slice(0, 160)) : [],
+        failedFeeds: failedList.map((x) => x.slice(0, 160)),
         itemsSeen: num(r.items_seen), candidates: num(r.candidates), dupSkipped: num(r.dup_skipped),
         deepseekCalls: num(r.deepseek_calls), costUsd: num(r.cost_usd_est),
         saved: num(r.saved), archived: num(r.archived), rejected: num(r.rejected),
         urlBackfill: json(r.url_backfill),
         clusterStats: json(r.cluster_stats),
-        ...digestPerSource(r.per_source),
+        ...digest,
         rejectReasons,
+        broadcast: {
+          feeds: broadcastFeedsOf({ startedAt: s.toISOString(), failedFeeds: failedList, progress: digest.progress, perSource: parsePerSource(r.per_source) }),
+        },
       });
     }
     return out;

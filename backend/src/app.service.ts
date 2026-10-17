@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import type { BroadcastFeedStatus } from './crawler/broadcast_feeds';
 import { lastCrawlRun, LastRunPublic, recentCrawlRuns, RunPublic } from './crawler/crawl_runs';
 import { alertFactsOf, evaluateRunAlerts, RunAlert } from './crawler/run_alerts';
 import { columnExists, tableExists } from './crawler/schema_probe';
@@ -28,6 +29,8 @@ export type HealthBroadcast = {
     mode: 'on' | 'off'; items: number | null; newItems: number | null; keywordPass: number | null;
     units: number | null; quotaStopped: boolean;
   } | null;
+  /** NEWS-Q8 ■2: 마지막 실행의 방송 채널별 읽기 결과(ok/404/500/api_quota · via api/rss · 항목 · 시각 · 기록 없으면 null) */
+  feeds: BroadcastFeedStatus[] | null;
 };
 
 /** 설정(피드 파일·분야 설정)의 막힌 피드 수 — 한 번만 센다. */
@@ -116,7 +119,9 @@ export class AppService {
     return value;
   }
 
-  private alertsCache: { at: number; value: RunAlert[] | null; api: Record<string, unknown> | null } | null = null;
+  private alertsCache: {
+    at: number; value: RunAlert[] | null; api: Record<string, unknown> | null; feeds: BroadcastFeedStatus[] | null;
+  } | null = null;
 
   /**
    * NEWS-Q5 ■1: 마지막 실행의 경보. 수집기가 저장한 per_source.__run.alerts 가 있으면 그대로,
@@ -126,6 +131,7 @@ export class AppService {
     if (this.alertsCache && now - this.alertsCache.at < LAST_RUN_TTL_MS) return this.alertsCache.value;
     let value: RunAlert[] | null = null;
     let api: Record<string, unknown> | null = null;
+    let feeds: BroadcastFeedStatus[] | null = null;
     try {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
@@ -135,12 +141,13 @@ export class AppService {
           value = Array.isArray(stored) ? (stored as RunAlert[]) : evaluateRunAlerts(runs.map(alertFactsOf));
           const a = runs[0]?.progress?.broadcastApi;
           api = a && typeof a === 'object' ? (a as Record<string, unknown>) : null;
+          feeds = runs[0]?.broadcast?.feeds ?? null;
         }
       }
     } catch {
       value = null;
     }
-    this.alertsCache = { at: now, value, api };
+    this.alertsCache = { at: now, value, api, feeds };
     return value;
   }
 
@@ -158,6 +165,7 @@ export class AppService {
         ? { mode: a.mode === 'on' ? 'on' : 'off', items: n('items'), newItems: n('newItems'), keywordPass: n('keywordPass'),
           units: n('units'), quotaStopped: a.quotaStopped === true }
         : null,
+      feeds: this.alertsCache?.feeds ?? null,
     };
   }
 

@@ -30,7 +30,8 @@ describe('AppController', () => {
       expect(health.lastRun).toBeNull();
       expect(health.alerts).toBeNull();
       // NEWS-Q6 ■4: 열쇠는 on|off 로만(값 0) · 기록 없으면 lastRun null
-      expect(health.broadcast).toEqual({ api: process.env.YOUTUBE_API_KEY ? 'on' : 'off', lastRun: null });
+      // NEWS-Q8 ■2: 채널별 읽기 결과(feeds) — 기록 없으면 null
+      expect(health.broadcast).toEqual({ api: process.env.YOUTUBE_API_KEY ? 'on' : 'off', lastRun: null, feeds: null });
       expect(JSON.stringify(health)).not.toContain(process.env.YOUTUBE_API_KEY || '\u0000none');
       expect(health.schema).toEqual({ cluster_columns: null });
       // NEWS-Q4 ■2: 설정의 막힌 피드(Render 망에서만 4 + 어디서나 403 SAMHSA 1) · 대체 검색 피드 5

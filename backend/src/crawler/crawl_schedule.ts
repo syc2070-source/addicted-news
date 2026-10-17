@@ -9,6 +9,7 @@
 //    원 피드를 다시 해 본다. 그 밖의 날은 건너뛰고 대체 피드(구글뉴스 site: 검색)가 읽는다.
 // ============================================================
 import type { BroadcastApiRecord } from './youtube_api';
+import type { BroadcastFeedStatus } from './broadcast_feeds';
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
@@ -241,6 +242,8 @@ export interface RunProgress {
   broadcastApi?: BroadcastApiRecord;
   /** NEWS-Q7 ■3: 놓친 날 되짚기(이번 실행이 메운 결손 실행 · 범위 · 더한 소스 수) */
   missedLookback?: { covers: string[]; after: string; before: string; sources: number };
+  /** NEWS-Q8 ■2: 방송 채널별 마지막 읽기 결과(health broadcast.feeds[]) */
+  broadcastFeeds?: BroadcastFeedStatus[];
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {
