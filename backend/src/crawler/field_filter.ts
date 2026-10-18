@@ -5,7 +5,42 @@ import { fieldProfile, flattenLang } from './field_profile';
 /** NEWS-Q8 ■1: 제외어 낱말 경계 설정(분야 설정 keywords.negative_boundary · 없으면 null = 옛 부분문자열). */
 export type NegativeBoundary = { particles: string[]; anywhere: Set<string>; allowLong: string[] };
 
-type Loaded = { strong: string[]; negative: string[]; incident: RegExp[]; policy: string[]; boundary: NegativeBoundary | null };
+/** NEWS-Q9 ■1: 조건부 strong 핵심어 하나(분야 설정 keywords.strong_context). */
+export type StrongContext = {
+  skipAttached: string[];
+  skipNextWord: string[];
+  keepAttached: string[];
+  keepNextWord: string[];
+  leadAny: string[];
+  leadChars: number;
+};
+
+type Loaded = {
+  strong: string[];
+  negative: string[];
+  incident: RegExp[];
+  policy: string[];
+  boundary: NegativeBoundary | null;
+  context: Map<string, StrongContext>;
+};
+
+function loadContext(raw: unknown): Map<string, StrongContext> {
+  const out = new Map<string, StrongContext>();
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (k.startsWith('_') || !v || typeof v !== 'object') continue;
+    const c = v as Record<string, unknown>;
+    out.set(k.toLowerCase().trim(), {
+      skipAttached: lowerList(c.skip_attached),
+      skipNextWord: lowerList(c.skip_next_word),
+      keepAttached: lowerList(c.keep_attached),
+      keepNextWord: lowerList(c.keep_next_word),
+      leadAny: lowerList(c.lead_any),
+      leadChars: Number(c.lead_chars) > 0 ? Number(c.lead_chars) : 300,
+    });
+  }
+  return out;
+}
 
 let cached: { field: string; data: Loaded } | null = null;
 
@@ -30,6 +65,7 @@ function loadKeywords(): Loaded {
           allowLong: lowerList(nb.allow_long),
         }
       : null,
+    context: loadContext(p.keywords.strong_context),
   };
   cached = { field: p.field, data };
   return data;
@@ -102,6 +138,65 @@ export function negativeHit(title: string, body: string): string | null {
   const { negative, boundary } = loadKeywords();
   const text = withoutAllowedLong(`${title || ''} ${body || ''}`.toLowerCase(), boundary);
   return negative.find((k) => textHasNegative(text, k, boundary)) ?? null;
+}
+
+/** 제목 + 본문 첫 문단(줄바꿈으로 가른 문단을 80자가 될 때까지 · 상한 chars). 스니펫처럼 줄바꿈이 없으면 앞 chars 자. */
+function leadOf(title: string, body: string, chars: number): string {
+  let lead = '';
+  for (const para of (body || '').split('\n')) {
+    lead = lead ? `${lead} ${para}` : para;
+    if (lead.trim().length >= 80) break;
+  }
+  return `${title || ''} ${lead.slice(0, chars)}`.toLowerCase();
+}
+
+/** 낱말 머리에서 나오는가(앞이 한글 음절이 아님 · 「술」은 되고 「기술」은 아님). */
+function hasWordStart(text: string, w: string): boolean {
+  let i = text.indexOf(w);
+  while (i !== -1) {
+    if (!isHangul(text.charAt(i - 1))) return true;
+    i = text.indexOf(w, i + 1);
+  }
+  return false;
+}
+
+/**
+ * NEWS-Q9 ■1: 조건부 핵심어 — 안 세는 꼴(금주의 · 금주 이슈)을 뺀 자리가 하나라도 있고,
+ * 제목·첫 문단에 맥락 낱말(술·알코올·음주·단주·절주)이 있을 때만 핵심어. 굳은 꼴(keep_*)은 맥락 없이도 핵심어.
+ */
+export function contextKeywordHit(title: string, body: string, key: string, c: StrongContext): boolean {
+  const text = `${title || ''} ${body || ''}`.toLowerCase();
+  let i = text.indexOf(key);
+  let found = false;
+  while (i !== -1) {
+    const rest = text.slice(i + key.length);
+    const next = /^\s/.test(rest) ? rest.slice(1) : rest;
+    const skip = c.skipAttached.some((s) => rest.startsWith(s)) || c.skipNextWord.some((w) => next.startsWith(w));
+    if (!skip) {
+      // 뜻이 하나로 굳은 꼴(금주구역 · 금주령 · 금주를 · 금주 운동)은 맥락 낱말 없이도 센다
+      if (c.keepAttached.some((s) => rest.startsWith(s)) || c.keepNextWord.some((w) => next.startsWith(w))) return true;
+      found = true;
+    }
+    i = text.indexOf(key, i + 1);
+  }
+  if (!found) return false;
+  if (!c.leadAny.length) return true;
+  const lead = leadOf(title, body, c.leadChars);
+  return c.leadAny.some((w) => hasWordStart(lead, w));
+}
+
+/** 이 글이 맞춘 strong 핵심어(없으면 null) — 조건부 핵심어는 contextKeywordHit 로. 실측·시험용으로도 쓴다. */
+export function strongHit(title: string, body: string): string | null {
+  const text = `${title || ''} ${body || ''}`.toLowerCase();
+  if (!text.trim()) return null;
+  const { strong, context } = loadKeywords();
+  return (
+    strong.find((k) => {
+      if (!textHasKeyword(text, k)) return false;
+      const c = context.get(k.toLowerCase().trim());
+      return c ? contextKeywordHit(title, body, k.toLowerCase().trim(), c) : true;
+    }) ?? null
+  );
 }
 
 // ────────────────────────────────────────────────────────────
@@ -183,11 +278,7 @@ export function isIncidentReport(title: string, _body?: string): boolean {
  * 제목+본문, 한/영 함께 소문자 비교.
  */
 export function matchesFieldKeywords(title: string, body: string, opts: { allowIncident?: boolean } = {}): boolean {
-  const text = `${title || ''} ${body || ''}`.toLowerCase();
-  if (!text.trim()) return false;
-  const { strong } = loadKeywords();
-  const strongHit = strong.some((k) => textHasKeyword(text, k));
-  if (!strongHit) return false;
+  if (strongHit(title, body) === null) return false;
   if (negativeHit(title, body) !== null) return false;
   // v5.2 #1: 단순 사건사고(정책·치료 맥락 없는) 제외
   // NEWS-Q2 ■6: allowIncident=true 면 통과시켜 DeepSeek 판정 뒤 보관(archive)으로 보낸다(tier 열 있을 때만).
@@ -197,7 +288,5 @@ export function matchesFieldKeywords(title: string, body: string, opts: { allowI
 
 /** 분야 strong 핵심어가 하나라도 있는지(제외어·사건사고 무관). NEWS-Q2 ■6 보관(archive) 판정용. */
 export function hasFieldKeyword(title: string, body: string): boolean {
-  const text = `${title || ''} ${body || ''}`.toLowerCase();
-  if (!text.trim()) return false;
-  return loadKeywords().strong.some((k) => textHasKeyword(text, k));
+  return strongHit(title, body) !== null;
 }

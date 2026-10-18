@@ -14,6 +14,8 @@
 //   · 후보 목록(id·제목·사유·AI/휴리스틱)은 매 실행 로그(Render 로그)에 남는다.
 //     soft 삭제는 행이 DB 에 그대로 있으므로 인스턴스 로컬 백업이 필요 없다.
 // - 요청 간 딜레이(DELAY_MS, 기본 500ms).
+// - NEWS-Q9 ■3: 끝에(실패해도) 결과 한 줄을 crawl_runs 에 남긴다(read_only true + per_source.__kind=cleanup ·
+//   cleanup_runs.ts) → /api/health lastCleanup · /api/health/runs?kind=cleanup. 사람 로그인 없이 읽힘.
 //
 // 실행:
 //   npx ts-node src/crawler/judge_cleanup.ts            # 미리보기(후보 목록만)
@@ -34,7 +36,8 @@ import {
   candidateReason, cleanupMode, CleanupMode, hardDeleteEnabled, isCandidate, isDeletionBasis, JudgedRow,
 } from './cleanup_policy';
 import { columnExists, QueryFn } from './schema_probe';
-import { defaultDbName } from './field_profile';
+import { defaultDbName, fieldProfile } from './field_profile';
+import { cleanupRunOf, CleanupRunPublic, recordCleanupRun, safeError } from './cleanup_runs';
 
 const DELAY_MS = Number(process.env.DELAY_MS ?? 500);
 const JUDGE_DAYS = Number(process.env.JUDGE_DAYS ?? 14);
@@ -204,6 +207,19 @@ async function legacyLocalBackup(client: Client, ids: number[]) {
   console.log(`💾 (로컬 전용) 하드 삭제 전 백업 ${res.rows.length}행: ${BACKUP_PATH}`);
 }
 
+function judgedByNow(): 'deepseek' | 'keyword' {
+  return deepseekAvailable ? 'deepseek' : 'keyword';
+}
+
+async function recordRunLine(query: QueryFn, run: CleanupRunPublic): Promise<void> {
+  try {
+    const ok = await recordCleanupRun(query, fieldProfile().field, run);
+    console.log(ok ? '   crawl_runs 정리 한 줄 기록(kind=cleanup)' : '   crawl_runs 표 없음 — 정리 결과는 로그에만');
+  } catch (e) {
+    console.warn('[judge_cleanup] crawl_runs 기록 실패(무시):', safeError(e));
+  }
+}
+
 async function main() {
   const apply = isApply();
   const hardDelete = hardDeleteEnabled();
@@ -213,14 +229,24 @@ async function main() {
   console.log('✅ DB 연결');
   const query: QueryFn = async (sql, params) => (await client.query(sql, params as unknown[])).rows;
 
-  const result = await runCleanup({
-    query,
-    judge,
-    apply,
-    hardDelete,
-    delayMs: deepseekAvailable ? DELAY_MS : 0,
-    beforeHardDelete: (ids) => legacyLocalBackup(client, ids),
-  });
+  // NEWS-Q9 ■3: 결과 한 줄을 crawl_runs 에 남긴다(health lastCleanup · /api/health/runs?kind=cleanup). 기록 실패는 로그만.
+  const startedAt = new Date();
+  let result: CleanupResult;
+  try {
+    result = await runCleanup({
+      query,
+      judge,
+      apply,
+      hardDelete,
+      delayMs: deepseekAvailable ? DELAY_MS : 0,
+      beforeHardDelete: (ids) => legacyLocalBackup(client, ids),
+    });
+  } catch (e) {
+    await recordRunLine(query, cleanupRunOf({ startedAt, finishedAt: new Date(), days: JUDGE_DAYS, judgedBy: judgedByNow(), result: null, error: e }));
+    await client.end().catch(() => undefined);
+    throw e;
+  }
+  await recordRunLine(query, cleanupRunOf({ startedAt, finishedAt: new Date(), days: JUDGE_DAYS, judgedBy: judgedByNow(), result }));
 
   // 사람이 읽는 리포트(로컬 편의용 — 기록의 정본은 위 로그)
   try {

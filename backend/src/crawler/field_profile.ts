@@ -72,6 +72,24 @@ export interface FieldProfile {
      * particles = 뒤에 붙어도 경계로 치는 조사 · anywhere = 경계 없이도 제외할 낱말 · allow_long = 제외어를 품어도 지나가는 긴 낱말.
      */
     negative_boundary?: { particles?: string[]; anywhere?: string[]; allow_long?: string[] };
+    /**
+     * NEWS-Q9 ■1: 뜻이 둘인 strong 핵심어(「금주」 = 술 끊기 / 이번 주)를 조건부로만 센다. 없으면 옛 부분문자열.
+     * skip_attached = 바로 붙으면 안 세는 꼴(금주의) · skip_next_word = 붙거나 한 칸 띄고 오면 안 세는 낱말(금주 이슈)
+     * · keep_attached / keep_next_word = 뜻이 굳은 꼴(금주구역 · 금주 운동) = 맥락 없이도 셈
+     * · lead_any = 제목·첫 문단에 이 가운데 하나(낱말 머리)가 있어야 셈 · lead_chars = 첫 문단 길이 상한.
+     */
+    strong_context?: Record<
+      string,
+      | {
+          skip_attached?: string[];
+          skip_next_word?: string[];
+          keep_attached?: string[];
+          keep_next_word?: string[];
+          lead_any?: string[];
+          lead_chars?: number;
+        }
+      | string
+    >;
     core: string[];
     ad_penalty: string[];
     dup_stopwords: string[];

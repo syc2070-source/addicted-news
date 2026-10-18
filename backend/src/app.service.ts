@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import type { BroadcastFeedStatus } from './crawler/broadcast_feeds';
+import { CleanupRunPublic, recentCleanupRuns } from './crawler/cleanup_runs';
 import { lastCrawlRun, LastRunPublic, recentCrawlRuns, RunPublic } from './crawler/crawl_runs';
 import { alertFactsOf, evaluateRunAlerts, RunAlert } from './crawler/run_alerts';
 import { columnExists, tableExists } from './crawler/schema_probe';
@@ -21,6 +22,8 @@ export type HealthWithRun = Health & {
   feeds: HealthFeeds | null;
   alerts: RunAlert[] | null;
   broadcast: HealthBroadcast;
+  /** NEWS-Q9 ■3: 마지막 정리 cron(judge_cleanup) 한 줄 · 기록 없으면 null */
+  lastCleanup: CleanupRunPublic | null;
 };
 /** NEWS-Q6 ■4: 방송 되짚기(YouTube Data API) — 열쇠 유무(on|off)와 마지막 실행 되짚기 수 */
 export type HealthBroadcast = {
@@ -102,6 +105,27 @@ export class AppService {
     return value;
   }
 
+  private cleanupCache: { at: number; n: number; value: CleanupRunPublic[] } | null = null;
+
+  /** NEWS-Q9 ■3: 최근 정리 cron 실행 n 개(/api/health/runs?kind=cleanup · health lastCleanup). 60초 기억. 실패해도 []. */
+  async recentCleanups(n = 5, now = Date.now()): Promise<CleanupRunPublic[]> {
+    const lim = Math.max(1, Math.min(20, Math.floor(n) || 5));
+    if (this.cleanupCache && this.cleanupCache.n >= lim && now - this.cleanupCache.at < LAST_RUN_TTL_MS) {
+      return this.cleanupCache.value.slice(0, lim);
+    }
+    let value: CleanupRunPublic[] = [];
+    try {
+      if (this.dataSource?.isInitialized) {
+        const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
+        if (await tableExists(q, 'crawl_runs')) value = await recentCleanupRuns(q, lim);
+      }
+    } catch {
+      value = [];
+    }
+    this.cleanupCache = { at: now, n: lim, value };
+    return value;
+  }
+
   /** NEWS-Q4 ■4: articles.cluster_id·cluster_size 둘 다 있으면 true(DB 못 닿으면 null · 60초 기억). */
   async schema(now = Date.now()): Promise<HealthSchema> {
     if (this.schemaCache && now - this.schemaCache.at < LAST_RUN_TTL_MS) return this.schemaCache.value;
@@ -179,6 +203,7 @@ export class AppService {
     return {
       ...this.getHealth(env), lastRun, schema: await this.schema(), feeds: blockedFeeds(), alerts: await this.alerts(),
       broadcast: await this.broadcast(env),
+      lastCleanup: (await this.recentCleanups(1))[0] ?? null,
     };
   }
 }

@@ -219,7 +219,16 @@
         "담배",
         "흡연",
         "니코틴",
-        "전자담배"
+        "전자담배",
+        "일중독",
+        "워커홀릭",
+        "사역 중독",
+        "과로 과몰입",
+        "음식중독",
+        "폭식",
+        "AI 중독",
+        "챗봇 의존",
+        "LLM 과의존"
       ],
       "en": [
         "addiction",
@@ -298,7 +307,13 @@
         "sobriety",
         "smoking",
         "nicotine",
-        "smoking cessation"
+        "smoking cessation",
+        "work addiction",
+        "workaholism",
+        "food addiction",
+        "binge eating",
+        "AI addiction",
+        "chatbot dependence"
       ],
       "_comment_es_pt": "NEWS-Q6 ■1: 세계 신문 스페인어 8·포르투갈어 2 피드용(전에는 ko·en 만 읽어 이 피드들은 늘 0).",
       "es": [
@@ -404,6 +419,9 @@
         "유산소 운동",
         "칼로리 소모",
         "식단 관리",
+        "주요 신문 톱뉴스",
+        "주요 일간지 1면",
+        "건강 뉴스 업데이트",
         "붓기"
       ],
       "en": [
@@ -446,6 +464,17 @@
         "예능"
       ],
       "allow_long": ["예배당"]
+    },
+    "strong_context": {
+      "_comment": "NEWS-Q9 ■1: 뜻이 둘인 strong 핵심어. 「금주」 = 술 끊기 / 이번 주. 「금주의 ○○」·「금주 이슈」 꼴은 안 세고, 뜻이 굳은 꼴(금주구역 · 금주령 · 금주를 · 금주하다 · 금주 운동)은 늘 세고, 남은 「금주」는 제목·첫 문단(lead_chars 자)에 lead_any 낱말(낱말 머리 · 「기술」 속 「술」 아님)이 있을 때만 핵심어. 「단주」·「절주」는 그대로. 오너 결정 10-17: 행동중독 = 도박·게임·쇼핑·일·스마트폰·음식·AI/LLM(탐색) · 물질 = 알코올·약물·니코틴.",
+      "금주": {
+        "skip_attached": ["의"],
+        "skip_next_word": ["이슈", "베스트", "추천", "일정", "핫딜", "핫템", "신작", "신간", "전망", "만기", "발표", "인물", "증시", "재판", "개봉", "특전", "영화", "게임일정", "뉴스"],
+        "keep_attached": ["를", "하", "한", "했", "령", "법", "구역"],
+        "keep_next_word": ["구역", "운동", "결심", "선언", "치료"],
+        "lead_any": ["술", "알코올", "음주", "단주", "절주"],
+        "lead_chars": 300
+      }
     },
     "core": [
       "중독",
@@ -863,6 +892,18 @@
         "source_name": "Google News (KR)"
       },
       {
+        "id": "kr-google-behavioral",
+        "_comment": "NEWS-Q9 ■2 오너 결정 10-17: 행동중독 일·음식·AI. 맨 「폭식」·「워커홀릭」은 먹방·연예 잡음이 많아 검색어에서 뺌(핵심어에는 둠).",
+        "lang": "ko",
+        "category": "중독사회와 회복",
+        "priority": 64,
+        "outlet_id": "google-kr-behavioral",
+        "url": "https://news.google.com/rss/search?q=\"일중독\"+OR+\"사역+중독\"+OR+\"음식중독\"+OR+\"음식+중독\"+OR+\"폭식장애\"+OR+\"폭식증\"+OR+\"AI+중독\"+OR+\"챗봇+의존\"&hl=ko&gl=KR&ceid=KR:ko",
+        "max_items": 20,
+        "region": "kr",
+        "source_name": "Google News (KR)"
+      },
+      {
         "id": "kr-google-recovery",
         "lang": "ko",
         "category": "중독사회와 회복",
@@ -991,6 +1032,18 @@
         "priority": 79,
         "outlet_id": "google-en-recovery",
         "url": "https://news.google.com/rss/search?q=\"addiction+recovery\"+OR+\"substance+use+disorder+treatment\"&hl=en-US&gl=US&ceid=US:en",
+        "max_items": 20,
+        "source_name": "Google News (EN)"
+      },
+      {
+        "id": "en-google-behavioral",
+        "_comment": "NEWS-Q9 ■2 오너 결정 10-17: 행동중독 work·food·AI. 맨 「binge eating」은 먹방·연예 잡음이 많아 「binge eating disorder」로.",
+        "lang": "en",
+        "region": "global",
+        "category": "중독사회와 회복",
+        "priority": 79,
+        "outlet_id": "google-en-behavioral",
+        "url": "https://news.google.com/rss/search?q=\"workaholism\"+OR+\"work+addiction\"+OR+\"food+addiction\"+OR+\"binge+eating+disorder\"+OR+\"AI+addiction\"+OR+\"chatbot+dependence\"&hl=en-US&gl=US&ceid=US:en",
         "max_items": 20,
         "source_name": "Google News (EN)"
       }

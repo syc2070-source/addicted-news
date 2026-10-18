@@ -25,9 +25,11 @@ describe('AppController', () => {
   describe('health', () => {
     it('ok · commit · startedAt · lastRun · schema · feeds · alerts · broadcast 만 돌려준다(비밀 없음 · DB 없으면 lastRun=null · 열 인식 null)', async () => {
       const health = await appController.getHealth();
-      expect(Object.keys(health).sort()).toEqual(['alerts', 'broadcast', 'commit', 'feeds', 'lastRun', 'ok', 'schema', 'startedAt']);
+      expect(Object.keys(health).sort()).toEqual(['alerts', 'broadcast', 'commit', 'feeds', 'lastCleanup', 'lastRun', 'ok', 'schema', 'startedAt']);
       expect(health.ok).toBe(true);
       expect(health.lastRun).toBeNull();
+      // NEWS-Q9 ■3: 정리 cron 기록 없으면 null
+      expect(health.lastCleanup).toBeNull();
       expect(health.alerts).toBeNull();
       // NEWS-Q6 ■4: 열쇠는 on|off 로만(값 0) · 기록 없으면 lastRun null
       // NEWS-Q8 ■2: 채널별 읽기 결과(feeds) — 기록 없으면 null
