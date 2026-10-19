@@ -2,8 +2,14 @@
 // NEWS-Q2 ■1: 분야 핵심어 거름망. 낱말 목록·사건 패턴·정책 맥락은 분야 설정(field_profiles/*.json)에서 읽는다.
 import { fieldProfile, flattenLang } from './field_profile';
 
-/** NEWS-Q8 ■1: 제외어 낱말 경계 설정(분야 설정 keywords.negative_boundary · 없으면 null = 옛 부분문자열). */
-export type NegativeBoundary = { particles: string[]; anywhere: Set<string>; allowLong: string[] };
+/**
+ * NEWS-Q8 ■1: 제외어 낱말 경계 설정(분야 설정 keywords.negative_boundary · 없으면 null = 옛 부분문자열).
+ * NEWS-Q10 ■2: endings = 조사 뒤에 한 번 더 붙어도 경계로 치는 어미(입금에서는 · 다이어트에도).
+ */
+export type NegativeBoundary = { particles: string[]; anywhere: Set<string>; allowLong: string[]; endings?: string[] };
+
+/** NEWS-Q10 ■2: 스팸 낱말 ∧ 제목 핵심어 → 관문으로(분야 설정 keywords.spam_gate). */
+type SpamGate = { words: Set<string>; maxHits: number; unlessAny: string[] };
 
 /** NEWS-Q9 ■1: 조건부 strong 핵심어 하나(분야 설정 keywords.strong_context). */
 export type StrongContext = {
@@ -22,7 +28,21 @@ type Loaded = {
   policy: string[];
   boundary: NegativeBoundary | null;
   context: Map<string, StrongContext>;
+  negContext: Map<string, string[]>;
+  spamGate: SpamGate | null;
+  adPenalty: string[];
 };
+
+function loadNegContext(raw: unknown): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (k.startsWith('_') || !v || typeof v !== 'object') continue;
+    const keep = lowerList((v as Record<string, unknown>).keep_with_any);
+    if (keep.length) out.set(k.toLowerCase().trim(), keep);
+  }
+  return out;
+}
 
 function loadContext(raw: unknown): Map<string, StrongContext> {
   const out = new Map<string, StrongContext>();
@@ -63,9 +83,19 @@ function loadKeywords(): Loaded {
           particles: lowerList(nb.particles).sort((a, b) => b.length - a.length),
           anywhere: new Set(lowerList(nb.anywhere)),
           allowLong: lowerList(nb.allow_long),
+          endings: lowerList(nb.endings),
         }
       : null,
     context: loadContext(p.keywords.strong_context),
+    negContext: loadNegContext(p.keywords.negative_context),
+    spamGate: p.keywords.spam_gate
+      ? {
+          words: new Set(lowerList(p.keywords.spam_gate.words)),
+          maxHits: Number(p.keywords.spam_gate.max_hits) > 0 ? Number(p.keywords.spam_gate.max_hits) : 1,
+          unlessAny: lowerList(p.keywords.spam_gate.unless_any),
+        }
+      : null,
+    adPenalty: lowerList(p.keywords.ad_penalty),
   };
   cached = { field: p.field, data };
   return data;
@@ -105,15 +135,17 @@ function isHangul(ch: string): boolean {
  * NEWS-Q8 ■1: 한글 낱말이 경계에서 나오는가.
  * 앞 = 문장 시작 또는 한글 음절이 아닌 글자(공백·문장부호·숫자·영문) ·
  * 뒤 = 끝 · 한글 음절이 아닌 글자 · 또는 조사 하나(그 뒤가 다시 한글 음절이 아닐 때).
+ * NEWS-Q10 ■2: 조사 뒤에 어미(endings) 하나가 더 붙은 꼴(에서는 · 에도 · 까지도)도 경계.
  */
-export function hasKoreanWordAt(text: string, key: string, particles: string[]): boolean {
+export function hasKoreanWordAt(text: string, key: string, particles: string[], endings: string[] = []): boolean {
   if (!key) return false;
+  const endsHere = (s: string) => !isHangul(s.charAt(0)) || endings.some((e) => s.startsWith(e) && !isHangul(s.charAt(e.length)));
   let i = text.indexOf(key);
   while (i !== -1) {
     if (!isHangul(text.charAt(i - 1))) {
       const rest = text.slice(i + key.length);
       if (!isHangul(rest.charAt(0))) return true;
-      if (particles.some((pt) => rest.startsWith(pt) && !isHangul(rest.charAt(pt.length)))) return true;
+      if (particles.some((pt) => rest.startsWith(pt) && endsHere(rest.slice(pt.length)))) return true;
     }
     i = text.indexOf(key, i + 1);
   }
@@ -124,7 +156,7 @@ export function hasKoreanWordAt(text: string, key: string, particles: string[]):
 function textHasNegative(text: string, keyword: string, boundary: NegativeBoundary | null): boolean {
   const key = (keyword || '').toLowerCase().trim();
   if (!boundary || !key || !/[가-힣]/.test(key) || boundary.anywhere.has(key)) return textHasKeyword(text, key);
-  return hasKoreanWordAt(text, key, boundary.particles);
+  return hasKoreanWordAt(text, key, boundary.particles, boundary.endings);
 }
 
 /** 허용 긴 낱말을 공백으로 지운 글(제외어 맞춤 전용). */
@@ -133,11 +165,34 @@ function withoutAllowedLong(text: string, boundary: NegativeBoundary | null): st
   return boundary.allowLong.reduce((t, w) => t.split(w).join(' '), text);
 }
 
-/** 이 글을 막는 제외어(없으면 null) — 실측·시험용으로도 쓴다. */
+/**
+ * NEWS-Q10 ■2: 제외어 판정. hit = 걸린 첫 제외어(동행 낱말이 있어 풀린 제외어는 뺌) ·
+ * gate = 걸린 것이 모두 스팸 낱말이고 spam_gate 조건(개수 · 제목 핵심어 · 광고·도박 낱말 없음)을 채움 → 떨어뜨리지 않고 관문으로.
+ */
+export function negativeVerdict(title: string, body: string): { hit: string | null; gate: boolean } {
+  const { negative, boundary, negContext, spamGate, adPenalty } = loadKeywords();
+  const full = `${title || ''} ${body || ''}`.toLowerCase();
+  const text = withoutAllowedLong(full, boundary);
+  const hits = negative.filter((k) => {
+    if (!textHasNegative(text, k, boundary)) return false;
+    const keep = negContext.get(k.toLowerCase().trim());
+    return !(keep && keep.some((w) => textHasKeyword(full, w)));
+  });
+  if (!hits.length) return { hit: null, gate: false };
+  const gate =
+    !!spamGate &&
+    hits.length <= spamGate.maxHits &&
+    hits.every((k) => spamGate.words.has(k.toLowerCase().trim())) &&
+    strongHit(title, '') !== null &&
+    !adPenalty.some((w) => full.includes(w)) &&
+    !spamGate.unlessAny.some((w) => textHasKeyword(full, w));
+  return { hit: hits[0], gate };
+}
+
+/** 이 글을 막는 제외어(없으면 null · 관문으로 보내는 스팸 낱말은 막지 않음) — 실측·시험용으로도 쓴다. */
 export function negativeHit(title: string, body: string): string | null {
-  const { negative, boundary } = loadKeywords();
-  const text = withoutAllowedLong(`${title || ''} ${body || ''}`.toLowerCase(), boundary);
-  return negative.find((k) => textHasNegative(text, k, boundary)) ?? null;
+  const v = negativeVerdict(title, body);
+  return v.gate ? null : v.hit;
 }
 
 /** 제목 + 본문 첫 문단(줄바꿈으로 가른 문단을 80자가 될 때까지 · 상한 chars). 스니펫처럼 줄바꿈이 없으면 앞 chars 자. */

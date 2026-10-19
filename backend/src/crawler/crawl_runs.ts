@@ -42,6 +42,8 @@ export interface RunProgressLike {
   broadcastFirst?: boolean;
   /** NEWS-Q5 ■1: 구글 링크 해석 실패 수(대개 429) · 실행 끝 경보(run_alerts) */
   urlResolveFail?: number;
+  /** NEWS-Q10 ■2: 스팸 낱말 하나 ∧ 제목 핵심어 → 관문으로 보낸 후보 수 */
+  spamToGate?: number;
   alerts?: Array<{ code: string; value: number | string; limit?: number }>;
   /** NEWS-Q6 ■3·■4: 구글 검색 피드 상한(초) · 방송 되짚기 기록 */
   googleCapSec?: number;

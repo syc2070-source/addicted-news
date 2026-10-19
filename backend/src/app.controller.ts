@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
+import { redactPublic } from './crawler/public_redact';
 
 @Controller()
 export class AppController {
@@ -12,16 +13,17 @@ export class AppController {
   }
 
   // GET /api/health — {ok, commit, startedAt, lastRun}. lastRun = 마지막 수집 실행 숫자 요약(NEWS-Q2 ■8, 표 없으면 null). 인증·비밀 0.
+  // NEWS-Q10 ■1: 공개 응답의 모든 글에서 호스트·포트·사용자·DB 이름·경로·열쇠 꼴을 가린다(redactPublic).
   @Get('api/health')
-  getHealth() {
-    return this.appService.getHealthWithRun();
+  async getHealth() {
+    return redactPublic(await this.appService.getHealthWithRun());
   }
 
   // GET /api/health/runs?limit=5 — 최근 수집 실행(숫자 · 40분 넘김 · 실패 피드 이름 · 묶음 절감 · NEWS-Q3 ■0). 인증·비밀 0.
   // ?kind=cleanup — 정리 cron(judge_cleanup) 결과 줄(NEWS-Q9 ■3).
   @Get('api/health/runs')
-  getRuns(@Query('limit') limit?: string, @Query('kind') kind?: string) {
-    if (kind === 'cleanup') return this.appService.recentCleanups(Number(limit) || 5);
-    return this.appService.recentRuns(Number(limit) || 5);
+  async getRuns(@Query('limit') limit?: string, @Query('kind') kind?: string) {
+    if (kind === 'cleanup') return redactPublic(await this.appService.recentCleanups(Number(limit) || 5));
+    return redactPublic(await this.appService.recentRuns(Number(limit) || 5));
   }
 }

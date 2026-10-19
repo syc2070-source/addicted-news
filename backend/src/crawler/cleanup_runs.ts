@@ -5,6 +5,7 @@
 // deepseek_calls 열은 0 으로 둔다 — 같은 날 12:00 수집기의 하루 상한(deepseek_budget)을 정리 몫이 먹지 않게(전과 같음).
 // ============================================================
 import type { CleanupMode } from './cleanup_policy';
+import { redactPublicText } from './public_redact';
 import { QueryFn, tableExists } from './schema_probe';
 
 export const CLEANUP_KIND = 'cleanup';
@@ -74,13 +75,10 @@ export function cleanupRunOf(o: {
   };
 }
 
-/** 실패 글에서 접속 문자열·열쇠 꼴을 지운다(health 는 공개). */
+/** 실패 글에서 접속 문자열·열쇠 꼴·호스트·사용자·경로를 지운다(health 는 공개 · NEWS-Q10 ■1 redactPublicText 하나로). */
 export function safeError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
-  return msg
-    .replace(/[a-z]+:\/\/[^\s]+/gi, '<url>')
-    .replace(/(password|passwd|pwd|key|token|secret)\s*[=:]\s*\S+/gi, '$1=<hidden>')
-    .slice(0, 200);
+  return redactPublicText(msg).slice(0, 200);
 }
 
 /** crawl_runs 한 행(표 없으면 false · 쓰기 실패는 던짐 — 부르는 쪽이 로그만 남긴다). */

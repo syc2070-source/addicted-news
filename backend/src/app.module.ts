@@ -6,6 +6,7 @@ import { ArticlesModule } from './articles/articles.module';
 import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
 import { EncyclopediaModule } from './encyclopedia/encyclopedia.module';
+import { ExportModule } from './export/export.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -37,6 +38,8 @@ import { AppService } from './app.service';
     AdminModule,
     ReportsModule,
     EncyclopediaModule,
+    // NEWS-Q10 ■3: 읽기 전용 내보내기 문 v0(열쇠 없으면 404)
+    ExportModule,
   ],
   // NEWS-Q1 ■2: GET / · GET /api/health (전에는 등록되지 않아 / 가 404)
   controllers: [AppController],

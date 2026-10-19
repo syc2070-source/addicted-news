@@ -71,7 +71,17 @@ export interface FieldProfile {
      * NEWS-Q8 ■1: 한글 제외어는 낱말 경계에서만 맞춘다(「출입금지」 속 「입금」은 제외어 아님). 없으면 옛 부분문자열 맞춤.
      * particles = 뒤에 붙어도 경계로 치는 조사 · anywhere = 경계 없이도 제외할 낱말 · allow_long = 제외어를 품어도 지나가는 긴 낱말.
      */
-    negative_boundary?: { particles?: string[]; anywhere?: string[]; allow_long?: string[] };
+    negative_boundary?: { particles?: string[]; anywhere?: string[]; allow_long?: string[]; endings?: string[] };
+    /**
+     * NEWS-Q10 ■2: 제외어마다 「이 낱말이 함께 있으면 막지 않음」(keep_with_any). 없으면 늘 막음.
+     */
+    negative_context?: Record<string, { keep_with_any?: string[] } | string>;
+    /**
+     * NEWS-Q10 ■2: 스팸 낱말 하나 ∧ 제목 핵심어 = 떨어뜨리지 않고 관문(DeepSeek)으로. 없으면 옛 규칙(떨어뜨림).
+     * words = 스팸 낱말 · max_hits = 스팸 낱말 몇 개까지 · unless_any = 이 낱말(도박 쪽)이 있으면 그대로 떨어뜨림
+     * (ad_penalty 낱말이 있어도 그대로 떨어뜨림).
+     */
+    spam_gate?: { words?: string[]; max_hits?: number; unless_any?: string[] };
     /**
      * NEWS-Q9 ■1: 뜻이 둘인 strong 핵심어(「금주」 = 술 끊기 / 이번 주)를 조건부로만 센다. 없으면 옛 부분문자열.
      * skip_attached = 바로 붙으면 안 세는 꼴(금주의) · skip_next_word = 붙거나 한 칸 띄고 오면 안 세는 낱말(금주 이슈)

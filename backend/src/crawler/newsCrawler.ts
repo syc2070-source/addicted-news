@@ -16,7 +16,7 @@ import {
 } from './deepseek_summary';
 import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extractor';
 import { isValidArticleImageUrl } from './image_validation';
-import { matchesFieldKeywords, hasFieldKeyword, isIncidentReport, normalize } from './field_filter';
+import { matchesFieldKeywords, hasFieldKeyword, isIncidentReport, negativeVerdict, normalize } from './field_filter';
 import { isKoreanOutput, describeLangCheck } from './lang_output';
 import { isBlacklistedDomain, getBlacklistSnapshot, normalizeHost, evaluateAutoBlacklistFromDb } from './domain_blacklist';
 import { notifyDiscord } from './notifier';
@@ -163,7 +163,8 @@ let crawlStats = {
   archiveTier: 0,            // NEWS-Q2 ■6: 보관(archive) 판정
   urlResolved: 0,            // NEWS-Q2 ■3: 구글 링크 → 원문 성공
   urlResolveFail: 0,         // NEWS-Q2 ■3: 해석 실패(구글 링크 유지)
-  feedsOk: 0,                // NEWS-Q2 ■4: 피드 읽기 성공
+  spamToGate: 0,             // NEWS-Q10 ■2: 스팸 낱말 하나 ∧ 제목 핵심어 → 관문으로 보낸 후보
+  feedsOk: 0,               // NEWS-Q2 ■4: 피드 읽기 성공
   feedsRepaired: 0,          // NEWS-Q2 ■4: 깨진 XML 고쳐 읽음
   clusterInherit: 0,         // NEWS-Q3 ■1: 묶음 둘째 기사 — 관문 건너뛰고 대표 판정 상속(저장 후보)
   clusterInheritRejected: 0, // NEWS-Q3 ■1: 대표가 거부라 함께 거부(호출 0)
@@ -1158,6 +1159,7 @@ async function judgeSource(
       }
       crawlStats.filterPass++;
       stat.candidates++;
+      if (negativeVerdict(rawTitle, rawContent).gate) crawlStats.spamToGate++;
 
       const lang = detectLanguage(rawTitle + ' ' + rawContent);
       const isForeign = lang !== 'ko';
@@ -2161,6 +2163,7 @@ async function main() {
   // NEWS-Q5 ■1: 실행 끝 경보(LLM 0) — per_source.__run.alerts 로 저장 + Discord 한 줄(웹훅 없으면 로그)
   if (RUN.progress) {
     RUN.progress.urlResolveFail = crawlStats.urlResolveFail;
+    RUN.progress.spamToGate = crawlStats.spamToGate;
     try {
       const prev = RUN.flags.crawlRuns ? await recentCrawlRuns(q, 6) : [];
       const digest = digestPerSource(RUN.perSource).sources;

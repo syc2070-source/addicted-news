@@ -109,6 +109,23 @@ describe('AppController', () => {
       expect(await svc.alerts(99_000)).toEqual([{ code: 'saved_zero', value: 0 }]);
     });
 
+    it('NEWS-Q10 ■1: GET /api/health/runs · health lastCleanup 의 오류 글에서 IP·포트·호스트를 가린다(commit·시각 그대로)', async () => {
+      jest.spyOn(appService, 'recentRuns').mockResolvedValue([
+        { startedAt: '2026-10-17T03:00:32.461Z', failedFeeds: ['spec-001 (The Fix): connect ETIMEDOUT 138.199.46.69:443', 'broadcast:mbc_pd_note [404]'] } as any,
+      ]);
+      jest.spyOn(appService, 'recentCleanups').mockResolvedValue([
+        { kind: 'cleanup', startedAt: '2026-10-25T18:00:00.000Z', error: 'getaddrinfo ENOTFOUND dpg-abc123-a.oregon-postgres.render.com' } as any,
+      ]);
+      const runs = (await appController.getRuns('1')) as any[];
+      expect(runs[0].failedFeeds).toEqual(['spec-001 (The Fix): connect ETIMEDOUT <host>', 'broadcast:mbc_pd_note [404]']);
+      expect(runs[0].startedAt).toBe('2026-10-17T03:00:32.461Z');
+      const cl = (await appController.getRuns('1', 'cleanup')) as any[];
+      expect(cl[0].error).toBe('getaddrinfo ENOTFOUND <host>');
+      const health = await appController.getHealth();
+      expect(health.lastCleanup?.error).toBe('getaddrinfo ENOTFOUND <host>');
+      expect(JSON.stringify(health)).not.toContain('render.com');
+    });
+
     it('commit = RENDER_GIT_COMMIT, 없으면 "local"', () => {
       expect(appService.getHealth({ RENDER_GIT_COMMIT: 'abc123' } as NodeJS.ProcessEnv).commit).toBe('abc123');
       expect(appService.getHealth({} as NodeJS.ProcessEnv).commit).toBe('local');
