@@ -100,6 +100,11 @@ export interface FieldProfile {
         }
       | string
     >;
+    /**
+     * NEWS-Q11 ■3: 핵심어 묶음(이름 → 낱말). 실행마다 묶음별 후보·저장 수를 센다 · 방송 관문 하위 주제 후보.
+     * '_' 로 시작하는 칸은 설명. 없으면 묶음 수를 세지 않는다.
+     */
+    groups?: Record<string, string[] | string>;
     core: string[];
     ad_penalty: string[];
     dup_stopwords: string[];
@@ -120,6 +125,8 @@ export interface FieldProfile {
     judge_schema_name: string;
     judge_fit_description: string;
     fallback_summary_line: string;
+    /** NEWS-Q11 ■2: 방송 전용 관문 한 질문(이 편이 분야를 다루는가 · 예/부분/아니오 + 하위 주제). 없으면 방송 판정 0(fail-closed). */
+    broadcast_gate?: string;
   };
   sources: {
     press_files: { world?: string; kr?: string; specialty?: string };
@@ -127,7 +134,8 @@ export interface FieldProfile {
     specialized: ProfileFeed[];
     institutions: ProfileFeed[];
     academic: ProfileFeed[];
-    broadcast: { file: string; keywords: string[]; false_friends: string[] };
+    /** lookback_pages = NEWS-Q11 ■2 업로드 재생목록 되짚기 쪽 수(한 쪽 50편 · 1단위) — 없으면 3 */
+    broadcast: { file: string; keywords: string[]; false_friends: string[]; lookback_pages?: number };
     statory_query: string;
     /** NEWS-Q7 ■3: 놓친 날 되짚기(국내지 구글 site: 날짜 검색) — 없으면 끔 */
     missed_day?: { query: string; max_items?: number; max_days?: number; locale?: string };

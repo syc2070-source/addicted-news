@@ -33,7 +33,8 @@ describe('AppController', () => {
       expect(health.alerts).toBeNull();
       // NEWS-Q6 ■4: 열쇠는 on|off 로만(값 0) · 기록 없으면 lastRun null
       // NEWS-Q8 ■2: 채널별 읽기 결과(feeds) — 기록 없으면 null
-      expect(health.broadcast).toEqual({ api: process.env.YOUTUBE_API_KEY ? 'on' : 'off', lastRun: null, feeds: null });
+      // NEWS-Q11 ■2: 방송 전용 관문 수(gate) — 기록 없으면 null
+      expect(health.broadcast).toEqual({ api: process.env.YOUTUBE_API_KEY ? 'on' : 'off', lastRun: null, feeds: null, gate: null });
       expect(JSON.stringify(health)).not.toContain(process.env.YOUTUBE_API_KEY || '\u0000none');
       expect(health.schema).toEqual({ cluster_columns: null });
       // NEWS-Q4 ■2: 설정의 막힌 피드(Render 망에서만 4 + 어디서나 403 SAMHSA 1) · 대체 검색 피드 5
@@ -80,6 +81,10 @@ describe('AppController', () => {
         if (sql.includes('information_schema.tables')) return [{ x: 1 }];
         if (sql.includes('information_schema.columns')) return [];
         if (sql.includes('FROM rejected_articles')) return [{ reason: 'category_fit_false', n: 7 }, { reason: 'low_confidence', n: 3 }];
+        // NEWS-Q11 ■1: 실행 창 저장 행이 보이는 꼴
+        if (sql.includes('WITH r AS')) {
+          return [{ publish: 47, archive: 24, broadcast: 1, hidden: 0, clustered: 29, new_clusters: 8, old_dated: 1 }];
+        }
         expect(params).toEqual([20]);
         return [{ started_at: '2026-10-12T03:00:28Z', finished_at: '2026-10-12T03:42:06Z', timed_out: true, feeds_ok: 90 }];
       });
@@ -88,9 +93,11 @@ describe('AppController', () => {
       expect(runs[0]).toMatchObject({
         timedOut: true, durationSec: 2498, feedsOk: 90, clusterStats: null,
         rejectReasons: { category_fit_false: 7, low_confidence: 3 },
+        visibility: { publish: 47, archive: 24, broadcast: 1, hidden: 0, clustered: 29, folded: 21, oldDated: 1 },
       });
       await svc.recentRuns(99, 2000);
-      expect(query).toHaveBeenCalledTimes(5);
+      // 표 1 · 열 4(tier·deleted_at·cluster_id·cluster_size) · cluster_stats 1 · 거부 표 1 · 실행 1 · 사유 1 · 보이는 꼴 1
+      expect(query).toHaveBeenCalledTimes(10);
     });
 
     it('NEWS-Q5 ■1 alerts: 저장된 경보가 있으면 그대로 · 옛 실행은 행 숫자로 다시 센다', async () => {

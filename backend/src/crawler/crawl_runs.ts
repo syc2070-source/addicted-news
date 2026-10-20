@@ -3,6 +3,7 @@
 // 표가 없으면 기록하지 않는다(로그에만). 읽기 실패는 조용히 null/[].
 // ============================================================
 import { BroadcastFeedStatus, broadcastFeedsOf } from './broadcast_feeds';
+import { groupSummary } from './keyword_groups';
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
@@ -52,6 +53,9 @@ export interface RunProgressLike {
   missedLookback?: object;
   /** NEWS-Q8 ■2: 방송 채널별 마지막 읽기 결과 */
   broadcastFeeds?: BroadcastFeedStatus[];
+  /** NEWS-Q11 ■2·■3: 방송 전용 관문 수 · 핵심어 묶음별 수 */
+  broadcastGate?: object;
+  keywordGroups?: Record<string, { candidates?: number; saved?: number; archived?: number; rejected?: number }>;
 }
 
 export const RUN_PROGRESS_KEY = '__run';
@@ -155,6 +159,8 @@ export interface RunPublic {
   rejectReasons: Record<string, number> | null;
   /** NEWS-Q8 ■2: 방송 채널별 마지막 읽기 결과(ok/404/500/api_quota · 읽은 길 api/rss · 항목 수 · 시각) */
   broadcast: { feeds: BroadcastFeedStatus[] };
+  /** NEWS-Q11 ■1: 저장 행이 목록에 보이는 꼴(묶음에 들어간 수 · 접힌 수 · 오래된 보도 날짜) — 열·표가 없으면 null */
+  visibility: RunVisibility | null;
 }
 
 export interface PerSourceDigest {
@@ -243,11 +249,15 @@ export function digestPerSource(raw: unknown): { progress: RunProgressLike | nul
 }
 
 /** NEWS-Q3 ■0·■5: 최근 실행 n 개(공개 · 숫자와 실패 피드 이름만 · 열쇠·본문 0). 표가 없거나 실패면 []. */
-/** 실행 한 번 동안 격리된 거부 기사 사유 분포(사유의 ':' 앞머리 · 많은 순 10). 실패면 null. */
+/**
+ * 실행 한 번 동안 격리된 거부 기사 사유 분포(사유의 ':' 앞머리 · 많은 순 10). 실패면 null.
+ * NEWS-Q11 ■2: 방송(broadcast:…)은 둘째 마디까지(broadcast:topic_fit_false) — 앞머리만이면 왜 떨어졌는지 안 보인다.
+ */
 export async function rejectReasonsBetween(query: QueryFn, from: Date, to: Date): Promise<Record<string, number> | null> {
   try {
     const rows = await query(
-      `SELECT split_part(reject_reason, ':', 1) AS reason, count(*)::int AS n FROM rejected_articles
+      `SELECT CASE WHEN reject_reason LIKE 'broadcast:%' THEN 'broadcast:' || split_part(reject_reason, ':', 2)
+                   ELSE split_part(reject_reason, ':', 1) END AS reason, count(*)::int AS n FROM rejected_articles
         WHERE created_at >= $1 AND created_at <= $2 GROUP BY 1 ORDER BY 2 DESC LIMIT 10`,
       [from, to],
     );
@@ -259,10 +269,71 @@ export async function rejectReasonsBetween(query: QueryFn, from: Date, to: Date)
   }
 }
 
+/** NEWS-Q11 ■1: 실행 하나가 저장한 행이 공개 목록에 어떻게 보이나(저장 수 ≠ 목록 줄 수의 까닭). */
+export interface RunVisibility {
+  /** 기사 실림(publish) · 보관(archive) · 방송(층 무관) · 숨김(차단·soft 삭제) */
+  publish: number;
+  archive: number;
+  broadcast: number;
+  hidden: number;
+  /** 실림 기사 중 묶음(같은 소식 2건 이상)에 들어간 수 */
+  clustered: number;
+  /** 그중 목록에서 접혀 대표 한 줄 뒤로 들어간 수(근사: 묶음 든 수 − 이번 실행에서 새로 생긴 묶음 수) */
+  folded: number;
+  /** 실림 기사 중 보도 날짜가 실행일 7일보다 앞선 것(목록이 보도 날짜 순이라 첫 쪽에 안 보임) */
+  oldDated: number;
+}
+
+export interface VisibilityColumns {
+  tier: boolean;
+  deletedAt: boolean;
+  cluster: boolean;
+}
+
+/** 실행 시간 창에 만든 articles 행 → 보이는 꼴 수. 열(tier·deleted_at·cluster_id/size)이 없으면 그 칸은 셈에서 빠진다. 실패면 null. */
+export async function runVisibility(query: QueryFn, from: Date, to: Date, cols: VisibilityColumns): Promise<RunVisibility | null> {
+  try {
+    const tier = cols.tier ? `COALESCE(tier, 'publish')` : `'publish'`;
+    const hidden = cols.deletedAt ? `(blocked OR deleted_at IS NOT NULL)` : `blocked`;
+    const csize = cols.cluster ? 'cluster_size' : '1';
+    const cid = cols.cluster ? 'cluster_id' : 'NULL::bigint';
+    const rows = await query(
+      `WITH r AS (
+         SELECT id, ${tier} AS t, COALESCE(source_type, '') = 'broadcast' AS bc, ${csize} AS csize, ${cid} AS cid,
+                published_at, ${hidden} AS hidden
+           FROM articles WHERE created_at >= $1 AND created_at <= $2
+       ), f AS (
+         SELECT ${cid} AS cid, min(id) AS first_id FROM articles
+          WHERE ${cols.cluster ? 'cluster_id IN (SELECT cid FROM r WHERE cid IS NOT NULL)' : 'false'} GROUP BY 1
+       ), p AS (
+         SELECT r.*, f.first_id FROM r LEFT JOIN f ON f.cid = r.cid WHERE NOT r.hidden AND r.t = 'publish' AND NOT r.bc
+       )
+       SELECT
+         (SELECT count(*) FROM p)::int AS publish,
+         (SELECT count(*) FROM r WHERE NOT hidden AND t = 'archive' AND NOT bc)::int AS archive,
+         (SELECT count(*) FROM r WHERE NOT hidden AND bc)::int AS broadcast,
+         (SELECT count(*) FROM r WHERE hidden)::int AS hidden,
+         (SELECT count(*) FROM p WHERE csize > 1)::int AS clustered,
+         (SELECT count(DISTINCT cid) FROM p WHERE csize > 1 AND first_id >= (SELECT min(id) FROM r))::int AS new_clusters,
+         (SELECT count(*) FROM p WHERE published_at < ($2::timestamptz AT TIME ZONE 'Asia/Seoul')::date - 7)::int AS old_dated`,
+      [from, to],
+    );
+    const r = rows?.[0];
+    if (!r) return null;
+    const n = (v: unknown) => Number(v || 0);
+    return {
+      publish: n(r.publish), archive: n(r.archive), broadcast: n(r.broadcast), hidden: n(r.hidden),
+      clustered: n(r.clustered), folded: Math.max(0, n(r.clustered) - n(r.new_clusters)), oldDated: n(r.old_dated),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function recentCrawlRuns(
   query: QueryFn,
   n: number,
-  opts: { clusterStatsColumn?: boolean; rejectReasons?: boolean } = {},
+  opts: { clusterStatsColumn?: boolean; rejectReasons?: boolean; visibility?: VisibilityColumns | null } = {},
 ): Promise<RunPublic[]> {
   try {
     const rows = await query(
@@ -281,6 +352,7 @@ export async function recentCrawlRuns(
       const failed = json(r.failed_feeds);
       const failedList: string[] = Array.isArray(failed) ? failed.map((x: unknown) => String(x)) : [];
       const rejectReasons = opts.rejectReasons && f ? await rejectReasonsBetween(query, s, new Date(f.getTime() + 60_000)) : null;
+      const visibility = opts.visibility && f ? await runVisibility(query, s, new Date(f.getTime() + 60_000), opts.visibility) : null;
       const digest = digestPerSource(r.per_source);
       out.push({
         startedAt: s.toISOString(),
@@ -296,6 +368,7 @@ export async function recentCrawlRuns(
         clusterStats: json(r.cluster_stats),
         ...digest,
         rejectReasons,
+        visibility,
         broadcast: {
           feeds: broadcastFeedsOf({ startedAt: s.toISOString(), failedFeeds: failedList, progress: digest.progress, perSource: parsePerSource(r.per_source) }),
         },
@@ -326,6 +399,8 @@ export interface LastRunPublic {
   timeouts: number;
   blocked: number;
   blockedFromHost: number | null;
+  /** NEWS-Q11 ■3: 핵심어 묶음별 「후보/저장」 한 줄(기록 없는 옛 실행 = null · 보관·거부는 runs 의 progress.keywordGroups) */
+  keywordGroups: Record<string, string> | null;
 }
 
 /** health 용 마지막 실행 요약(숫자만). 표가 없거나 실패면 null. */
@@ -356,6 +431,7 @@ export async function lastCrawlRun(query: QueryFn, field?: string): Promise<Last
       timeouts: sources.timeouts,
       blocked: sources.blocked,
       blockedFromHost: progress ? n(progress.blockedFromHost) : null,
+      keywordGroups: groupSummary(progress?.keywordGroups),
     };
   } catch {
     return null;

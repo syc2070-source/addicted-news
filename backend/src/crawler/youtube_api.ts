@@ -197,6 +197,80 @@ export async function lookbackChannel(
   return { items, units };
 }
 
+// ---------- NEWS-Q11 ■2: 업로드 재생목록 되짚기(playlistItems.list · 쪽당 1단위 · 전체 설명 포함) ----------
+// search.list(100단위 · 50편 · 바쁜 채널은 5일치)를 대신한다. 채널 업로드 재생목록 = UC… → UU…(같은 꼬리).
+// 3쪽(150편)이면 하루 8~10편 채널도 2주 넘게 · PD수첩 같은 주 1~2편 채널은 넉 달 넘게 거슬러 본다. 9채널 ≈ 27단위/일.
+export const PLAYLIST_UNITS = 1;
+export const UPLOAD_PAGES_DEFAULT = 3;
+export const UPLOAD_PAGE_SIZE = 50;
+
+/** 채널 id → 업로드 재생목록 id(UC… → UU…). 꼴이 아니면 null. */
+export function uploadsPlaylistId(channelId: string): string | null {
+  return /^UC[\w-]{22}$/.test(channelId) ? `UU${channelId.slice(2)}` : null;
+}
+
+const HIDDEN_TITLES = /^(private video|deleted video|비공개 동영상|삭제된 동영상)$/i;
+
+/** playlistItems.list 응답 → BroadcastItem[](비공개·삭제 영상 버림 · 설명은 전체) + 다음 쪽 열쇠. */
+export function parsePlaylistItems(json: any): { items: BroadcastItem[]; next: string | null } {
+  const items: BroadcastItem[] = [];
+  for (const it of Array.isArray(json?.items) ? json.items : []) {
+    const sn = it?.snippet || {};
+    const videoId = String(sn.resourceId?.videoId || it?.contentDetails?.videoId || '');
+    const title = decodeHtml(String(sn.title || '')).trim();
+    if (!/^[\w-]{11}$/.test(videoId) || !title || HIDDEN_TITLES.test(title)) continue;
+    const th = sn.thumbnails || {};
+    items.push({
+      videoId,
+      title,
+      description: decodeHtml(String(sn.description || '')).trim(),
+      publishedAt: String(it?.contentDetails?.videoPublishedAt || sn.publishedAt || ''),
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      thumbnailUrl: th.high?.url || th.medium?.url || th.default?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    });
+  }
+  const next = typeof json?.nextPageToken === 'string' && json.nextPageToken ? json.nextPageToken : null;
+  return { items, next };
+}
+
+/** 채널 하나 되짚기: 업로드 재생목록 pages 쪽(쪽마다 1단위 · 할당량 가드가 막으면 멈춤). */
+export async function lookbackUploads(
+  channelId: string,
+  key: string,
+  guard: QuotaGuard,
+  opts: { pages?: number; get?: HttpGet } = {},
+): Promise<LookbackResult> {
+  const get = opts.get ?? defaultGet;
+  const playlistId = uploadsPlaylistId(channelId);
+  if (!playlistId) return { items: [], units: 0, error: { status: null, reason: 'bad_channel_id' } };
+  const headers = { 'x-goog-api-key': key, accept: 'application/json' };
+  const pages = Math.max(1, Math.min(5, Math.floor(opts.pages ?? UPLOAD_PAGES_DEFAULT)));
+  const items: BroadcastItem[] = [];
+  let units = 0;
+  let pageToken: string | null = null;
+  for (let p = 0; p < pages; p++) {
+    if (!guard.spend(PLAYLIST_UNITS)) {
+      return { items, units, error: units ? undefined : { status: null, reason: 'quota_guard' } };
+    }
+    units += PLAYLIST_UNITS;
+    try {
+      const params: Record<string, string | number> = {
+        part: 'snippet,contentDetails', playlistId, maxResults: UPLOAD_PAGE_SIZE,
+      };
+      if (pageToken) params.pageToken = pageToken;
+      const page = parsePlaylistItems(await get(`${API}/playlistItems`, params, headers));
+      items.push(...page.items);
+      pageToken = page.next;
+      if (!pageToken) break;
+    } catch (e) {
+      const err = apiErrorOf(e);
+      if (err.reason === 'quotaExceeded' || err.reason === 'dailyLimitExceeded') guard.stopped = true;
+      return { items, units, error: err };
+    }
+  }
+  return { items, units };
+}
+
 /** 이번 실행 되짚기 기록(per_source.__run.broadcastApi · health). */
 export interface BroadcastApiRecord {
   mode: 'on' | 'off';

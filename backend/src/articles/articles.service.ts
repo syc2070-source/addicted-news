@@ -293,7 +293,7 @@ export class ArticlesService implements OnModuleInit {
     where: FindOptionsWhere<Article> | FindOptionsWhere<Article>[],
     page: number,
     limit: number,
-  ): Promise<{ items: Decorated[]; total: number }> {
+  ): Promise<{ items: Decorated[]; total: number; rows: number; folded: number }> {
     const st = await this.clusterState();
     const idRows = await this.articleRepo.find({
       select: { id: true },
@@ -317,7 +317,13 @@ export class ArticlesService implements OnModuleInit {
         a.representative = g.info.representativeId === a.id;
       }
     });
-    return { items, total: groups.length };
+    // NEWS-Q11 ■1: 목록 요약 — 기사 행 수(훑은 만큼) · 묶음에 접힌 수(대표 한 줄 뒤로 들어간 기사)
+    return { items, total: groups.length, rows: idRows.length, folded: idRows.length - groups.length };
+  }
+
+  /** NEWS-Q11 ■1: 페이지 응답의 요약 칸(묶음 단위면 접힌 수 · 아니면 접지 않음 = 0). */
+  private pageSummary(r: { total: number; rows?: number; folded?: number }, grouped: boolean) {
+    return grouped ? { rows: r.rows ?? r.total, folded: r.folded ?? 0 } : { rows: r.total, folded: 0 };
   }
 
   private async plainList(where: FindOptionsWhere<Article> | FindOptionsWhere<Article>[], take: number, skip = 0) {
@@ -410,10 +416,13 @@ export class ArticlesService implements OnModuleInit {
     slug: string, page: number, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster',
   ) {
     const where = this.where({ category: categoryKeyFor(slug) }, kind, tier);
-    const { items, total } = this.grouping(kind, tier, group)
-      ? await this.groupedPage(where, page, limit)
-      : await this.plainList(where, limit, (page - 1) * limit);
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit), group: this.grouping(kind, tier, group) ? 'cluster' : 'none' };
+    const grouped = this.grouping(kind, tier, group);
+    const r = grouped ? await this.groupedPage(where, page, limit) : await this.plainList(where, limit, (page - 1) * limit);
+    const { items, total } = r;
+    return {
+      items, total, page, limit, totalPages: Math.ceil(total / limit), group: grouped ? 'cluster' : 'none',
+      ...this.pageSummary(r, grouped),
+    };
   }
 
   // 기사 검색
@@ -432,10 +441,13 @@ export class ArticlesService implements OnModuleInit {
   // 최신 기사 (페이징) — 기본 묶음 단위(group=cluster) · group=none 은 옛 꼴(랩·Statory 입구)
   async getLatestPaged(page: number, limit: number, kind: ArticleKind = 'article', tier: ArticleTier = 'publish', group: GroupMode = 'cluster') {
     const where = this.where({}, kind, tier);
-    const { items, total } = this.grouping(kind, tier, group)
-      ? await this.groupedPage(where, page, limit)
-      : await this.plainList(where, limit, (page - 1) * limit);
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit), group: this.grouping(kind, tier, group) ? 'cluster' : 'none' };
+    const grouped = this.grouping(kind, tier, group);
+    const r = grouped ? await this.groupedPage(where, page, limit) : await this.plainList(where, limit, (page - 1) * limit);
+    const { items, total } = r;
+    return {
+      items, total, page, limit, totalPages: Math.ceil(total / limit), group: grouped ? 'cluster' : 'none',
+      ...this.pageSummary(r, grouped),
+    };
   }
 
   /** 묶음 한 개(■3): id = 묶음 열쇠(cluster_id) 또는 묶음 안 아무 기사 id. 대표 + 매체 목록. */

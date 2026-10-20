@@ -12,7 +12,7 @@ import { RejectedArticle } from '../articles/rejected_article.entity';
 import { buildSources, SourceConfig, CategoryName, adPenaltyKeywords, SourceType, defaultGrade } from './sourceConfig';
 import {
   summarizeKoreanDeepSeek, deepseekAvailable, deepseekStats, Confidence, DEEPSEEK_MODEL,
-  deepseekDown, DEEPSEEK_DOWN_AFTER, DEEPSEEK_TIMEOUT_MS,
+  deepseekDown, DEEPSEEK_DOWN_AFTER, DEEPSEEK_TIMEOUT_MS, askDeepSeekJson,
 } from './deepseek_summary';
 import { extractArticleData, httpGetText, resolveFinalUrl } from './article_extractor';
 import { isValidArticleImageUrl } from './image_validation';
@@ -24,12 +24,16 @@ import { decodeEntities, crossMediaSimilarity } from './text_utils';
 import { crawlerConnectionOptions } from './crawler_db';
 import { insertArticleWithRawBody, RawBodyWriteState } from './raw_body_store';
 import {
-  BROADCAST_SOURCE_TYPE, BroadcastItem, buildBroadcastRow, decideBroadcast, fetchBroadcastItems, loadBroadcastSources, orderFailedFirst,
+  BROADCAST_SOURCE_TYPE, BroadcastItem, buildBroadcastRow, fetchBroadcastItems, loadBroadcastSources, orderFailedFirst,
   passesBroadcastKeywordGate,
 } from './broadcast';
 import {
-  DAILY_UNIT_CAP, QuotaGuard, SEARCH_UNITS, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackChannel, planChannel,
-  rss404Outlets, youtubeApiKey,
+  BroadcastGateStats, broadcastGateSystem, buildBroadcastGateUser, decideBroadcastGate, emptyBroadcastGateStats, parseBroadcastVerdict,
+} from './broadcast_gate';
+import { GroupCounter, keywordGroupsOf } from './keyword_groups';
+import {
+  DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackUploads,
+  planChannel, rss404Outlets, youtubeApiKey,
 } from './youtube_api';
 import { feedStatusOf } from './broadcast_feeds';
 import { probeSchema, SchemaFlags } from './schema_probe';
@@ -102,6 +106,8 @@ type Candidate = {
   sourceId?: string;
   /** NEWS-Q3 ■1: 묶음 둘째 기사(관문 건너뛰고 대표 판정 상속) — 저장 때 제목 닮음 중복으로 버리지 않는다 */
   clusterMember?: boolean;
+  /** NEWS-Q11 ■3: 핵심어 묶음(저장 때 묶음별 저장·보관 수) */
+  kwGroups?: string[];
 };
 
 const RSS_TIMEOUT = Number(process.env.RSS_TIMEOUT_MS ?? 15000);
@@ -420,6 +426,10 @@ type RunContext = {
   poolLoaded: number;
   /** NEWS-Q4 ■1: 순서·상한 기록(crawl_runs.per_source.__run) */
   progress: RunProgress | null;
+  /** NEWS-Q11 ■3: 핵심어 묶음별 후보·저장·보관·거부 */
+  groups: GroupCounter;
+  /** NEWS-Q11 ■2: 방송 전용 관문 수 */
+  broadcastGate: BroadcastGateStats;
 };
 const RUN: RunContext = {
   flags: {
@@ -433,6 +443,8 @@ const RUN: RunContext = {
   pool: null,
   poolLoaded: 0,
   progress: null,
+  groups: new GroupCounter(),
+  broadcastGate: emptyBroadcastGateStats(),
 };
 // 이번 실행 묶음 후보의 임시 id(음수 · DB id 와 겹치지 않음)
 let clusterTempId = 0;
@@ -713,9 +725,15 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
   const guard = new QuotaGuard(DAILY_UNIT_CAP, today.units);
   const api = emptyApiRecord(apiKey ? 'on' : 'off', today.units);
   if (RUN.progress) RUN.progress.broadcastApi = api;
+  // NEWS-Q11 ■2: 방송 전용 관문(핵심어 ∧ 한 질문 → publish / archive / reject) · 업로드 재생목록 되짚기
+  const gate = RUN.broadcastGate;
+  if (RUN.progress) RUN.progress.broadcastGate = gate;
+  const gateSystem = broadcastGateSystem();
+  const pages = PROFILE.sources.broadcast.lookback_pages ?? UPLOAD_PAGES_DEFAULT;
   const rssDown = new Set(rss404Outlets(failedRaw));
-  console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → DeepSeek 관문) · 되짚기 API ${api.mode}` +
-    (apiKey ? ` (오늘 앞서 ${today.units}단위 · 상한 ${DAILY_UNIT_CAP})` : ` (env ${YOUTUBE_API_ENV} 없음 → RSS 만)`));
+  console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → 방송 관문 한 질문) · 되짚기 API ${api.mode}` +
+    (apiKey ? ` (업로드 재생목록 ${pages}쪽 · 오늘 앞서 ${today.units}단위 · 상한 ${DAILY_UNIT_CAP})` : ` (env ${YOUTUBE_API_ENV} 없음 → RSS 만)`) +
+    (gateSystem ? '' : ' · 방송 관문 설정 없음 → 판정 0'));
   for (const source of sources) {
     if (Date.now() > deadline) {
       console.log('  ⏱️ 방송 몫 시간 도달 — 방송 추적 중단');
@@ -724,7 +742,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     const stat = sourceStat(`broadcast:${source.outletId}`);
     const plan = planChannel({
       hasKey: !!apiKey, rss404LastRun: rssDown.has(source.outletId),
-      searchedToday: today.channels.includes(source.outletId), quotaLeft: !guard.stopped && guard.canSpend(SEARCH_UNITS),
+      searchedToday: today.channels.includes(source.outletId), quotaLeft: !guard.stopped && guard.canSpend(PLAYLIST_UNITS),
     });
     let items: BroadcastItem[] = [];
     let rssFailed: string | null = null;
@@ -744,10 +762,8 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     }
     if (plan.api && apiKey) {
       const rssIds = new Set(items.map((it) => it.videoId));
-      const lb = await lookbackChannel(source.channelId, apiKey, guard, {
-        needFull: (it) => !rssIds.has(it.videoId) && passesBroadcastKeywordGate(it),
-      });
-      api.calls += lb.units > SEARCH_UNITS ? 2 : lb.units > 0 ? 1 : 0;
+      const lb = await lookbackUploads(source.channelId, apiKey, guard, { pages });
+      api.calls += Math.round(lb.units / PLAYLIST_UNITS);
       api.units += lb.units;
       api.unitsToday = guard.used;
       api.quotaStopped = guard.stopped;
@@ -759,13 +775,16 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         console.warn(`  ├─ [${source.program}] ⚠️ 되짚기 실패 [${lb.error.status ?? '-'}] ${lb.error.reason}`);
       }
       api.items += lb.items.length;
+      let fresh = 0;
       for (const it of lb.items) {
         if (rssIds.has(it.videoId)) continue;
+        rssIds.add(it.videoId);
         items.push(it);
+        fresh++;
         api.newItems++;
         if (passesBroadcastKeywordGate(it)) api.keywordPass++;
       }
-      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${lb.items.filter((it) => !rssIds.has(it.videoId)).length}) · ${lb.units}단위`);
+      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${fresh}) · ${lb.units}단위`);
     }
     // NEWS-Q8 ■2: 채널별 마지막 읽기 결과(health broadcast.feeds[])
     if (RUN.progress) {
@@ -781,18 +800,26 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     let accepted = 0;
     for (const item of items) {
       crawlStats.broadcastSeen++;
-      const pre = decideBroadcast(item, null, true);
-      if (pre.action === 'skip' && pre.reason === 'keyword_miss') continue;
+      gate.seen++;
+      // NEWS-Q11 ■2: 핵심어 0 = no_keyword(세기만 · 격리 0 — 하루 수백 편이라 기록하면 거부 표가 잡음으로 찬다)
+      if (!passesBroadcastKeywordGate(item)) {
+        gate.reject.no_keyword++;
+        continue;
+      }
       crawlStats.broadcastKeywordPass++;
+      gate.keywordPass++;
       stat.candidates++;
-      if (!deepseekAvailable) {
-        console.log(`  │   ⏭️ DeepSeek 없음 → 방송 저장 보류: ${item.title.slice(0, 40)}`);
+      const kwGroups = keywordGroupsOf(item.title, item.description);
+      RUN.groups.add(kwGroups, 'candidates');
+      if (!deepseekAvailable || !gateSystem) {
+        console.log(`  │   ⏭️ ${gateSystem ? 'DeepSeek 없음' : '방송 관문 설정 없음'} → 방송 저장 보류: ${item.title.slice(0, 40)}`);
         continue;
       }
       // ■2: 이미 저장·판정한 영상이면 DeepSeek 0
       if (await preDuplicate(RUN.known, RUN.query, { urls: [item.url], titles: [] })) {
         crawlStats.dupPreSkip++;
         stat.dup++;
+        gate.reject.duplicate++;
         continue;
       }
       if (!deepseekRoomLeft()) break;
@@ -800,39 +827,53 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       if (Date.now() > deadline) break;
       const callsBefore = deepseekStats.calls;
       const provCategory = classifyCategory(item.title, item.description, DEFAULT_CATEGORY);
-      const pack = await summarizeKoreanDeepSeek(item.title, item.description || item.title, {
-        translate: false, category: provCategory,
-      });
+      const answer = await askDeepSeekJson(gateSystem, buildBroadcastGateUser(item, source.program), ['fit', 'subtopic']);
       stat.calls += deepseekStats.calls - callsBefore;
-      if (deepseekDown() && pack?.categoryFit === undefined) break;
-      const judgment = pack
-        ? { categoryFit: pack.categoryFit, isIncident: pack.isIncident, confidence: pack.confidence }
-        : null;
-      const decision = decideBroadcast(item, judgment, true);
-      if (decision.action !== 'accept') {
+      if (deepseekDown() && !answer) break;
+      const verdict = parseBroadcastVerdict(answer);
+      const decision = decideBroadcastGate(verdict);
+      if (decision.action === 'skip') {
+        // 판정 없음 = 저장도 거부 기록도 않는다(다음 실행이 다시 본다 · fail-closed)
+        gate.reject.judgment_missing++;
+        console.log(`  │   ⏭️ 방송 관문 판정 없음(다음 실행에 다시): ${item.title.slice(0, 40)}`);
+        continue;
+      }
+      gate.judged++;
+      gate.subtopics[decision.subtopic] = (gate.subtopics[decision.subtopic] || 0) + 1;
+      const summary = verdict?.summary || null;
+      // 보관층 열이 없는 DB(묶음 SQL 전)에서는 partial 을 둘 곳이 없다 → 거부(기사 경로 effectiveTier 와 같은 규칙)
+      const archiveable = decision.action !== 'archive' || RUN.flags.tier;
+      if (decision.action === 'reject' || !archiveable) {
+        const reason = decision.action === 'reject' ? decision.reason : 'topic_partial_no_tier';
         crawlStats.broadcastRejected++;
         stat.rejected++;
-        const reason = decision.reason;
-        console.log(`  │   🚫 방송 관문 거부(${reason}): ${item.title.slice(0, 40)}`);
+        gate.reject.topic_fit_false += decision.action === 'reject' ? 1 : 0;
+        RUN.groups.add(kwGroups, 'rejected');
+        console.log(`  │   🚫 방송 관문 거부(${reason} · ${decision.subtopic}): ${item.title.slice(0, 40)}`);
         rejectedAll.push({
-          title: item.title, originalTitle: item.title, summary: pack?.summary || null,
+          title: item.title, originalTitle: item.title, summary,
           category: provCategory, source: source.program, sourceUrl: item.url, googleUrl: null,
           publishedAt: buildBroadcastRow(source, item, { category: provCategory }).publishedAt,
           lang: 'ko', sourceType: BROADCAST_SOURCE_TYPE, rejectReason: `broadcast:${reason}`,
-          confidence: pack?.confidence ?? null,
+          confidence: null,
           // domain 비움: youtube.com 이 기사용 자동 블랙리스트 집계에 섞이지 않게.
           domain: null,
         });
         continue;
       }
+      const tier: Tier = decision.action === 'archive' ? 'archive' : 'publish';
+      if (tier === 'archive') gate.archive++;
+      else gate.publish++;
+      const base = buildBroadcastRow(source, item, { summary, category: provCategory });
       const row: Candidate = {
-        ...(buildBroadcastRow(source, item, { summary: pack?.summary, category: provCategory }) as Candidate),
-        tier: 'publish', urlResolve: null, sourceId: `broadcast:${source.outletId}`,
+        ...(base as Candidate),
+        keywords: base.keywords.includes(decision.subtopic) ? base.keywords : [...base.keywords, decision.subtopic],
+        tier, urlResolve: null, sourceId: `broadcast:${source.outletId}`, kwGroups,
       };
       out.push(row);
       accepted++;
       crawlStats.broadcastAccepted++;
-      console.log(`  │   📺 방송 채택: [${source.program}] ${item.title.slice(0, 40)}`);
+      console.log(`  │   📺 방송 ${tier === 'archive' ? '보관' : '채택'}(${decision.subtopic}): [${source.program}] ${item.title.slice(0, 40)}`);
     }
     console.log(`  ├─ [${source.program}] 읽음 ${items.length} · 채택 ${accepted}`);
   }
@@ -1160,6 +1201,8 @@ async function judgeSource(
       crawlStats.filterPass++;
       stat.candidates++;
       if (negativeVerdict(rawTitle, rawContent).gate) crawlStats.spamToGate++;
+      const kwGroups = keywordGroupsOf(rawTitle, rawContent);
+      RUN.groups.add(kwGroups, 'candidates');
 
       const lang = detectLanguage(rawTitle + ' ' + rawContent);
       const isForeign = lang !== 'ko';
@@ -1175,6 +1218,7 @@ async function judgeSource(
         if (rep.tier === 'reject' || (rep.tier === 'archive' && !RUN.flags.tier)) {
           crawlStats.clusterInheritRejected++;
           stat.rejected++;
+          RUN.groups.add(kwGroups, 'rejected');
           console.log(`  │   🧩 묶음 상속 거부(대표 ${repLabel} ${rep.reason || rep.tier}): ${rawTitle.slice(0, 30)}...`);
           if (rep.tier === 'reject') {
             rejectedAll.push({
@@ -1210,7 +1254,7 @@ async function judgeSource(
           sourceUrl, googleUrl, imageUrl: imageUrlM, origin: 'crawler', isTop: false, isFeature: false,
           publishedAt, lang, isForeign, blocked: false, blockedReason: null,
           sourceType: conf.sourceType, outletId,
-          tier: rep.tier, publishedTs, sourceGrade, urlResolve, sourceId: conf.id, clusterMember: true,
+          tier: rep.tier, publishedTs, sourceGrade, urlResolve, sourceId: conf.id, clusterMember: true, kwGroups,
         };
         out.push(memberRow);
         continue;
@@ -1256,6 +1300,7 @@ async function judgeSource(
           const reason = d.reason || 'rejected';
           countReject(reason);
           stat.rejected++;
+          RUN.groups.add(kwGroups, 'rejected');
           stat.calls += deepseekStats.calls - callsBefore;
           console.log(`  │   🚫 입구 게이트 거부(${reason}): ${shortTitle}`);
           // ■1: 내용 판정 거부만 묶음 기억에(같은 사건 다음 기사는 호출 없이 함께 거부). 판정 실패는 넣지 않음.
@@ -1326,6 +1371,7 @@ async function judgeSource(
           // fail-closed: 원문을 그대로 싣는 폴백 금지. 격리 후 폐기.
           crawlStats.langRejectSkip++;
           stat.rejected++;
+          RUN.groups.add(kwGroups, 'rejected');
           stat.calls += deepseekStats.calls - callsBefore;
           console.log(`  │   🚫 비한국어 산출물 격리(${describeLangCheck(langCheck)}): ${shortTitle}`);
           rejectedAll.push({
@@ -1357,7 +1403,7 @@ async function judgeSource(
         sourceUrl, googleUrl, imageUrl, origin: 'crawler', isTop: false, isFeature: false,
         publishedAt, lang, isForeign, blocked: false, blockedReason: null,
         sourceType: conf.sourceType, outletId,
-        tier, publishedTs, sourceGrade, urlResolve, sourceId: conf.id,
+        tier, publishedTs, sourceGrade, urlResolve, sourceId: conf.id, kwGroups,
       });
     }
 
@@ -1716,6 +1762,7 @@ async function saveCandidates(list: Candidate[]) {
         else st.saved++;
       }
       if (extras.tier === 'archive') archived++;
+      RUN.groups.add(c.kwGroups, extras.tier === 'archive' ? 'archived' : 'saved');
     };
 
     let safeKeywords: string[] | null = null;
@@ -2164,6 +2211,8 @@ async function main() {
   if (RUN.progress) {
     RUN.progress.urlResolveFail = crawlStats.urlResolveFail;
     RUN.progress.spamToGate = crawlStats.spamToGate;
+    // NEWS-Q11 ■3: 핵심어 묶음별 후보·저장·보관·거부
+    RUN.progress.keywordGroups = RUN.groups.toJSON();
     try {
       const prev = RUN.flags.crawlRuns ? await recentCrawlRuns(q, 6) : [];
       const digest = digestPerSource(RUN.perSource).sources;

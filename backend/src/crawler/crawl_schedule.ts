@@ -10,6 +10,8 @@
 // ============================================================
 import type { BroadcastApiRecord } from './youtube_api';
 import type { BroadcastFeedStatus } from './broadcast_feeds';
+import type { BroadcastGateStats } from './broadcast_gate';
+import type { GroupCounts } from './keyword_groups';
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
@@ -246,6 +248,10 @@ export interface RunProgress {
   missedLookback?: { covers: string[]; after: string; before: string; sources: number };
   /** NEWS-Q8 ■2: 방송 채널별 마지막 읽기 결과(health broadcast.feeds[]) */
   broadcastFeeds?: BroadcastFeedStatus[];
+  /** NEWS-Q11 ■2: 방송 전용 관문 수(publish · archive · 거부 사유별 · 하위 주제) */
+  broadcastGate?: BroadcastGateStats;
+  /** NEWS-Q11 ■3: 핵심어 묶음별 후보·저장·보관·거부 */
+  keywordGroups?: GroupCounts;
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

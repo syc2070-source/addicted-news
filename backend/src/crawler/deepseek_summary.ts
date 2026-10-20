@@ -469,6 +469,60 @@ export async function judgeArticleFields(
 }
 
 /**
+ * NEWS-Q11 ■2: 질문 하나 → JSON 하나(방송 관문). 판정 호출과 같은 설정(temperature 0 · thinking 끔 · json_object).
+ * keys 가 빠지면 강화 지시로 1회 재요청 · 그래도 없으면 null(부르는 쪽이 fail-closed). 통계·비용은 deepseekStats 에.
+ */
+export async function askDeepSeekJson(
+  system: string,
+  user: string,
+  keys: string[],
+  maxTokens = JUDGE_MAX_TOKENS,
+): Promise<Record<string, unknown> | null> {
+  if (!deepseekAvailable || !deepseek) return null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const strict = attempt === 2;
+    try {
+      deepseekStats.calls++;
+      const params: Record<string, unknown> = {
+        model: DEEPSEEK_MODEL,
+        messages: [
+          { role: 'system', content: ensureJsonWord(strict ? `${STRICT_JSON_ONLY}\n\n${system}` : system) },
+          {
+            role: 'user',
+            content: ensureJsonWord(strict ? `${user}\n\n[재요청] 이전 응답에 칸이 빠졌다. ${keys.join(', ')} 를 모두 채운 JSON 하나만.` : user),
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0,
+        max_tokens: maxTokens,
+        ...(THINKING_DISABLED ? { thinking: { type: 'disabled' } } : {}),
+      };
+      const r = await (deepseek.chat.completions.create as unknown as
+        (p: unknown) => Promise<{ choices?: Array<{ finish_reason?: string; message?: { content?: string } }> }>)(params);
+      addUsage(r as any);
+      noteDeepseekResult(null);
+      const text = (r.choices?.[0]?.message?.content || '').trim();
+      const obj = text ? extractJsonObject(text, keys) : null;
+      if (obj && keys.every((k) => obj[k] !== undefined && obj[k] !== null)) {
+        deepseekStats.ok++;
+        return obj;
+      }
+      console.warn(`[deepseek][ask] 칸 누락·JSON 아님(attempt ${attempt}/2): ${text.slice(0, 160)}`);
+    } catch (e) {
+      const err = e as { status?: number; message?: string };
+      console.warn(`[deepseek][ask] 호출 예외(attempt ${attempt}/2, status=${err?.status ?? '?'}): ${err?.message ?? String(e)}`);
+      noteDeepseekResult(err);
+      if (deepseekDown()) break;
+    }
+  }
+  deepseekStats.fail++;
+  return null;
+}
+
+const STRICT_JSON_ONLY =
+  '너는 JSON 생성기다. 오직 유효한 JSON 객체 하나만 출력한다. 설명·코드펜스·서문 금지. 첫 글자 "{", 마지막 글자 "}".';
+
+/**
  * 요약 + 판정. v5.4.2 부터 판정은 '전용 호출'이 권위를 가진다(요약이 판정 필드를
  * 밀어내던 구조를 분리). 전용 판정이 실패하면 결합 호출에서 온 값으로 보완하고,
  * 그래도 미완성이면 undefined 로 남겨 입구 게이트가 거부한다.

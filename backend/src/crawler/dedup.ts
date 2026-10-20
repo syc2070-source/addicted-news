@@ -243,9 +243,12 @@ export async function loadKnownIndex(query: QueryFn, days = 30, log: (s: string)
       const ts = r.ts ? new Date(r.ts).getTime() : NaN;
       idx.addSaved({ url: r.source_url, googleUrl: r.google_url, title: r.title, originalTitle: r.original_title, source: r.source, ts });
     }
+    // NEWS-Q11 ■2: 방송을 기사 관문으로 거부한 옛 기록(broadcast:category_fit_false 등)은 기억하지 않는다
+    // → 방송 전용 관문이 한 번 다시 본다. 새 관문 거부(broadcast:topic_…)는 그대로 기억.
     const rej = await query(
       `SELECT source_url, google_url, title, original_title FROM rejected_articles
-        WHERE created_at >= now() - ($1 || ' days')::interval AND reject_reason <> 'judgment_missing'`,
+        WHERE created_at >= now() - ($1 || ' days')::interval AND reject_reason <> 'judgment_missing'
+          AND NOT (reject_reason LIKE 'broadcast:%' AND reject_reason NOT LIKE 'broadcast:topic%')`,
       [String(days)],
     );
     for (const r of rej) idx.add({ url: r.source_url, googleUrl: r.google_url, title: r.title, originalTitle: r.original_title });

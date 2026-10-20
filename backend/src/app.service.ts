@@ -34,6 +34,8 @@ export type HealthBroadcast = {
   } | null;
   /** NEWS-Q8 ■2: 마지막 실행의 방송 채널별 읽기 결과(ok/404/500/api_quota · via api/rss · 항목 · 시각 · 기록 없으면 null) */
   feeds: BroadcastFeedStatus[] | null;
+  /** NEWS-Q11 ■2: 마지막 실행의 방송 전용 관문 수(publish · archive · 거부 사유별 · 하위 주제) — 기록 없으면 null */
+  gate: Record<string, unknown> | null;
 };
 
 /** 설정(피드 파일·분야 설정)의 막힌 피드 수 — 한 번만 센다. */
@@ -92,9 +94,15 @@ export class AppService {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
         if (await tableExists(q, 'crawl_runs')) {
+          const [tier, deletedAt, clusterId, clusterSize] = await Promise.all([
+            columnExists(q, 'articles', 'tier'), columnExists(q, 'articles', 'deleted_at'),
+            columnExists(q, 'articles', 'cluster_id'), columnExists(q, 'articles', 'cluster_size'),
+          ]);
           value = await recentCrawlRuns(q, lim, {
             clusterStatsColumn: await columnExists(q, 'crawl_runs', 'cluster_stats'),
             rejectReasons: await tableExists(q, 'rejected_articles'),
+            // NEWS-Q11 ■1: 저장 행이 목록에 보이는 꼴(묶음 든 수 · 접힌 수 · 오래된 보도 날짜)
+            visibility: { tier, deletedAt, cluster: clusterId && clusterSize },
           });
         }
       }
@@ -145,6 +153,7 @@ export class AppService {
 
   private alertsCache: {
     at: number; value: RunAlert[] | null; api: Record<string, unknown> | null; feeds: BroadcastFeedStatus[] | null;
+    gate: Record<string, unknown> | null;
   } | null = null;
 
   /**
@@ -156,6 +165,7 @@ export class AppService {
     let value: RunAlert[] | null = null;
     let api: Record<string, unknown> | null = null;
     let feeds: BroadcastFeedStatus[] | null = null;
+    let gate: Record<string, unknown> | null = null;
     try {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
@@ -166,12 +176,14 @@ export class AppService {
           const a = runs[0]?.progress?.broadcastApi;
           api = a && typeof a === 'object' ? (a as Record<string, unknown>) : null;
           feeds = runs[0]?.broadcast?.feeds ?? null;
+          const g = runs[0]?.progress?.broadcastGate;
+          gate = g && typeof g === 'object' ? (g as Record<string, unknown>) : null;
         }
       }
     } catch {
       value = null;
     }
-    this.alertsCache = { at: now, value, api, feeds };
+    this.alertsCache = { at: now, value, api, feeds, gate };
     return value;
   }
 
@@ -190,6 +202,7 @@ export class AppService {
           units: n('units'), quotaStopped: a.quotaStopped === true }
         : null,
       feeds: this.alertsCache?.feeds ?? null,
+      gate: this.alertsCache?.gate ?? null,
     };
   }
 
