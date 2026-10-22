@@ -256,6 +256,8 @@ export interface RunProgress {
   oldDatedArchived?: number;
   /** NEWS-Q12 ■3: 본문 추출이 거듭 멈춰 이번 실행에서 건너뛴 호스트 · 건너뛴 수 */
   bodyBreaker?: { tripped: string[]; skipped: Record<string, number> };
+  /** NEWS-Q12 ■1: 설정 archive_ids 로 이번 실행이 보관층으로 옮긴 방송 id */
+  broadcastArchivedIds?: number[];
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

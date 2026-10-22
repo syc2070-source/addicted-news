@@ -185,6 +185,29 @@ export async function existingEpisodeMains(
   }
 }
 
+/**
+ * 설정 sources.broadcast.archive_ids 의 실린 방송 행을 보관층으로(Q12 전에 실린 예고·클립 정리 · 오너 지시).
+ * 이 id · 방송 · 실림층인 행만 · 이미 보관이면 0(몇 번 돌아도 같음) · 실패면 [](크롤 계속).
+ */
+export async function archiveListedBroadcasts(
+  query: QueryFn,
+  ids: number[],
+): Promise<number[]> {
+  const want = ids.filter((n) => Number.isInteger(n) && n > 0);
+  if (!want.length) return [];
+  try {
+    const rows = (await query(
+      `UPDATE articles SET tier = 'archive'
+        WHERE id = ANY($1::int[]) AND source_type = 'broadcast' AND COALESCE(tier, 'publish') = 'publish'
+        RETURNING id`,
+      [want],
+    )) as Array<{ id?: unknown }>;
+    return (rows || []).map((r) => Number(r.id)).filter(Number.isFinite);
+  } catch {
+    return [];
+  }
+}
+
 /** 날짜 글(YYYY-MM-DD) ± n 일. */
 export function shiftYmd(ymd: string, days: number): string {
   const t = Date.parse(`${ymd.slice(0, 10)}T00:00:00Z`);

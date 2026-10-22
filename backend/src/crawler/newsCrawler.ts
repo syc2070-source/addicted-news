@@ -30,7 +30,9 @@ import {
 import {
   BroadcastGateStats, broadcastGateSystem, buildBroadcastGateUser, decideBroadcastGate, emptyBroadcastGateStats, parseBroadcastVerdict,
 } from './broadcast_gate';
-import { DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, existingEpisodeMains, foldEpisodes, shiftYmd } from './broadcast_episode';
+import {
+  DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, archiveListedBroadcasts, existingEpisodeMains, foldEpisodes, shiftYmd,
+} from './broadcast_episode';
 import { GroupCounter, keywordGroupsOf } from './keyword_groups';
 import {
   DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, UPLOAD_PAGES_MAX, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackUploads,
@@ -2002,6 +2004,13 @@ async function main() {
   let timedOut = false;
   const progress = emptyProgress(crawlSources.length, CRAWL_TIMEOUT_MS);
   RUN.progress = progress;
+
+  // NEWS-Q12 ■1: 설정 archive_ids 의 실린 방송(Q12 전 예고·클립 · 자동으로 못 묶는 관련 클립) → 보관층(이미 보관이면 0)
+  const listed = PROFILE.sources.broadcast.archive_ids ?? [];
+  if (listed.length && RUN.flags.tier && RUN.query) {
+    progress.broadcastArchivedIds = await archiveListedBroadcasts(RUN.query, listed);
+    console.log(`📺 방송 보관층으로(설정 archive_ids ${listed.length}): 이번에 옮김 ${progress.broadcastArchivedIds.length}`);
+  }
 
   // NEWS-Q1 ■4: 방송은 기사 통계(한국 비중 등)에 섞지 않고 저장만 함께 한다.
   // NEWS-Q4 ■1ⓓ: 방송 9채널을 맨 앞에(작고 빠름 · 5분 몫) — 기사 소스가 상한에 걸려도 방송은 빠지지 않는다.

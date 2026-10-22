@@ -1,4 +1,5 @@
 import {
+  archiveListedBroadcasts,
   coresMatch,
   episodeCore,
   existingEpisodeMains,
@@ -253,6 +254,31 @@ describe('broadcast_episode — 같은 편 묶기(NEWS-Q12 ■1)', () => {
     expect(
       foldEpisodes([it_('「사행산업」 새 회차', PD, '2026-08-18')], existing),
     ).toEqual(['main']);
+  });
+
+  it('설정 archive_ids(오너 지시 11 편 · PD수첩 클립 넷 포함) → 이 id·방송·실림층만 보관 · 몇 번 돌아도 같음 · 실패면 []', async () => {
+    const ids = fieldProfile().sources.broadcast.archive_ids ?? [];
+    expect(ids).toHaveLength(11);
+    expect(ids).toEqual(expect.arrayContaining([5868, 5869, 5870, 5871]));
+    expect(ids).not.toContain(5873); // PD수첩 본편은 실림 그대로
+    const calls: unknown[][] = [];
+    const moved = await archiveListedBroadcasts((sql, params) => {
+      calls.push([sql, params]);
+      return Promise.resolve([{ id: 5868 }, { id: 5869 }]);
+    }, ids);
+    expect(moved).toEqual([5868, 5869]);
+    expect(String(calls[0][0])).toMatch(/SET tier = 'archive'/);
+    expect(String(calls[0][0])).toMatch(/source_type = 'broadcast'/);
+    expect(String(calls[0][0])).toMatch(
+      /COALESCE\(tier, 'publish'\) = 'publish'/,
+    );
+    expect(calls[0][1]).toEqual([ids]);
+    expect(
+      await archiveListedBroadcasts(() => Promise.resolve([]), []),
+    ).toEqual([]);
+    expect(
+      await archiveListedBroadcasts(() => Promise.reject(new Error('x')), [1]),
+    ).toEqual([]);
   });
 
   it('DB 읽기: 같은 프로그램 · 날짜 창 · 실림층만 · 실패면 빈 목록 · shiftYmd', async () => {

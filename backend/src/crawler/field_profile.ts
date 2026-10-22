@@ -155,6 +155,8 @@ export interface FieldProfile {
       episode_days?: number;
       /** 같은 회차 제목 비교에서 빼는 흔한 낱말(분야 낱말이 겹친다고 같은 회차는 아님) */
       episode_generic_words?: string[];
+      /** NEWS-Q12 ■1: 실린 방송 가운데 보관층으로 옮길 id(본편 아닌 예고·클립 · 이미 보관이면 그대로) */
+      archive_ids?: number[];
     };
     statory_query: string;
     /** NEWS-Q7 ■3: 놓친 날 되짚기(국내지 구글 site: 날짜 검색) — 없으면 끔 */
