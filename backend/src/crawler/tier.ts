@@ -39,6 +39,25 @@ export function decideTier(
   return { tier: 'reject', reason: 'category_fit_false' };
 }
 
+/**
+ * NEWS-Q12 ■2: 보도 날짜(YYYY-MM-DD · KST)가 수집일(KST)보다 days 넘게 오래된 기사는 publish → archive.
+ * 방송은 빼고(되짚기 100일 · 재업로드) · tier 열이 없으면 그대로(거부로 낮추지 않음 = 덜 버림) · days 없거나 0 이면 끔.
+ */
+export function oldDatedTier(
+  tier: 'publish' | 'archive',
+  publishedAt: string | null | undefined,
+  opts: { days?: number; now?: number; broadcast: boolean; tierColumn: boolean },
+): { tier: 'publish' | 'archive'; demoted: boolean } {
+  const days = Number(opts.days || 0);
+  if (tier !== 'publish' || days <= 0 || opts.broadcast || !opts.tierColumn || !publishedAt) {
+    return { tier, demoted: false };
+  }
+  const pub = Date.parse(`${publishedAt.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(pub)) return { tier, demoted: false };
+  const todayKst = Date.parse(`${new Date((opts.now ?? Date.now()) + 9 * 3600000).toISOString().slice(0, 10)}T00:00:00Z`);
+  return (todayKst - pub) / 86400000 > days ? { tier: 'archive', demoted: true } : { tier, demoted: false };
+}
+
 /** tier 열이 없을 때(옛 동작): archive 는 저장하지 않고 거부로. */
 export function effectiveTier(d: TierDecision, tierColumn: boolean): TierDecision {
   if (d.tier === 'archive' && !tierColumn) return { tier: 'reject', reason: d.reason };

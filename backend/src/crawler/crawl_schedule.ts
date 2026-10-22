@@ -252,6 +252,10 @@ export interface RunProgress {
   broadcastGate?: BroadcastGateStats;
   /** NEWS-Q11 ■3: 핵심어 묶음별 후보·저장·보관·거부 */
   keywordGroups?: GroupCounts;
+  /** NEWS-Q12 ■2: 보도 날짜가 30일 넘게 오래돼 실림 대신 보관한 기사 수 */
+  oldDatedArchived?: number;
+  /** NEWS-Q12 ■3: 본문 추출이 거듭 멈춰 이번 실행에서 건너뛴 호스트 · 건너뛴 수 */
+  bodyBreaker?: { tripped: string[]; skipped: Record<string, number> };
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

@@ -56,6 +56,10 @@ export interface RunProgressLike {
   /** NEWS-Q11 ■2·■3: 방송 전용 관문 수 · 핵심어 묶음별 수 */
   broadcastGate?: object;
   keywordGroups?: Record<string, { candidates?: number; saved?: number; archived?: number; rejected?: number }>;
+  /** NEWS-Q12 ■2: 오래된 보도 날짜라 보관한 기사 수 */
+  oldDatedArchived?: number;
+  /** NEWS-Q12 ■3: 본문 추출 단락기 */
+  bodyBreaker?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';

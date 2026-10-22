@@ -1,14 +1,15 @@
 {
   "_comment": "NEWS-Q1 ■4: 탐사·시사 방송의 중독 편 추적. YouTube 공개 채널 RSS(열쇠 불필요). channel_id 는 2026-10-10 채널 페이지 소스(externalId)로 실측. 공용 채널(달리·KBS 다큐·EBS 다큐)은 다른 프로그램도 올라오므로 핵심어 관문이 거른다.",
+  "_program_en_comment": "NEWS-Q12 ■4: program_en = 내보내기 sourceEn(영어 화면용 프로그램 영어 이름).",
   "feeds": [
-    { "outlet_id": "mbc_pd_note", "program": "MBC PD수첩", "channel_title": "MBC PD수첩", "handle": "@MBCPDnote", "channel_id": "UCawCv9kO2UXbTtsK4EammRQ" },
-    { "outlet_id": "mbc_straight", "program": "MBC 스트레이트", "channel_title": "탐사기획 스트레이트", "handle": "@mbc-straight", "channel_id": "UCSnghwknYf04dRFBtOtY8xA" },
-    { "outlet_id": "sbs_truth", "program": "SBS 그것이 알고 싶다", "channel_title": "그것이 알고싶다", "handle": "@sbstruth", "channel_id": "UC_U34UlsS9Mp5ZgvsEA7irw" },
-    { "outlet_id": "sbs_special", "program": "SBS 스페셜", "channel_title": "달리 [SBS DALI] - SBS 공식 교양 채널", "handle": "@sbs_dali", "channel_id": "UCPx-7AKiN1Z_qEVKhLQ5pAw", "shared_channel": true },
-    { "outlet_id": "kbs_60min", "program": "KBS 추적60분", "channel_title": "KBS 추적60분", "handle": "@KBS60min", "channel_id": "UCy-6oZwPwrR_W-zYnqLD8dg" },
-    { "outlet_id": "kbs_sisa_chang", "program": "KBS 시사기획 창", "channel_title": "KBS시사", "handle": "@kbssisa", "channel_id": "UCEb31RoX5RnfYENmnyokN8A", "shared_channel": true },
-    { "outlet_id": "kbs_docu_insight", "program": "KBS 다큐인사이트", "channel_title": "KBS 다큐", "handle": "@KBSDocumentary", "channel_id": "UC4LW3sOslC14Vn5bcoNUBkg", "shared_channel": true },
-    { "outlet_id": "ebs_docuprime", "program": "EBS 다큐프라임", "channel_title": "EBSDocumentary (EBS 다큐)", "handle": "@EBSDocumentary", "channel_id": "UCFCtZJTuJhE18k8IXwmXTYQ", "shared_channel": true },
-    { "outlet_id": "newstapa", "program": "뉴스타파", "channel_title": "뉴스타파 Newstapa", "handle": "@news_tapa", "channel_id": "UCeFUGS2VCOb6DO3BiUgvwNA" }
+    { "outlet_id": "mbc_pd_note", "program": "MBC PD수첩", "program_en": "MBC PD Notebook", "channel_title": "MBC PD수첩", "handle": "@MBCPDnote", "channel_id": "UCawCv9kO2UXbTtsK4EammRQ" },
+    { "outlet_id": "mbc_straight", "program": "MBC 스트레이트", "program_en": "MBC Straight", "channel_title": "탐사기획 스트레이트", "handle": "@mbc-straight", "channel_id": "UCSnghwknYf04dRFBtOtY8xA" },
+    { "outlet_id": "sbs_truth", "program": "SBS 그것이 알고 싶다", "program_en": "SBS Unanswered Questions", "channel_title": "그것이 알고싶다", "handle": "@sbstruth", "channel_id": "UC_U34UlsS9Mp5ZgvsEA7irw" },
+    { "outlet_id": "sbs_special", "program": "SBS 스페셜", "program_en": "SBS Special", "channel_title": "달리 [SBS DALI] - SBS 공식 교양 채널", "handle": "@sbs_dali", "channel_id": "UCPx-7AKiN1Z_qEVKhLQ5pAw", "shared_channel": true },
+    { "outlet_id": "kbs_60min", "program": "KBS 추적60분", "program_en": "KBS In-Depth 60 Minutes", "channel_title": "KBS 추적60분", "handle": "@KBS60min", "channel_id": "UCy-6oZwPwrR_W-zYnqLD8dg" },
+    { "outlet_id": "kbs_sisa_chang", "program": "KBS 시사기획 창", "program_en": "KBS Current Affairs Window", "channel_title": "KBS시사", "handle": "@kbssisa", "channel_id": "UCEb31RoX5RnfYENmnyokN8A", "shared_channel": true },
+    { "outlet_id": "kbs_docu_insight", "program": "KBS 다큐인사이트", "program_en": "KBS Docu Insight", "channel_title": "KBS 다큐", "handle": "@KBSDocumentary", "channel_id": "UC4LW3sOslC14Vn5bcoNUBkg", "shared_channel": true },
+    { "outlet_id": "ebs_docuprime", "program": "EBS 다큐프라임", "program_en": "EBS Docuprime", "channel_title": "EBSDocumentary (EBS 다큐)", "handle": "@EBSDocumentary", "channel_id": "UCFCtZJTuJhE18k8IXwmXTYQ", "shared_channel": true },
+    { "outlet_id": "newstapa", "program": "뉴스타파", "program_en": "Newstapa", "channel_title": "뉴스타파 Newstapa", "handle": "@news_tapa", "channel_id": "UCeFUGS2VCOb6DO3BiUgvwNA" }
   ]
 }

@@ -50,6 +50,25 @@ export function keywordGroupsOf(title: string, body = ''): string[] {
   return hit.length ? hit : [OTHER_GROUP];
 }
 
+/** NEWS-Q12 ■4: 묶음 이름들 → 내보내기 subtype 영문 id(설정 keywords.group_ids · 묶인 범주는 둘 다 · 기타·대응 없음 = 빠짐 · 겹침 없음). */
+export function subtypeIdsOfGroups(groups: string[]): string[] {
+  const map = fieldProfile().keywords.group_ids || {};
+  const out: string[] = [];
+  for (const g of groups) {
+    if (g.startsWith('_')) continue;
+    const v = map[g];
+    for (const id of Array.isArray(v) ? v : typeof v === 'string' ? [v] : []) {
+      if (id && !out.includes(id)) out.push(id);
+    }
+  }
+  return out;
+}
+
+/** 제목 + 첫 문단 → subtype 영문 id[](기타만이면 []). */
+export function subtypeIdsOf(title: string, body = ''): string[] {
+  return subtypeIdsOfGroups(keywordGroupsOf(title, body));
+}
+
 /** 실행 하나의 묶음별 수. */
 export class GroupCounter {
   readonly counts: GroupCounts = {};

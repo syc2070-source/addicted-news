@@ -105,6 +105,8 @@ export interface FieldProfile {
      * '_' 로 시작하는 칸은 설명. 없으면 묶음 수를 세지 않는다.
      */
     groups?: Record<string, string[] | string>;
+    /** NEWS-Q12 ■4: 묶음 이름 → 내보내기 subtype 영문 id(묶인 범주는 둘 다 · 없는 묶음·기타 = 빈 배열) */
+    group_ids?: Record<string, string[] | string>;
     core: string[];
     ad_penalty: string[];
     dup_stopwords: string[];
@@ -117,6 +119,8 @@ export interface FieldProfile {
     low_confidence: TierRule;
     category_mismatch_with_keyword: TierRule;
     deepseek_daily_cap: number;
+    /** NEWS-Q12 ■2: 보도 날짜가 수집일보다 이 날 수 넘게 오래된 기사(방송 아님)는 실림 대신 보관 · 없으면 끔 · 앞으로만 */
+    old_dated_archive_days?: number;
   };
   prompts: {
     summary_system: string;
@@ -134,8 +138,24 @@ export interface FieldProfile {
     specialized: ProfileFeed[];
     institutions: ProfileFeed[];
     academic: ProfileFeed[];
-    /** lookback_pages = NEWS-Q11 ■2 업로드 재생목록 되짚기 쪽 수(한 쪽 50편 · 1단위) — 없으면 3 */
-    broadcast: { file: string; keywords: string[]; false_friends: string[]; lookback_pages?: number };
+    /**
+     * lookback_pages = NEWS-Q11 ■2 업로드 재생목록 되짚기 쪽 수(한 쪽 50편 · 1단위) — 없으면 3
+     * NEWS-Q12 ■2: cover_days = 기본 쪽 수로 이만큼 못 덮으면 max_pages 까지 더(더 읽는 쪽은 하루 unit_cap_day 안)
+     * NEWS-Q12 ■1: clip_markers = 제목에 있으면 예고·클립(실림 대신 보관) · episode_days = 같은 회차로 볼 날짜 폭(±)
+     */
+    broadcast: {
+      file: string;
+      keywords: string[];
+      false_friends: string[];
+      lookback_pages?: number;
+      cover_days?: number;
+      max_pages?: number;
+      unit_cap_day?: number;
+      clip_markers?: string[];
+      episode_days?: number;
+      /** 같은 회차 제목 비교에서 빼는 흔한 낱말(분야 낱말이 겹친다고 같은 회차는 아님) */
+      episode_generic_words?: string[];
+    };
     statory_query: string;
     /** NEWS-Q7 ■3: 놓친 날 되짚기(국내지 구글 site: 날짜 검색) — 없으면 끔 */
     missed_day?: { query: string; max_items?: number; max_days?: number; locale?: string };

@@ -233,24 +233,61 @@ export function parsePlaylistItems(json: any): { items: BroadcastItem[]; next: s
   return { items, next };
 }
 
-/** 채널 하나 되짚기: 업로드 재생목록 pages 쪽(쪽마다 1단위 · 할당량 가드가 막으면 멈춤). */
+// NEWS-Q12 ■2: 바쁜 채널은 기본 쪽 수 뒤에도 cover_days(100일)를 덮을 때까지 더 읽는다(상한 6쪽 · 더 읽는 쪽은 하루 unit_cap_day 안에서만).
+export const UPLOAD_PAGES_MAX = 6;
+
+export interface UploadPagesPlan {
+  /** 기본 쪽 수(늘 읽음) */
+  pages?: number;
+  /** 덮을 날 수 — 가장 오래된 영상이 이보다 새로우면 maxPages 까지 더 읽음(0/없음 = 기본 쪽 수만) */
+  coverDays?: number;
+  maxPages?: number;
+  /** 더 읽는 쪽은 오늘 쓴 단위(guard.used)가 이 값 안일 때만 */
+  unitCapDay?: number;
+  now?: number;
+}
+
+/** 읽은 영상 가운데 가장 오래된 것이 몇 날 전인지(게시 시각 없으면 null). */
+export function coveredDaysOf(items: BroadcastItem[], now: number): number | null {
+  let oldest = Infinity;
+  for (const it of items) {
+    const t = Date.parse(it.publishedAt);
+    if (Number.isFinite(t) && t < oldest) oldest = t;
+  }
+  return Number.isFinite(oldest) ? Math.floor((now - oldest) / 86400000) : null;
+}
+
+/** 채널 하나 되짚기: 업로드 재생목록 pages 쪽(쪽마다 1단위 · 할당량 가드가 막으면 멈춤) · coverDays 를 못 덮으면 maxPages 까지. */
 export async function lookbackUploads(
   channelId: string,
   key: string,
   guard: QuotaGuard,
-  opts: { pages?: number; get?: HttpGet } = {},
-): Promise<LookbackResult> {
+  opts: UploadPagesPlan & { get?: HttpGet } = {},
+): Promise<LookbackResult & { pages: number; coveredDays: number | null }> {
   const get = opts.get ?? defaultGet;
+  const now = opts.now ?? Date.now();
   const playlistId = uploadsPlaylistId(channelId);
-  if (!playlistId) return { items: [], units: 0, error: { status: null, reason: 'bad_channel_id' } };
+  if (!playlistId) return { items: [], units: 0, pages: 0, coveredDays: null, error: { status: null, reason: 'bad_channel_id' } };
   const headers = { 'x-goog-api-key': key, accept: 'application/json' };
-  const pages = Math.max(1, Math.min(5, Math.floor(opts.pages ?? UPLOAD_PAGES_DEFAULT)));
+  const clamp = (n: number) => Math.max(1, Math.min(UPLOAD_PAGES_MAX, Math.floor(n)));
+  const pages = clamp(opts.pages ?? UPLOAD_PAGES_DEFAULT);
+  const maxPages = opts.coverDays ? Math.max(pages, clamp(opts.maxPages ?? UPLOAD_PAGES_MAX)) : pages;
   const items: BroadcastItem[] = [];
   let units = 0;
+  let pagesOk = 0;
   let pageToken: string | null = null;
-  for (let p = 0; p < pages; p++) {
+  const done = (error?: LookbackResult['error']) => ({
+    items, units, pages: pagesOk, coveredDays: coveredDaysOf(items, now), ...(error ? { error } : {}),
+  });
+  for (let p = 0; p < maxPages; p++) {
+    if (p >= pages) {
+      // 기본 쪽 수 뒤: 이미 덮었거나 하루 상한이면 멈춤
+      const covered = coveredDaysOf(items, now);
+      if (covered !== null && covered >= (opts.coverDays ?? 0)) break;
+      if (opts.unitCapDay !== undefined && guard.used + PLAYLIST_UNITS > opts.unitCapDay) break;
+    }
     if (!guard.spend(PLAYLIST_UNITS)) {
-      return { items, units, error: units ? undefined : { status: null, reason: 'quota_guard' } };
+      return done(units ? undefined : { status: null, reason: 'quota_guard' });
     }
     units += PLAYLIST_UNITS;
     try {
@@ -260,15 +297,16 @@ export async function lookbackUploads(
       if (pageToken) params.pageToken = pageToken;
       const page = parsePlaylistItems(await get(`${API}/playlistItems`, params, headers));
       items.push(...page.items);
+      pagesOk++;
       pageToken = page.next;
       if (!pageToken) break;
     } catch (e) {
       const err = apiErrorOf(e);
       if (err.reason === 'quotaExceeded' || err.reason === 'dailyLimitExceeded') guard.stopped = true;
-      return { items, units, error: err };
+      return done(err);
     }
   }
-  return { items, units };
+  return done();
 }
 
 /** 이번 실행 되짚기 기록(per_source.__run.broadcastApi · health). */
@@ -288,6 +326,8 @@ export interface BroadcastApiRecord {
   apiOnly: string[];
   quotaStopped: boolean;
   errors: string[];
+  /** NEWS-Q12 ■2: 채널별 읽은 쪽 수 · 덮은 날 수(가장 오래된 영상) */
+  cover?: Record<string, { pages: number; days: number | null }>;
 }
 
 export function emptyApiRecord(mode: 'on' | 'off', unitsBefore = 0): BroadcastApiRecord {

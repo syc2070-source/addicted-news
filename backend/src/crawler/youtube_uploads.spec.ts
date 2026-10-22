@@ -111,6 +111,8 @@ describe('youtube_api — 업로드 재생목록 되짚기(NEWS-Q11 ■2)', () =
     expect(r).toEqual({
       items: [],
       units: 0,
+      pages: 0,
+      coveredDays: null,
       error: { status: null, reason: 'quota_guard' },
     });
     expect(full.stopped).toBe(true);
@@ -137,5 +139,75 @@ describe('youtube_api — 업로드 재생목록 되짚기(NEWS-Q11 ■2)', () =
     expect(
       (await lookbackUploads('bad', FAKE_KEY, new QuotaGuard())).error?.reason,
     ).toBe('bad_channel_id');
+  });
+});
+
+// NEWS-Q12 ■2: 바쁜 채널은 100일을 덮을 때까지 6쪽까지 · 더 읽는 쪽은 하루 100단위 안
+describe('youtube_api — 100일 덮기(NEWS-Q12 ■2)', () => {
+  const NOW = Date.parse('2026-10-22T03:00:00Z');
+  // 쪽 n 의 영상은 모두 (n+1)*daysPerPage 일 전
+  function datedPage(n: number, daysPerPage: number) {
+    const at = new Date(NOW - (n + 1) * daysPerPage * 86400000).toISOString();
+    return {
+      nextPageToken: `T${n + 1}`,
+      items: Array.from({ length: 50 }, (_, i) => ({
+        snippet: {
+          title: `편 ${n}-${i}`,
+          description: '',
+          resourceId: { videoId: `v${String(n * 100 + i).padStart(10, '0')}` },
+        },
+        contentDetails: { videoPublishedAt: at },
+      })),
+    };
+  }
+  const run = (
+    daysPerPage: number,
+    guard = new QuotaGuard(),
+    unitCapDay = 100,
+  ) => {
+    let n = 0;
+    return lookbackUploads('UCawCv9kO2UXbTtsK4EammRQ', FAKE_KEY, guard, {
+      pages: 3,
+      coverDays: 100,
+      maxPages: 6,
+      unitCapDay,
+      now: NOW,
+      get: () => Promise.resolve(datedPage(n++, daysPerPage)),
+    });
+  };
+
+  it('3쪽으로 100일을 덮는 채널(쪽당 40일) = 3쪽 그대로', async () => {
+    const r = await run(40);
+    expect(r.pages).toBe(3);
+    expect(r.coveredDays).toBe(120);
+  });
+
+  it('바쁜 채널(쪽당 10일) = 6쪽에서 멈춤(60일) · 25일이면 4쪽(100일)', async () => {
+    const busy = await run(10);
+    expect(busy.pages).toBe(6);
+    expect(busy.units).toBe(6 * PLAYLIST_UNITS);
+    expect(busy.coveredDays).toBe(60);
+    expect((await run(25)).pages).toBe(4);
+  });
+
+  it('더 읽는 쪽은 오늘 쓴 단위가 하루 상한(100) 안일 때만 · 기본 3쪽은 그대로', async () => {
+    const r = await run(10, new QuotaGuard(2000, 98), 100);
+    expect(r.pages).toBe(3);
+    expect(r.units).toBe(3);
+  });
+
+  it('coverDays 없으면 옛 동작(기본 쪽 수만)', async () => {
+    let n = 0;
+    const r = await lookbackUploads(
+      'UCawCv9kO2UXbTtsK4EammRQ',
+      FAKE_KEY,
+      new QuotaGuard(),
+      {
+        pages: 3,
+        now: NOW,
+        get: () => Promise.resolve(datedPage(n++, 10)),
+      },
+    );
+    expect(r.pages).toBe(3);
   });
 });

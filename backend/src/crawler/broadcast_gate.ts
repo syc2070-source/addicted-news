@@ -40,6 +40,8 @@ export interface BroadcastGateStats {
   archive: number;
   reject: Record<BroadcastGateReason, number>;
   subtopics: Record<string, number>;
+  /** NEWS-Q12 ■1: yes 였지만 본편에 묶여 보관한 수(clip = 예고·클립 표지 · episode_dup = 같은 회차 · archive 에 이미 포함) */
+  folded: { clip: number; episode_dup: number };
 }
 
 export function emptyBroadcastGateStats(): BroadcastGateStats {
@@ -56,6 +58,7 @@ export function emptyBroadcastGateStats(): BroadcastGateStats {
       judgment_missing: 0,
     },
     subtopics: {},
+    folded: { clip: 0, episode_dup: 0 },
   };
 }
 

@@ -30,9 +30,10 @@ import {
 import {
   BroadcastGateStats, broadcastGateSystem, buildBroadcastGateUser, decideBroadcastGate, emptyBroadcastGateStats, parseBroadcastVerdict,
 } from './broadcast_gate';
+import { DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, existingEpisodeMains, foldEpisodes, shiftYmd } from './broadcast_episode';
 import { GroupCounter, keywordGroupsOf } from './keyword_groups';
 import {
-  DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackUploads,
+  DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, UPLOAD_PAGES_MAX, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackUploads,
   planChannel, rss404Outlets, youtubeApiKey,
 } from './youtube_api';
 import { feedStatusOf } from './broadcast_feeds';
@@ -41,7 +42,8 @@ import { fieldProfile, SourceGrade } from './field_profile';
 import { fetchFeed } from './feed_fetch';
 import { KnownIndex, loadKnownIndex, preDuplicate } from './dedup';
 import { DeepseekBudget, dailyCap, estimateCostUsd, priceOf, usedTodayFromRuns } from './deepseek_budget';
-import { decideTier, effectiveTier, Tier } from './tier';
+import { decideTier, effectiveTier, oldDatedTier, Tier } from './tier';
+import { HostBreaker } from './host_breaker';
 import {
   CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, recentCrawlRuns, recordCrawlRun,
 } from './crawl_runs';
@@ -167,6 +169,7 @@ let crawlStats = {
   dupPreSkip: 0,             // NEWS-Q2 ■2: DeepSeek 앞 중복 건너뜀(기억표·DB)
   capSkip: 0,                // NEWS-Q2 ■2: 하루 DeepSeek 상한으로 건너뜀
   archiveTier: 0,            // NEWS-Q2 ■6: 보관(archive) 판정
+  oldDatedArchive: 0,        // NEWS-Q12 ■2: 오래된 보도 날짜 → 보관
   urlResolved: 0,            // NEWS-Q2 ■3: 구글 링크 → 원문 성공
   urlResolveFail: 0,         // NEWS-Q2 ■3: 해석 실패(구글 링크 유지)
   spamToGate: 0,             // NEWS-Q10 ■2: 스팸 낱말 하나 ∧ 제목 핵심어 → 관문으로 보낸 후보
@@ -729,7 +732,15 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
   const gate = RUN.broadcastGate;
   if (RUN.progress) RUN.progress.broadcastGate = gate;
   const gateSystem = broadcastGateSystem();
-  const pages = PROFILE.sources.broadcast.lookback_pages ?? UPLOAD_PAGES_DEFAULT;
+  const bcCfg = PROFILE.sources.broadcast;
+  const pages = bcCfg.lookback_pages ?? UPLOAD_PAGES_DEFAULT;
+  // NEWS-Q12 ■2: 바쁜 채널은 cover_days 를 덮을 때까지 max_pages 까지(더 읽는 쪽은 하루 unit_cap_day 안)
+  const cover = { coverDays: bcCfg.cover_days, maxPages: bcCfg.max_pages ?? UPLOAD_PAGES_MAX, unitCapDay: bcCfg.unit_cap_day };
+  // NEWS-Q12 ■1: 같은 편 묶기(예고·클립·같은 회차 → 본편 하나만 실림)
+  const fold = {
+    markers: bcCfg.clip_markers ?? DEFAULT_CLIP_MARKERS, days: bcCfg.episode_days ?? DEFAULT_EPISODE_DAYS,
+    generic: bcCfg.episode_generic_words ?? [],
+  };
   const rssDown = new Set(rss404Outlets(failedRaw));
   console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → 방송 관문 한 질문) · 되짚기 API ${api.mode}` +
     (apiKey ? ` (업로드 재생목록 ${pages}쪽 · 오늘 앞서 ${today.units}단위 · 상한 ${DAILY_UNIT_CAP})` : ` (env ${YOUTUBE_API_ENV} 없음 → RSS 만)`) +
@@ -762,7 +773,8 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     }
     if (plan.api && apiKey) {
       const rssIds = new Set(items.map((it) => it.videoId));
-      const lb = await lookbackUploads(source.channelId, apiKey, guard, { pages });
+      const lb = await lookbackUploads(source.channelId, apiKey, guard, { pages, ...cover });
+      (api.cover ||= {})[source.outletId] = { pages: lb.pages, days: lb.coveredDays };
       api.calls += Math.round(lb.units / PLAYLIST_UNITS);
       api.units += lb.units;
       api.unitsToday = guard.used;
@@ -784,7 +796,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         api.newItems++;
         if (passesBroadcastKeywordGate(it)) api.keywordPass++;
       }
-      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${fresh}) · ${lb.units}단위`);
+      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${fresh}) · ${lb.units}단위 · ${lb.coveredDays ?? '-'}일치`);
     }
     // NEWS-Q8 ■2: 채널별 마지막 읽기 결과(health broadcast.feeds[])
     if (RUN.progress) {
@@ -798,6 +810,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     }
     stat.read = items.length;
     let accepted = 0;
+    const pendingPublish: Array<{ row: Candidate; item: BroadcastItem }> = [];
     for (const item of items) {
       crawlStats.broadcastSeen++;
       gate.seen++;
@@ -862,18 +875,48 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         continue;
       }
       const tier: Tier = decision.action === 'archive' ? 'archive' : 'publish';
-      if (tier === 'archive') gate.archive++;
-      else gate.publish++;
       const base = buildBroadcastRow(source, item, { summary, category: provCategory });
       const row: Candidate = {
         ...(base as Candidate),
         keywords: base.keywords.includes(decision.subtopic) ? base.keywords : [...base.keywords, decision.subtopic],
         tier, urlResolve: null, sourceId: `broadcast:${source.outletId}`, kwGroups,
       };
-      out.push(row);
       accepted++;
       crawlStats.broadcastAccepted++;
-      console.log(`  │   📺 방송 ${tier === 'archive' ? '보관' : '채택'}(${decision.subtopic}): [${source.program}] ${item.title.slice(0, 40)}`);
+      if (tier === 'publish') {
+        // ■1: 실림 후보는 채널을 다 본 뒤 같은 편 묶기
+        pendingPublish.push({ row, item });
+        continue;
+      }
+      gate.archive++;
+      out.push(row);
+      console.log(`  │   📺 방송 보관(${decision.subtopic}): [${source.program}] ${item.title.slice(0, 40)}`);
+    }
+    // NEWS-Q12 ■1: 예고·클립·같은 회차 → 본편 하나만 실림(이미 실린 본편이 있으면 모두 보관) · 보관층 열이 없으면 묶지 않음
+    if (pendingPublish.length) {
+      let roles = pendingPublish.map(() => 'main' as string);
+      if (RUN.flags.tier) {
+        const ymds = pendingPublish.map((p) => p.row.publishedAt).sort();
+        const existing = RUN.query
+          ? await existingEpisodeMains(RUN.query, source.program, shiftYmd(ymds[0], -fold.days), shiftYmd(ymds[ymds.length - 1], fold.days), { deletedAt: RUN.flags.deletedAt })
+          : [];
+        roles = foldEpisodes(
+          pendingPublish.map((p) => ({ title: p.item.title, description: p.item.description, program: source.program, publishedAt: p.item.publishedAt || p.row.publishedAt })),
+          existing, fold,
+        );
+      }
+      pendingPublish.forEach((p, i) => {
+        const role = roles[i];
+        if (role === 'clip' || role === 'episode_dup') {
+          p.row.tier = 'archive';
+          gate.folded[role]++;
+          gate.archive++;
+        } else {
+          gate.publish++;
+        }
+        out.push(p.row);
+        console.log(`  │   📺 방송 ${p.row.tier === 'archive' ? `보관(본편에 묶음 · ${role})` : '채택'}: [${source.program}] ${p.item.title.slice(0, 40)}`);
+      });
     }
     console.log(`  ├─ [${source.program}] 읽음 ${items.length} · 채택 ${accepted}`);
   }
@@ -958,6 +1001,8 @@ interface ReadSource {
   repaired: boolean;
 }
 
+const bodyBreaker = new HostBreaker();
+
 async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<string>): Promise<ReadItem> {
   const rawTitle = normalizeText(it.title || '');
   const itemLink = it.link ? String(it.link) : '';
@@ -996,9 +1041,14 @@ async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<strin
   }
 
   // 원문 본문 추출(부족·미통과 시). og:image 힌트도 함께 수집(v5.2 #5).
-  if ((!r.fieldOk || !r.rawContent || r.rawContent.length < MIN_BODY_CHARS) && r.resolvedUrl) {
+  // NEWS-Q12 ■3: 이번 실행에서 본문 추출이 거듭 멈춘 호스트는 건너뜀(제목·스니펫으로 판정)
+  // 못 푼 구글 링크(news.google.com)는 단락기 밖 — 여러 매체가 한 호스트 이름으로 묶이면 안 되므로
+  const breakerOn = !isGoogleNewsLink(r.resolvedUrl);
+  if ((!r.fieldOk || !r.rawContent || r.rawContent.length < MIN_BODY_CHARS) && r.resolvedUrl && !(breakerOn && bodyBreaker.skip(r.resolvedUrl))) {
     r.bodyTried = true;
+    const t0 = Date.now();
     const data = await extractArticleData(r.resolvedUrl);
+    if (breakerOn) bodyBreaker.record(r.resolvedUrl, Date.now() - t0, data.body ? data.body.length : 0);
     r.ogImageHint = data.ogImage;
     if (data.body && data.body.length > (r.rawContent || '').length) {
       r.rawContent = data.body;
@@ -1744,8 +1794,14 @@ async function saveCandidates(list: Candidate[]) {
       continue;
     }
     // NEWS-Q2: 묶음 SQL 2 열(tier·published_ts·source_grade·url_resolve)은 INSERT 뒤 열이 선 것만 채운다.
+    // NEWS-Q12 ■2: 보도 날짜가 수집일보다 gate.old_dated_archive_days 넘게 오래된 기사 = 보관(앞으로만)
+    // 방송(되짚기 100일 · 재업로드)과 Statory(pub_year 만 있으면 YYYY-01-01 이라 날짜가 아님)는 빼고
+    const aged = oldDatedTier(c.tier === 'archive' ? 'archive' : 'publish', c.publishedAt, {
+      days: PROFILE.gate.old_dated_archive_days, broadcast: isBroadcast || c.origin === 'statory', tierColumn: RUN.flags.tier,
+    });
+    if (aged.demoted) console.log(`  │   🗄️ 보관(old_dated · 보도 ${c.publishedAt}): ${c.title.slice(0, 30)}`);
     const extras = {
-      tier: c.tier || 'publish',
+      tier: aged.tier,
       publishedTs: c.publishedTs ?? null,
       sourceGrade: c.sourceGrade ?? defaultGrade(c.sourceType),
       urlResolve: c.urlResolve ?? null,
@@ -1762,6 +1818,10 @@ async function saveCandidates(list: Candidate[]) {
         else st.saved++;
       }
       if (extras.tier === 'archive') archived++;
+      if (aged.demoted) {
+        crawlStats.oldDatedArchive++;
+        if (RUN.progress) RUN.progress.oldDatedArchived = (RUN.progress.oldDatedArchived || 0) + 1;
+      }
       RUN.groups.add(c.kwGroups, extras.tier === 'archive' ? 'archived' : 'saved');
     };
 
@@ -2213,6 +2273,8 @@ async function main() {
     RUN.progress.spamToGate = crawlStats.spamToGate;
     // NEWS-Q11 ■3: 핵심어 묶음별 후보·저장·보관·거부
     RUN.progress.keywordGroups = RUN.groups.toJSON();
+    // NEWS-Q12 ■3: 본문 추출 단락기(끊긴 호스트 · 건너뛴 추출 수)
+    RUN.progress.bodyBreaker = { tripped: bodyBreaker.tripped(), skipped: bodyBreaker.skipped };
     try {
       const prev = RUN.flags.crawlRuns ? await recentCrawlRuns(q, 6) : [];
       const digest = digestPerSource(RUN.perSource).sources;

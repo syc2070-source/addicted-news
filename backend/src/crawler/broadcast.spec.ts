@@ -32,7 +32,7 @@ https://www.instagram.com/mbcpdnote</media:description>
 
 const SOURCE: BroadcastSource = {
   outletId: 'mbc_pd_note', program: 'MBC PD수첩', channelTitle: 'MBC PD수첩',
-  channelId: 'UCawCv9kO2UXbTtsK4EammRQ', feedUrl: 'x', sharedChannel: false,
+  channelId: 'UCawCv9kO2UXbTtsK4EammRQ', feedUrl: 'x', sharedChannel: false, programEn: 'MBC PD Notebook',
 };
 
 describe('방송 RSS 파싱', () => {

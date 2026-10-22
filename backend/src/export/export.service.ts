@@ -9,6 +9,13 @@ import { Injectable, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { fieldProfile } from '../crawler/field_profile';
 import { columnExists, QueryFn } from '../crawler/schema_probe';
+import { broadcastEnglishNames } from '../crawler/broadcast';
+import {
+  keywordGroupNames,
+  keywordGroupsOf,
+  OTHER_GROUP,
+  subtypeIdsOfGroups,
+} from '../crawler/keyword_groups';
 
 export const EXPORT_PAGE = 200;
 
@@ -36,6 +43,12 @@ export interface ExportArticle {
   clusterId: string | null;
   tier: 'publish' | 'archive';
   sourceGrade: string | null;
+  /** NEWS-Q12 ■4: 출처 종류(articles.source_type · broadcast · kr_press · world_press …) — 없으면 null */
+  sourceType: string | null;
+  /** NEWS-Q12 ■4: 하위 분야 영문 id(gambling · alcohol · drugs · tobacco · gaming · digital · work · food · ai · shopping) — 기타 = [] */
+  subtype: string[];
+  /** NEWS-Q12 ■4: 방송 프로그램 영어 이름(방송이 아니거나 모르면 null) */
+  sourceEn: string | null;
 }
 
 export interface ExportPage {
@@ -150,7 +163,8 @@ export function buildExportSql(
   if (q.since) where.push(`created_at >= ${p(q.since)}::timestamptz`);
   if (q.cursor != null) where.push(`id > ${p(q.cursor)}`);
   const sql =
-    `SELECT id, title, source, published_at, source_url, category` +
+    // keywords(짧은 꼬리표)는 subtype 셈에만 쓰고 내보내지 않는다 · 본문·요약은 읽지도 않음
+    `SELECT id, title, source, published_at, source_url, category, source_type, keywords` +
     `${cols.publishedTs ? ', published_ts' : ', NULL AS published_ts'}` +
     `${cols.tier ? ', tier' : ', NULL AS tier'}` +
     `${cols.sourceGrade ? ', source_grade' : ', NULL AS source_grade'}` +
@@ -167,9 +181,30 @@ const iso = (v: unknown): string | null => {
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 };
 
+/** 행 → 묶음 이름(제목 + 꼬리표 · 방송 관문 하위 주제가 꼬리표에 있으면 그것도) → 영문 id. 요약·본문은 쓰지 않는다. */
+export function subtypeOfRow(r: Record<string, any>): string[] {
+  // keywords = typeorm simple-array(쉼표로 이은 글) · 배열로 와도 받음
+  const kw: unknown[] = Array.isArray(r.keywords)
+    ? r.keywords
+    : typeof r.keywords === 'string'
+      ? r.keywords.split(',')
+      : [];
+  const tags = kw.filter((k): k is string => typeof k === 'string');
+  const groups = keywordGroupsOf(String(r.title ?? ''), tags.join(' ')).filter(
+    (g) => g !== OTHER_GROUP,
+  );
+  const names = keywordGroupNames();
+  for (const k of tags) {
+    if (typeof k === 'string' && names.includes(k) && !groups.includes(k))
+      groups.push(k);
+  }
+  return subtypeIdsOfGroups(groups);
+}
+
 export function exportRowOf(
   r: Record<string, any>,
   field: string,
+  englishNames: Record<string, string> = {},
 ): ExportArticle {
   const publishedAt =
     r.published_at instanceof Date
@@ -187,6 +222,12 @@ export function exportRowOf(
     clusterId: r.cluster_id == null ? null : String(r.cluster_id),
     tier: r.tier === 'archive' ? 'archive' : 'publish',
     sourceGrade: r.source_grade == null ? null : String(r.source_grade),
+    sourceType: r.source_type == null ? null : String(r.source_type),
+    subtype: subtypeOfRow(r),
+    sourceEn:
+      r.source_type === 'broadcast'
+        ? (englishNames[String(r.source ?? '')] ?? null)
+        : null,
   };
 }
 
@@ -228,7 +269,8 @@ export class ExportService {
     const rows = await query(sql, params);
     const more = rows.length > EXPORT_PAGE;
     const shown = rows.slice(0, EXPORT_PAGE);
-    out.items = shown.map((r) => exportRowOf(r, field));
+    const en = broadcastEnglishNames();
+    out.items = shown.map((r) => exportRowOf(r, field, en));
     const last = shown[shown.length - 1];
     if (more && last) out.nextCursor = encodeCursor(Number(last.id));
     return out;

@@ -27,6 +27,10 @@ const COLS = [
   'clusterId',
   'tier',
   'sourceGrade',
+  // NEWS-Q12 ■4
+  'sourceType',
+  'subtype',
+  'sourceEn',
 ];
 
 function row(id: number, over: Record<string, unknown> = {}) {
@@ -134,7 +138,8 @@ describe('export v0 — GET /api/export/articles(NEWS-Q10 ■3)', () => {
     const sql = String(
       query.mock.calls.find((c) => String(c[0]).includes('FROM articles'))![0],
     );
-    expect(sql).not.toMatch(/summary|raw_body|teaser|keywords/);
+    // NEWS-Q12 ■4: keywords(꼬리표)는 subtype 셈에만 읽음(내보내지 않음) · 본문·요약은 읽지도 않음
+    expect(sql).not.toMatch(/summary|raw_body|teaser/);
     expect(parseExportQuery({ cursor: page.nextCursor! }).cursor).toBe(
       EXPORT_PAGE,
     );

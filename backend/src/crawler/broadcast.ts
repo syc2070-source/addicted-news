@@ -30,6 +30,8 @@ export interface BroadcastSource {
   channelId: string;
   feedUrl: string;
   sharedChannel: boolean;
+  /** NEWS-Q12 ■4: 프로그램 영어 이름(없으면 null) */
+  programEn: string | null;
 }
 
 export interface BroadcastItem {
@@ -59,11 +61,19 @@ export function loadBroadcastSources(
         channelId: String(f.channel_id),
         feedUrl: feedUrlFor(String(f.channel_id)),
         sharedChannel: f.shared_channel === true,
+        programEn: typeof f.program_en === 'string' && f.program_en.trim() ? f.program_en.trim() : null,
       }));
   } catch (e) {
     console.warn(`[broadcast] 소스 파일을 읽지 못함(방송 추적 건너뜀): ${(e as Error).message}`);
     return [];
   }
+}
+
+/** NEWS-Q12 ■4: 프로그램 이름(articles.source) → 영어 이름(내보내기 sourceEn). */
+export function broadcastEnglishNames(sources: BroadcastSource[] = loadBroadcastSources()): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const s of sources) if (s.programEn) out[s.program] = s.programEn;
+  return out;
 }
 
 /** 핵심어를 품었지만 뜻이 다른 낱말(분야 설정 sources.broadcast.false_friends). */
