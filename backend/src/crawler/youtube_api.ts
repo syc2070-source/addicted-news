@@ -245,25 +245,39 @@ export interface UploadPagesPlan {
   /** 더 읽는 쪽은 오늘 쓴 단위(guard.used)가 이 값 안일 때만 */
   unitCapDay?: number;
   now?: number;
+  /**
+   * NEWS-Q13 ■3 「이어짐」: 이 채널을 지난번 잘 되짚은 실행 시각(ms · 여유 하루 뺀 값). 있으면 coverDays 대신
+   * 이보다 오래된 영상에 닿을 때 멈춘다(적어도 1쪽 · 최대 maxPages · 기본 쪽 수 뒤는 unitCapDay 안). 못 닿으면 gap.
+   */
+  since?: number;
 }
 
-/** 읽은 영상 가운데 가장 오래된 것이 몇 날 전인지(게시 시각 없으면 null). */
-export function coveredDaysOf(items: BroadcastItem[], now: number): number | null {
+/** 읽은 영상 가운데 가장 오래된 게시 시각(ms · 없으면 null). */
+function oldestOf(items: BroadcastItem[]): number | null {
   let oldest = Infinity;
   for (const it of items) {
     const t = Date.parse(it.publishedAt);
     if (Number.isFinite(t) && t < oldest) oldest = t;
   }
-  return Number.isFinite(oldest) ? Math.floor((now - oldest) / 86400000) : null;
+  return Number.isFinite(oldest) ? oldest : null;
 }
 
-/** 채널 하나 되짚기: 업로드 재생목록 pages 쪽(쪽마다 1단위 · 할당량 가드가 막으면 멈춤) · coverDays 를 못 덮으면 maxPages 까지. */
+/** 읽은 영상 가운데 가장 오래된 것이 몇 날 전인지(게시 시각 없으면 null). */
+export function coveredDaysOf(items: BroadcastItem[], now: number): number | null {
+  const oldest = oldestOf(items);
+  return oldest === null ? null : Math.floor((now - oldest) / 86400000);
+}
+
+/**
+ * 채널 하나 되짚기: 업로드 재생목록 pages 쪽(쪽마다 1단위 · 할당량 가드가 막으면 멈춤) · coverDays 를 못 덮으면 maxPages 까지.
+ * NEWS-Q13 ■3: since 가 있으면 「이어짐」 — since 보다 오래된 영상에 닿으면 멈춤 · 못 닿고 끝나면 gap(이어지지 못한 날 수).
+ */
 export async function lookbackUploads(
   channelId: string,
   key: string,
   guard: QuotaGuard,
   opts: UploadPagesPlan & { get?: HttpGet } = {},
-): Promise<LookbackResult & { pages: number; coveredDays: number | null }> {
+): Promise<LookbackResult & { pages: number; coveredDays: number | null; gap?: number | null }> {
   const get = opts.get ?? defaultGet;
   const now = opts.now ?? Date.now();
   const playlistId = uploadsPlaylistId(channelId);
@@ -271,16 +285,36 @@ export async function lookbackUploads(
   const headers = { 'x-goog-api-key': key, accept: 'application/json' };
   const clamp = (n: number) => Math.max(1, Math.min(UPLOAD_PAGES_MAX, Math.floor(n)));
   const pages = clamp(opts.pages ?? UPLOAD_PAGES_DEFAULT);
-  const maxPages = opts.coverDays ? Math.max(pages, clamp(opts.maxPages ?? UPLOAD_PAGES_MAX)) : pages;
+  const since = opts.since !== undefined && Number.isFinite(opts.since) ? opts.since : undefined;
+  const maxPages = since !== undefined || opts.coverDays ? Math.max(pages, clamp(opts.maxPages ?? UPLOAD_PAGES_MAX)) : pages;
   const items: BroadcastItem[] = [];
   let units = 0;
   let pagesOk = 0;
   let pageToken: string | null = null;
-  const done = (error?: LookbackResult['error']) => ({
-    items, units, pages: pagesOk, coveredDays: coveredDaysOf(items, now), ...(error ? { error } : {}),
-  });
+  let exhausted = false;
+  const reachedSince = () => {
+    const oldest = oldestOf(items);
+    return since !== undefined && oldest !== null && oldest <= since;
+  };
+  const gapOf = (): number | null | undefined => {
+    if (since === undefined) return undefined;
+    if (exhausted || reachedSince()) return 0;
+    const oldest = oldestOf(items);
+    return oldest === null ? null : Math.ceil((oldest - since) / 86400000);
+  };
+  const done = (error?: LookbackResult['error']) => {
+    const gap = gapOf();
+    return {
+      items, units, pages: pagesOk, coveredDays: coveredDaysOf(items, now),
+      ...(gap !== undefined ? { gap } : {}), ...(error ? { error } : {}),
+    };
+  };
   for (let p = 0; p < maxPages; p++) {
-    if (p >= pages) {
+    if (since !== undefined) {
+      // 이어짐: 지난번 본 데까지 닿았으면 멈춤 · 기본 쪽 수 뒤는 하루 상한 안에서만
+      if (p > 0 && reachedSince()) break;
+      if (p >= pages && opts.unitCapDay !== undefined && guard.used + PLAYLIST_UNITS > opts.unitCapDay) break;
+    } else if (p >= pages) {
       // 기본 쪽 수 뒤: 이미 덮었거나 하루 상한이면 멈춤
       const covered = coveredDaysOf(items, now);
       if (covered !== null && covered >= (opts.coverDays ?? 0)) break;
@@ -299,7 +333,10 @@ export async function lookbackUploads(
       items.push(...page.items);
       pagesOk++;
       pageToken = page.next;
-      if (!pageToken) break;
+      if (!pageToken) {
+        exhausted = true;
+        break;
+      }
     } catch (e) {
       const err = apiErrorOf(e);
       if (err.reason === 'quotaExceeded' || err.reason === 'dailyLimitExceeded') guard.stopped = true;
@@ -307,6 +344,160 @@ export async function lookbackUploads(
     }
   }
   return done();
+}
+
+// ---------- NEWS-Q13 ■3: 「이어짐」 기준 · 100일 한 번 메우기(search.list) ----------
+/** 여유 7일: 업로드 재생목록은 올린 차례 · 게시 시각은 videoPublishedAt(예약·프리미어는 며칠 늦게 공개) */
+export const CONTINUITY_MARGIN_DAYS = 7;
+
+/**
+ * 채널마다 지난번 잘 되짚은 실행 시각(ms) — 최근 실행(읽기 전용 제외)의 broadcastApi.cover 에 그 채널이 있고
+ * judged(그 채널 영상을 끊김 없이 다 판정) ∧ gap 0/없음 ∧ errors 에 없으면. judged 칸이 없는 옛 기록은 세지 않는다.
+ * 없거나 실패면 {}(그 채널은 옛 coverDays 규칙 — 다 읽고 다시 판정).
+ */
+export async function lastLookbackFromRuns(query: QueryFn, field: string): Promise<Record<string, number>> {
+  try {
+    const rows = await query(
+      `SELECT started_at, per_source->'__run'->'broadcastApi' AS api FROM crawl_runs
+        WHERE field = $1 AND read_only = false ORDER BY started_at DESC LIMIT 14`,
+      [field],
+    );
+    const out: Record<string, number> = {};
+    for (const r of rows || []) {
+      const a = typeof r.api === 'string' ? JSON.parse(r.api) : r.api;
+      const at = Date.parse(r.started_at instanceof Date ? r.started_at.toISOString() : String(r.started_at));
+      if (!a || !a.cover || !Number.isFinite(at)) continue;
+      const failed = new Set((Array.isArray(a.errors) ? a.errors : []).map((e: unknown) => String(e).split(':')[0]));
+      for (const [ch, c] of Object.entries(a.cover as Record<string, { pages?: number; judged?: boolean; gap?: number | null }>)) {
+        if (out[ch] !== undefined || failed.has(ch) || !(Number(c?.pages) > 0)) continue;
+        // 판정이 끊겼거나 이어지지 못한(gap) 실행은 「잘 되짚음」이 아니다 → 더 앞 실행에서 이어 읽음(빈 데가 날마다 보임)
+        if (c?.judged !== true || Number(c?.gap) > 0) continue;
+        out[ch] = at;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** 메우기를 이 만큼 해 보고도 덜 되면 그만둔다(날마다 808단위를 태우지 않게 · runs 에 giveUp). */
+export const BACKFILL_MAX_TRIES = 3;
+
+export interface BackfillState {
+  /** 앞 실행이 done 을 남겼거나 BACKFILL_MAX_TRIES 번 해 봤음 → 이번엔 안 돎 */
+  done: boolean;
+  tries: number;
+  /** 앞 실행에서 오류·끊김 없이 끝난 채널(다시 검색하지 않음) */
+  finished: string[];
+}
+
+/**
+ * 설정 깃발 backfill_search_once 의 id 에 대한 앞 실행 기록(per_source.__run.broadcastBackfill).
+ * 실패면 done(안전: 다시 돌지 않음 · 단위 0).
+ */
+export async function backfillStateFromRuns(query: QueryFn, field: string, id: string): Promise<BackfillState> {
+  try {
+    const rows = await query(
+      `SELECT per_source->'__run'->'broadcastBackfill' AS b FROM crawl_runs
+        WHERE field = $1 AND per_source->'__run'->'broadcastBackfill'->>'id' = $2`,
+      [field, id],
+    );
+    const finished = new Set<string>();
+    let done = false;
+    let tries = 0;
+    for (const r of rows || []) {
+      const b = typeof r.b === 'string' ? JSON.parse(r.b) : r.b;
+      if (!b) continue;
+      if (b.done === true) done = true;
+      const chans = Object.entries((b.channels || {}) as Record<string, { error?: string }>);
+      // 검색을 하나라도 한 실행만 「해 봄」(같은 날 둘째 실행 · 할당량 · 시간으로 채널에 못 닿은 실행은 세지 않음)
+      if (chans.length) tries++;
+      for (const [ch, rec] of chans) {
+        if (rec && !rec.error) finished.add(ch);
+      }
+    }
+    return { done: done || tries >= BACKFILL_MAX_TRIES, tries, finished: [...finished] };
+  } catch {
+    return { done: true, tries: 0, finished: [] };
+  }
+}
+
+export interface BackfillChannelRecord {
+  pages: number;
+  items: number;
+  units: number;
+  error?: string;
+}
+
+export interface BackfillRecord {
+  id: string;
+  done: boolean;
+  /** 몇 번째 해 봄(1부터) · 앞 실행에서 이미 끝난 채널(이번엔 검색 0) */
+  try: number;
+  carried: string[];
+  query: string;
+  publishedAfter: string;
+  unitCap: number;
+  channels: Record<string, BackfillChannelRecord>;
+}
+
+/**
+ * 채널 하나 100일 메우기: search.list(channelId · q · publishedAfter · order=date · 쪽당 100단위 · 최대 maxPages)
+ * + 쪽마다 videos.list(1단위 · 전체 설명). 한 쪽 부르기 전에 하루 unitCap(이날만 상한) · 하루 가드 둘 다 본다.
+ */
+export async function backfillSearch(
+  channelId: string,
+  key: string,
+  guard: QuotaGuard,
+  opts: { query: string; days: number; maxPages: number; unitCap: number; now?: number; get?: HttpGet },
+): Promise<{ items: BroadcastItem[]; units: number; pages: number; error?: { status: number | null; reason: string } }> {
+  const get = opts.get ?? defaultGet;
+  const headers = { 'x-goog-api-key': key, accept: 'application/json' };
+  const publishedAfter = new Date((opts.now ?? Date.now()) - opts.days * 86400000).toISOString();
+  const items: BroadcastItem[] = [];
+  let units = 0;
+  let pages = 0;
+  let pageToken: string | null = null;
+  for (let p = 0; p < Math.max(0, Math.floor(opts.maxPages)); p++) {
+    if (guard.used + SEARCH_UNITS + VIDEOS_UNITS > opts.unitCap || !guard.spend(SEARCH_UNITS)) {
+      // 첫 쪽부터 막힘 = quota_guard · 둘째 쪽에서 막힘 = unit_cap(덜 메움 → 그 채널은 다음 실행이 다시)
+      return { items, units, pages, error: { status: null, reason: pages ? 'unit_cap' : 'quota_guard' } };
+    }
+    units += SEARCH_UNITS;
+    let found: BroadcastItem[];
+    try {
+      const params: Record<string, string | number> = {
+        part: 'snippet', channelId, q: opts.query, order: 'date', type: 'video', publishedAfter, maxResults: SEARCH_MAX_RESULTS,
+      };
+      if (pageToken) params.pageToken = pageToken;
+      const json = await get(`${API}/search`, params, headers);
+      found = parseSearchResponse(json);
+      pageToken = typeof json?.nextPageToken === 'string' && json.nextPageToken ? json.nextPageToken : null;
+    } catch (e) {
+      const err = apiErrorOf(e);
+      if (err.reason === 'quotaExceeded' || err.reason === 'dailyLimitExceeded') guard.stopped = true;
+      return { items, units, pages, error: err };
+    }
+    pages++;
+    if (found.length && guard.spend(VIDEOS_UNITS)) {
+      units += VIDEOS_UNITS;
+      try {
+        const full = parseVideosResponse(
+          await get(`${API}/videos`, { part: 'snippet', id: found.map((it) => it.videoId).join(','), maxResults: 50 }, headers),
+        );
+        for (const it of found) {
+          const d = full.get(it.videoId);
+          if (d) it.description = d;
+        }
+      } catch {
+        /* 짧은 설명으로 계속 */
+      }
+    }
+    items.push(...found);
+    if (!pageToken) break;
+  }
+  return { items, units, pages };
 }
 
 /** 이번 실행 되짚기 기록(per_source.__run.broadcastApi · health). */
@@ -327,7 +518,8 @@ export interface BroadcastApiRecord {
   quotaStopped: boolean;
   errors: string[];
   /** NEWS-Q12 ■2: 채널별 읽은 쪽 수 · 덮은 날 수(가장 오래된 영상) */
-  cover?: Record<string, { pages: number; days: number | null }>;
+  /** NEWS-Q13 ■3: gap = 이어지지 못한 날 수 · judged = 이 채널 영상을 끊김 없이 다 판정(이어짐 기준이 되는 조건) */
+  cover?: Record<string, { pages: number; days: number | null; gap?: number | null; judged?: boolean }>;
 }
 
 export function emptyApiRecord(mode: 'on' | 'off', unitsBefore = 0): BroadcastApiRecord {

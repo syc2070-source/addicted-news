@@ -47,7 +47,10 @@
         "since": "2026-10-11",
         "local_ok": "2026-10-13",
         "substitute": "kr-google-site-donga",
-        "note": "Render(싱가포르)에서 3회 연속 socket hang up · 이 PC 200(0.13초)"
+        "note": "Render(싱가포르)에서 3회 연속 socket hang up · 이 PC 200(0.13초)",
+        "retry_log": [{ "date": "2026-10-19", "ok": true }],
+        "promote_after": 2,
+        "_q13_comment": "NEWS-Q13 ■6 CTO 판정 ⑤: 월요일 재시도가 2번 잇달아 성공하면(10-19 성공 1번 기록 · 10-26 결과로 첫 적용) 원 피드 = 주 피드(날마다) · 대체 kr-google-site-donga = 원 피드가 실패한 날만 판정하는 예비(끄지 않음). 주 피드가 3번 잇달아 실패하면 옛 규칙(주 1회 재시도)으로."
       }
     },
     {

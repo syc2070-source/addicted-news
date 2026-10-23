@@ -41,7 +41,23 @@ export interface BroadcastGateStats {
   reject: Record<BroadcastGateReason, number>;
   subtopics: Record<string, number>;
   /** NEWS-Q12 ■1: yes 였지만 본편에 묶여 보관한 수(clip = 예고·클립 표지 · episode_dup = 같은 회차 · archive 에 이미 포함) */
-  folded: { clip: number; episode_dup: number };
+  folded: { clip: number; episode_dup: number; related: number };
+  /** NEWS-Q13 ■4: partial(언급 → 보관) 판정 하나마다 {id(저장 뒤) · 제목 · 사유} */
+  partials?: BroadcastPartialNote[];
+}
+
+export interface BroadcastPartialNote {
+  id: number | null;
+  title: string;
+  reason: string;
+}
+
+export const PARTIAL_REASON_CHARS = 160;
+
+/** partial 기록 한 줄: 사유 = 「하위 주제 · 관문 요약 앞 160자」(요약 없으면 하위 주제만). */
+export function partialNoteOf(title: string, subtopic: string, summary: string | null): BroadcastPartialNote {
+  const s = (summary || '').replace(/\s+/g, ' ').trim().slice(0, PARTIAL_REASON_CHARS);
+  return { id: null, title: title.slice(0, 200), reason: s ? `${subtopic} · ${s}` : subtopic };
 }
 
 export function emptyBroadcastGateStats(): BroadcastGateStats {
@@ -58,7 +74,7 @@ export function emptyBroadcastGateStats(): BroadcastGateStats {
       judgment_missing: 0,
     },
     subtopics: {},
-    folded: { clip: 0, episode_dup: 0 },
+    folded: { clip: 0, episode_dup: 0, related: 0 },
   };
 }
 

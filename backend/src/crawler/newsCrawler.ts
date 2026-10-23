@@ -28,14 +28,17 @@ import {
   passesBroadcastKeywordGate,
 } from './broadcast';
 import {
-  BroadcastGateStats, broadcastGateSystem, buildBroadcastGateUser, decideBroadcastGate, emptyBroadcastGateStats, parseBroadcastVerdict,
+  BroadcastGateStats, BroadcastPartialNote, broadcastGateSystem, buildBroadcastGateUser, decideBroadcastGate, emptyBroadcastGateStats,
+  parseBroadcastVerdict, partialNoteOf,
 } from './broadcast_gate';
 import {
-  DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, archiveListedBroadcasts, existingEpisodeMains, foldEpisodes, shiftYmd,
+  DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, DEFAULT_MAIN_EVIDENCE, DEFAULT_RELATED_DAYS, archiveListedBroadcasts, existingEpisodeMains, foldEpisodes,
+  listedArchiveIds, restoreKeptBroadcasts, shiftYmd,
 } from './broadcast_episode';
 import { GroupCounter, keywordGroupsOf } from './keyword_groups';
 import {
-  DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, UPLOAD_PAGES_MAX, YOUTUBE_API_ENV, apiTodayFromRuns, emptyApiRecord, lookbackUploads,
+  BACKFILL_MAX_TRIES, BackfillRecord, CONTINUITY_MARGIN_DAYS, DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, UPLOAD_PAGES_MAX,
+  YOUTUBE_API_ENV, apiTodayFromRuns, backfillSearch, backfillStateFromRuns, emptyApiRecord, lastLookbackFromRuns, lookbackUploads,
   planChannel, rss404Outlets, youtubeApiKey,
 } from './youtube_api';
 import { feedStatusOf } from './broadcast_feeds';
@@ -46,6 +49,7 @@ import { KnownIndex, loadKnownIndex, preDuplicate } from './dedup';
 import { DeepseekBudget, dailyCap, estimateCostUsd, priceOf, usedTodayFromRuns } from './deepseek_budget';
 import { decideTier, effectiveTier, oldDatedTier, Tier } from './tier';
 import { HostBreaker } from './host_breaker';
+import { attemptsFromRuns, planPromotion, standbyLast } from './blocked_promote';
 import {
   CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, recentCrawlRuns, recordCrawlRun,
 } from './crawl_runs';
@@ -112,6 +116,8 @@ type Candidate = {
   clusterMember?: boolean;
   /** NEWS-Q11 ■3: 핵심어 묶음(저장 때 묶음별 저장·보관 수) */
   kwGroups?: string[];
+  /** NEWS-Q13 ■4: 방송 관문 partial 기록(runs broadcastPartials) — 저장되면 id 를 채운다 */
+  partialNote?: BroadcastPartialNote;
 };
 
 const RSS_TIMEOUT = Number(process.env.RSS_TIMEOUT_MS ?? 15000);
@@ -741,8 +747,25 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
   // NEWS-Q12 ■1: 같은 편 묶기(예고·클립·같은 회차 → 본편 하나만 실림)
   const fold = {
     markers: bcCfg.clip_markers ?? DEFAULT_CLIP_MARKERS, days: bcCfg.episode_days ?? DEFAULT_EPISODE_DAYS,
-    generic: bcCfg.episode_generic_words ?? [],
+    generic: bcCfg.episode_generic_words ?? [], relatedDays: bcCfg.related_days ?? DEFAULT_RELATED_DAYS,
+    mainEvidence: bcCfg.main_evidence ?? DEFAULT_MAIN_EVIDENCE,
   };
+  // NEWS-Q13 ■3: 「이어짐」 — 채널마다 지난번 잘 되짚은 실행 시각(없는 채널은 옛 cover_days 규칙)
+  const lastOk = apiKey && RUN.flags.crawlRuns && RUN.query ? await lastLookbackFromRuns(RUN.query, PROFILE.field) : {};
+  // NEWS-Q13 ■3: 100일 한 번 메우기(설정 깃발 · runs 에 done 이면 다시 안 돎)
+  // 앞 실행에서 끝난 채널은 다시 검색하지 않음 · BACKFILL_MAX_TRIES 번 뒤엔 그만둠(날마다 808단위 태우지 않게)
+  const bf = bcCfg.backfill_search_once;
+  const bfState = apiKey && bf?.id && bf.channels?.length && bf.query && RUN.flags.crawlRuns && RUN.query
+    ? await backfillStateFromRuns(RUN.query, PROFILE.field, bf.id)
+    : null;
+  const backfill: BackfillRecord | null = bf && bfState && !bfState.done
+    ? {
+      id: bf.id, done: false, try: bfState.tries + 1, carried: bfState.finished, query: bf.query, unitCap: bf.unit_cap_day ?? 1000,
+      publishedAfter: new Date(Date.now() - (bf.days ?? 100) * 86400000).toISOString().slice(0, 10), channels: {},
+    }
+    : null;
+  if (backfill && RUN.progress) RUN.progress.broadcastBackfill = backfill;
+  if (bfState?.done && bf && bfState.tries >= BACKFILL_MAX_TRIES) console.log(`  📺 100일 메우기 ${bf.id}: ${bfState.tries}번 해 봄 → 그만둠`);
   const rssDown = new Set(rss404Outlets(failedRaw));
   console.log(`\n📺 방송 추적 ${sources.length}채널 (핵심어 → 방송 관문 한 질문) · 되짚기 API ${api.mode}` +
     (apiKey ? ` (업로드 재생목록 ${pages}쪽 · 오늘 앞서 ${today.units}단위 · 상한 ${DAILY_UNIT_CAP})` : ` (env ${YOUTUBE_API_ENV} 없음 → RSS 만)`) +
@@ -775,8 +798,10 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     }
     if (plan.api && apiKey) {
       const rssIds = new Set(items.map((it) => it.videoId));
-      const lb = await lookbackUploads(source.channelId, apiKey, guard, { pages, ...cover });
-      (api.cover ||= {})[source.outletId] = { pages: lb.pages, days: lb.coveredDays };
+      const okAt = lastOk[source.outletId];
+      const since = okAt !== undefined ? okAt - CONTINUITY_MARGIN_DAYS * 86400000 : undefined;
+      const lb = await lookbackUploads(source.channelId, apiKey, guard, { pages, ...cover, since });
+      (api.cover ||= {})[source.outletId] = { pages: lb.pages, days: lb.coveredDays, ...(lb.gap !== undefined ? { gap: lb.gap } : {}) };
       api.calls += Math.round(lb.units / PLAYLIST_UNITS);
       api.units += lb.units;
       api.unitsToday = guard.used;
@@ -798,7 +823,28 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         api.newItems++;
         if (passesBroadcastKeywordGate(it)) api.keywordPass++;
       }
-      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${fresh}) · ${lb.units}단위 · ${lb.coveredDays ?? '-'}일치`);
+      console.log(`  ├─ [${source.program}] 되짚기 ${lb.items.length}편(RSS 에 없던 것 ${fresh}) · ${lb.units}단위 · ${lb.coveredDays ?? '-'}일치` +
+        (lb.gap !== undefined ? ` · 이어짐 gap ${lb.gap ?? '-'}일` : ''));
+      // NEWS-Q13 ■3: 100일 한 번 메우기(대상 채널만 · 쪽당 100+1단위 · 이날만 상한 unitCap)
+      if (backfill && bf!.channels.includes(source.outletId) && !backfill.carried.includes(source.outletId)) {
+        const sb = await backfillSearch(source.channelId, apiKey, guard, {
+          query: backfill.query, days: bf!.days ?? 100, maxPages: bf!.max_pages ?? 2, unitCap: backfill.unitCap,
+        });
+        api.units += sb.units;
+        api.unitsToday = guard.used;
+        api.quotaStopped = guard.stopped;
+        let added = 0;
+        for (const it of sb.items) {
+          if (rssIds.has(it.videoId)) continue;
+          rssIds.add(it.videoId);
+          items.push(it);
+          added++;
+        }
+        backfill.channels[source.outletId] = {
+          pages: sb.pages, items: sb.items.length, units: sb.units, ...(sb.error ? { error: `${sb.error.status ?? ''}:${sb.error.reason}` } : {}),
+        };
+        console.log(`  ├─ [${source.program}] 100일 메우기 search ${sb.pages}쪽 · ${sb.items.length}편(새 ${added}) · ${sb.units}단위${sb.error ? ` · 실패 ${sb.error.reason}` : ''}`);
+      }
     }
     // NEWS-Q8 ■2: 채널별 마지막 읽기 결과(health broadcast.feeds[])
     if (RUN.progress) {
@@ -812,7 +858,9 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     }
     stat.read = items.length;
     let accepted = 0;
-    const pendingPublish: Array<{ row: Candidate; item: BroadcastItem }> = [];
+    // NEWS-Q13 ■3: 판정을 다 못 하고 끊겼나(메우기 채널은 끊기면 「끝」이 아님 → 다음 실행이 다시)
+    let cutShort = false;
+    const pendingPublish: Array<{ row: Candidate; item: BroadcastItem; subtopic: string }> = [];
     for (const item of items) {
       crawlStats.broadcastSeen++;
       gate.seen++;
@@ -828,6 +876,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       RUN.groups.add(kwGroups, 'candidates');
       if (!deepseekAvailable || !gateSystem) {
         console.log(`  │   ⏭️ ${gateSystem ? 'DeepSeek 없음' : '방송 관문 설정 없음'} → 방송 저장 보류: ${item.title.slice(0, 40)}`);
+        cutShort = true;
         continue;
       }
       // ■2: 이미 저장·판정한 영상이면 DeepSeek 0
@@ -837,19 +886,29 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         gate.reject.duplicate++;
         continue;
       }
-      if (!deepseekRoomLeft()) break;
+      if (!deepseekRoomLeft()) {
+        cutShort = true;
+        break;
+      }
       // NEWS-Q6 ⓑ′: 방송 몫 시간은 채널 사이만이 아니라 판정 하나마다 본다(10-15: 한 채널 안에서 62분)
-      if (Date.now() > deadline) break;
+      if (Date.now() > deadline) {
+        cutShort = true;
+        break;
+      }
       const callsBefore = deepseekStats.calls;
       const provCategory = classifyCategory(item.title, item.description, DEFAULT_CATEGORY);
       const answer = await askDeepSeekJson(gateSystem, buildBroadcastGateUser(item, source.program), ['fit', 'subtopic']);
       stat.calls += deepseekStats.calls - callsBefore;
-      if (deepseekDown() && !answer) break;
+      if (deepseekDown() && !answer) {
+        cutShort = true;
+        break;
+      }
       const verdict = parseBroadcastVerdict(answer);
       const decision = decideBroadcastGate(verdict);
       if (decision.action === 'skip') {
         // 판정 없음 = 저장도 거부 기록도 않는다(다음 실행이 다시 본다 · fail-closed)
         gate.reject.judgment_missing++;
+        cutShort = true; // 다음 실행이 다시 봐야 함 → 이 채널은 「잘 되짚음」 아님(이어짐 기준 안 됨)
         console.log(`  │   ⏭️ 방송 관문 판정 없음(다음 실행에 다시): ${item.title.slice(0, 40)}`);
         continue;
       }
@@ -887,10 +946,13 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       crawlStats.broadcastAccepted++;
       if (tier === 'publish') {
         // ■1: 실림 후보는 채널을 다 본 뒤 같은 편 묶기
-        pendingPublish.push({ row, item });
+        pendingPublish.push({ row, item, subtopic: decision.subtopic });
         continue;
       }
       gate.archive++;
+      // NEWS-Q13 ■4: partial(언급) 판정마다 {id · 제목 · 사유} — 11-05 무관 비율 계산용(사유 = 하위 주제 + 관문 요약 앞부분)
+      row.partialNote = partialNoteOf(item.title, decision.subtopic, summary);
+      (gate.partials ||= []).push(row.partialNote);
       out.push(row);
       console.log(`  │   📺 방송 보관(${decision.subtopic}): [${source.program}] ${item.title.slice(0, 40)}`);
     }
@@ -900,16 +962,23 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       if (RUN.flags.tier) {
         const ymds = pendingPublish.map((p) => p.row.publishedAt).sort();
         const existing = RUN.query
-          ? await existingEpisodeMains(RUN.query, source.program, shiftYmd(ymds[0], -fold.days), shiftYmd(ymds[ymds.length - 1], fold.days), { deletedAt: RUN.flags.deletedAt })
+          ? await existingEpisodeMains(
+            RUN.query, source.program, shiftYmd(ymds[0], -Math.max(fold.days, fold.relatedDays)), shiftYmd(ymds[ymds.length - 1], fold.days),
+            { deletedAt: RUN.flags.deletedAt },
+          )
           : [];
         roles = foldEpisodes(
-          pendingPublish.map((p) => ({ title: p.item.title, description: p.item.description, program: source.program, publishedAt: p.item.publishedAt || p.row.publishedAt })),
-          existing, fold,
+          pendingPublish.map((p) => ({
+            title: p.item.title, description: p.item.description, program: source.program,
+            publishedAt: p.item.publishedAt || p.row.publishedAt, groups: [...(p.row.kwGroups || []), p.subtopic],
+          })),
+          // NEWS-Q13 ■2: 관련 클립 묶기는 단독 채널에서만
+          existing, { ...fold, solo: source.soloChannel },
         );
       }
       pendingPublish.forEach((p, i) => {
         const role = roles[i];
-        if (role === 'clip' || role === 'episode_dup') {
+        if (role === 'clip' || role === 'episode_dup' || role === 'related') {
           p.row.tier = 'archive';
           gate.folded[role]++;
           gate.archive++;
@@ -921,6 +990,17 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       });
     }
     console.log(`  ├─ [${source.program}] 읽음 ${items.length} · 채택 ${accepted}`);
+    const bfRec = backfill?.channels[source.outletId];
+    if (bfRec && cutShort && !bfRec.error) bfRec.error = 'cut_short';
+    // NEWS-Q13 ■3: 이 채널 영상을 끊김 없이 다 판정했나 — 다음 실행 「이어짐」은 judged 인 실행만 기준으로 삼는다
+    const cv = api.cover?.[source.outletId];
+    if (cv) cv.judged = !cutShort;
+  }
+  if (backfill) {
+    backfill.done = bf!.channels.every(
+      (ch) => backfill.carried.includes(ch) || (backfill.channels[ch] && !backfill.channels[ch].error),
+    );
+    console.log(`  📺 100일 메우기 ${backfill.id}: ${backfill.done ? '끝(다음 실행부터 안 돎)' : '덜 됨(다음 실행이 다시)'}`);
   }
   return out;
 }
@@ -1820,6 +1900,7 @@ async function saveCandidates(list: Candidate[]) {
         else st.saved++;
       }
       if (extras.tier === 'archive') archived++;
+      if (c.partialNote) c.partialNote.id = id;
       if (aged.demoted) {
         crawlStats.oldDatedArchive++;
         if (RUN.progress) RUN.progress.oldDatedArchived = (RUN.progress.oldDatedArchived || 0) + 1;
@@ -2006,7 +2087,14 @@ async function main() {
   RUN.progress = progress;
 
   // NEWS-Q12 ■1: 설정 archive_ids 의 실린 방송(Q12 전 예고·클립 · 자동으로 못 묶는 관련 클립) → 보관층(이미 보관이면 0)
-  const listed = PROFILE.sources.broadcast.archive_ids ?? [];
+  // NEWS-Q13 ■1: 옮긴 id 를 그대로 남김(typeorm UPDATE … RETURNING 꼴 [행들, 수] 를 행들로 · Q12 는 [] 로 남았음)
+  // NEWS-Q13 ■2: keep_ids(자동 묶기 되돌림)가 먼저 · archive_ids 에 함께 있으면 keep 이 앞섬
+  const keep = PROFILE.sources.broadcast.keep_ids ?? [];
+  const listed = listedArchiveIds(PROFILE.sources.broadcast.archive_ids ?? [], keep);
+  if (keep.length && RUN.flags.tier && RUN.query) {
+    progress.broadcastRestoredIds = await restoreKeptBroadcasts(RUN.query, keep);
+    console.log(`📺 방송 실림으로 되돌림(설정 keep_ids ${keep.length}): 이번에 옮김 ${progress.broadcastRestoredIds.length}`);
+  }
   if (listed.length && RUN.flags.tier && RUN.query) {
     progress.broadcastArchivedIds = await archiveListedBroadcasts(RUN.query, listed);
     console.log(`📺 방송 보관층으로(설정 archive_ids ${listed.length}): 이번에 옮김 ${progress.broadcastArchivedIds.length}`);
@@ -2031,13 +2119,20 @@ async function main() {
   // ■1ⓒ: 시작점 순환(지난 실행이 마지막으로 마친 소스 다음부터) · ■2: 막힌 피드는 주·월 1회만 원 피드
   const narrowed = typeFilter.length > 0 || maxSrc > 0;
   const lastId = RUN.flags.crawlRuns && !narrowed ? await lastRunLastSourceId(q, PROFILE.field) : null;
-  const plan = planSources(crawlSources, lastId);
+  // NEWS-Q13 ■6: 재시도가 잇달아 성공한 막힌 피드 = 주 피드(날마다) · 그 대체 피드 = 예비(원 피드가 실패한 날만 판정)
+  const promotion = planPromotion(crawlSources, RUN.flags.crawlRuns && !narrowed ? await attemptsFromRuns(q, PROFILE.field) : {});
+  const plan = planSources(crawlSources, lastId, Date.now(), promotion.promoted);
+  if (promotion.promoted.size) {
+    progress.blockedPromoted = [...promotion.promoted];
+    console.log(`   막힌 피드 주 피드로(재시도 잇단 성공): ${progress.blockedPromoted.join(', ')} · 예비 ${[...promotion.standby.keys()].join(', ')}`);
+  }
+  const primaryOk = new Map<string, boolean>();
   progress.startIndex = plan.startIndex;
   progress.startId = plan.startId;
   progress.blockedSkipped = plan.skipped.map((s) => s.id);
   progress.blockedFromHost = crawlSources.filter((s) => s.blocked?.kind === 'blocked_from_host').length;
   const retryIds = new Set(plan.retrying.map((s) => s.id));
-  let order = plan.order;
+  let order = standbyLast(plan.order, promotion.standby);
   // NEWS-Q7 ■3: 놓친 날 되짚기 1회 — 기사 단계를 못 돈 실행이 있으면 국내지 site: 날짜 검색을 맨 앞에(LLM 0 · 중복 검사·관문 그대로)
   const missedCfg = PROFILE.sources.missed_day;
   if (missedCfg?.query && RUN.flags.crawlRuns && !narrowed) {
@@ -2067,6 +2162,15 @@ async function main() {
     consume: async (conf, outcome, i) => {
       if (Date.now() > crawlDeadline) return false;
       console.log(`[${i + 1}/${order.length}] ${conf.sourceName} (${conf.category})`);
+      // NEWS-Q13 ■6: 예비 피드 — 원 피드가 이번 실행에서 성공했으면 판정 0(읽기만 했음)
+      const standbyOf = promotion.standby.get(conf.id);
+      if (standbyOf && primaryOk.get(standbyOf) === true) {
+        (progress.standbySkipped ||= []).push(conf.id);
+        console.log(`  ⏭️ 예비 피드 ${conf.id}: 원 피드 ${standbyOf} 성공 → 오늘 판정 안 함`);
+        progress.reached = i + 1;
+        progress.lastId = conf.id;
+        return Date.now() <= crawlDeadline;
+      }
       const retry = retryIds.has(conf.id);
       const got = await judgeSource(conf, outcome, { blockedRetry: retry });
       all.push(...got);
@@ -2076,7 +2180,12 @@ async function main() {
         const ok = outcome.status === 'ok' || (outcome.status === 'timeout' && !!outcome.value);
         const status = outcome.status === 'error' ? String(httpStatusOf(outcome.error) ?? 'ERR') : ok ? undefined : 'timeout';
         progress.blockedRetried.push({ id: conf.id, ok, ...(status ? { status } : {}) });
-        console.log(`  🔁 막힌 피드 재시도 ${conf.id}: ${ok ? '성공 — 설정의 blocked 를 지워도 됨' : `실패(${status}) — 대체 피드 유지`}`);
+        console.log(`  🔁 막힌 피드 재시도 ${conf.id}: ${ok ? '성공(잇달아 성공하면 주 피드로)' : `실패(${status}) — 대체 피드 유지`}`);
+      }
+      if (promotion.promoted.has(conf.id)) {
+        const ok = outcome.status === 'ok' || (outcome.status === 'timeout' && !!outcome.value);
+        primaryOk.set(conf.id, ok);
+        (progress.blockedPrimary ||= []).push({ id: conf.id, ok });
       }
       return Date.now() <= crawlDeadline;
     },

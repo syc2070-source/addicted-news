@@ -32,6 +32,8 @@ export interface BroadcastSource {
   sharedChannel: boolean;
   /** NEWS-Q12 ■4: 프로그램 영어 이름(없으면 null) */
   programEn: string | null;
+  /** NEWS-Q13 ■2: 한 프로그램 전용 채널(설정 solo_channel · 공용 채널이면 늘 false) — 관련 클립 자동 묶기는 여기서만 */
+  soloChannel: boolean;
 }
 
 export interface BroadcastItem {
@@ -62,6 +64,7 @@ export function loadBroadcastSources(
         feedUrl: feedUrlFor(String(f.channel_id)),
         sharedChannel: f.shared_channel === true,
         programEn: typeof f.program_en === 'string' && f.program_en.trim() ? f.program_en.trim() : null,
+        soloChannel: f.solo_channel === true && f.shared_channel !== true,
       }));
   } catch (e) {
     console.warn(`[broadcast] 소스 파일을 읽지 못함(방송 추적 건너뜀): ${(e as Error).message}`);

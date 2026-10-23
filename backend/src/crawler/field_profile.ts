@@ -157,6 +157,20 @@ export interface FieldProfile {
       episode_generic_words?: string[];
       /** NEWS-Q12 ■1: 실린 방송 가운데 보관층으로 옮길 id(본편 아닌 예고·클립 · 이미 보관이면 그대로) */
       archive_ids?: number[];
+      /** NEWS-Q13 ■2: 관련 클립 자동 묶기 — 본편 뒤 이 날 수 안(기본 3) · keep_ids = 보관층에서 실림으로 되돌릴 id */
+      related_days?: number;
+      keep_ids?: number[];
+      /** 본편 표시 정규식(없으면 코드 기본 · 방송 꼬리 「… 방송」·「N회」·날짜·[full]) */
+      main_evidence?: string[];
+      /** NEWS-Q13 ■3: 못 닿은 채널만 search.list 로 한 번 메움(id 가 runs 에 done 이면 다시 안 돎) */
+      backfill_search_once?: {
+        id: string;
+        channels: string[];
+        query: string;
+        days?: number;
+        max_pages?: number;
+        unit_cap_day?: number;
+      };
     };
     statory_query: string;
     /** NEWS-Q7 ■3: 놓친 날 되짚기(국내지 구글 site: 날짜 검색) — 없으면 끔 */

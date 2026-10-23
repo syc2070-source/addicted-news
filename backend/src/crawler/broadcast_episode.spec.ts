@@ -294,7 +294,8 @@ describe('broadcast_episode — 같은 편 묶기(NEWS-Q12 ■1)', () => {
       { deletedAt: true },
     );
     expect(rows).toEqual([
-      { title: 'A', program: PD, publishedAt: '2026-08-11' },
+      // NEWS-Q13 ■2: 하위 주제(keywords 꼬리표 + 제목 묶음 · 없으면 기타)
+      { title: 'A', program: PD, publishedAt: '2026-08-11', groups: ['기타'] },
     ]);
     expect(String(calls[0][0])).toMatch(/source_type = 'broadcast'/);
     expect(String(calls[0][0])).toMatch(

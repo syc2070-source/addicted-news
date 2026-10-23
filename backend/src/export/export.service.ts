@@ -115,9 +115,10 @@ export function parseExportQuery(q: {
   const kind = (q.kind || 'all') as ExportKind;
   if (!['article', 'broadcast', 'all'].includes(kind))
     throw new Error('kind = article | broadcast | all');
-  const tier = (q.tier || 'all') as ExportTier;
-  if (!['publish', 'archive', 'all'].includes(tier))
-    throw new Error('tier = publish | archive | all');
+  // NEWS-Q13 ■4: v0 은 실림(publish)만 — 보관층(언급·묶인 클립 · 포털 비노출)은 내보내지 않는다
+  const tier = (q.tier || 'publish') as ExportTier;
+  if (tier !== 'publish')
+    throw new Error('tier = publish(v0 은 실림만 · 보관층은 내보내지 않음)');
   let cursor: number | null = null;
   if (q.cursor) {
     const m = /^id:(\d{1,15})$/.exec(

@@ -7,6 +7,11 @@
 //  · 이미 실린 본편(DB · 지난 실행)이 있으면 이번 것은 모두 보관.
 // 행을 고치지 않는다(앞으로만) · 스키마 0 · 묶음 표시는 보관층(포털 비노출) = 「접힘」.
 // ============================================================
+import {
+  OTHER_GROUP,
+  keywordGroupNames,
+  keywordGroupsOf,
+} from './keyword_groups';
 
 export interface EpisodeItem {
   title: string;
@@ -15,6 +20,8 @@ export interface EpisodeItem {
   program: string;
   /** ISO 또는 YYYY-MM-DD */
   publishedAt: string;
+  /** NEWS-Q13 ■2: 하위 주제(핵심어 묶음 · 방송 관문 subtopic) — 관련 클립 묶기에만 */
+  groups?: string[];
 }
 
 export const DEFAULT_CLIP_MARKERS = [
@@ -126,6 +133,20 @@ function dayOf(s: string): number {
   return Number.isNaN(t) ? NaN : t / 86400000;
 }
 
+function kstDay(s: string): number {
+  return Math.floor((dayOf(s) * 86400000 + 9 * 3600000) / 86400000);
+}
+
+/** 1부·2부 · 1518회·1519회 처럼 회차 표기가 둘 다 있고 다르면 다른 편. */
+export function episodeNumbersConflict(a: string, b: string): boolean {
+  for (const re of [/(\d+)\s*부(?![가-힣])/, /(\d+)\s*회(?![가-힣])/]) {
+    const x = re.exec(a)?.[1];
+    const y = re.exec(b)?.[1];
+    if (x && y && x !== y) return true;
+  }
+  return false;
+}
+
 /** 클립(또는 다른 본편 후보) c 가 본편 m 과 같은 회차인가. */
 export function sameEpisode(
   c: EpisodeItem,
@@ -138,18 +159,89 @@ export function sameEpisode(
   const dm = dayOf(m.publishedAt);
   if (!Number.isFinite(dc) || !Number.isFinite(dm) || Math.abs(dc - dm) > days)
     return false;
-  // 1부·2부 · 1518회·1519회 처럼 회차 표기가 둘 다 있고 다르면 다른 편
-  for (const re of [/(\d+)\s*부(?![가-힣])/, /(\d+)\s*회(?![가-힣])/]) {
-    const a = re.exec(c.title)?.[1];
-    const b = re.exec(m.title)?.[1];
-    if (a && b && a !== b) return false;
-  }
+  if (episodeNumbersConflict(c.title, m.title)) return false;
   const cc = episodeCore(c.title);
   const mc = episodeCore(m.title);
   if (coresMatch(cc, mc, generic)) return true;
   // 관련 클립: 제목은 다르지만 설명이 본편 제목 핵심을 품음(6자 이상)
   const sm = squash(mc);
   return sm.length >= 6 && squash(c.description || '').includes(sm);
+}
+
+export const DEFAULT_RELATED_DAYS = 3;
+
+/**
+ * 본편 표시(방송 꼬리): 「… 방송」 · 「260811 방송」 · 「1518회」 · 「2026년 8월 11일」 · 「(26.10.11)」 · [full] · 풀버전.
+ * 관련 클립 묶기에서 본편 노릇은 이 표시가 있는 것만 · 이 표시가 있는 것은 관련 클립이 되지 않는다
+ * (표시 없는 쇼츠가 본편보다 먼저 올라와도 본편을 보관으로 밀지 않게 — 리뷰 1).
+ */
+export const DEFAULT_MAIN_EVIDENCE = [
+  '(?<!생)방송\\s*$',
+  '(?<!생)방송\\s*[|)\\]]',
+  '\\d{6}\\s*방송',
+  // 회차는 세·네 자리만(1518회 · 356회) — 「3회 연속」·「5회 투약」은 본편 표시 아님
+  '(?<!\\d)\\d{3,4}\\s*회(?![가-힣])',
+  '\\d{4}년\\s*\\d{1,2}월\\s*\\d{1,2}일',
+  '\\(\\d{2}\\.\\d{1,2}\\.\\d{1,2}\\.?\\)',
+  '\\[\\s*full\\s*\\]',
+  '풀버전',
+];
+
+export function hasMainEvidence(
+  title: string,
+  evidence: string[] = DEFAULT_MAIN_EVIDENCE,
+): boolean {
+  return evidence.some((p) => {
+    try {
+      return new RegExp(p, 'i').test(title);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * NEWS-Q13 ■2: 관련 클립 c 가 본편 m 에 딸렸나(제목·설명이 본편과 달라 sameEpisode 가 못 잡는 것 · LLM 0).
+ * 다섯 조건 모두: 단독 채널(호출하는 쪽이 본다) ∧ m 은 실린 본편(본편 표시 있음 · c 는 표시 없음)
+ * ∧ c 게시가 m 뒤 0~related_days 일(한국 날짜 · 같은 날이면 m 보다 늦게) ∧ 하위 주제(묶음 · 기타 뺌) 겹침 ∧ 회차 표기 충돌 없음.
+ */
+export function relatedClip(
+  c: EpisodeItem,
+  m: EpisodeItem,
+  relatedDays = DEFAULT_RELATED_DAYS,
+  evidence: string[] = DEFAULT_MAIN_EVIDENCE,
+): boolean {
+  if (c.program !== m.program || FULL_MARK.test(c.title)) return false;
+  if (!hasMainEvidence(m.title, evidence) || hasMainEvidence(c.title, evidence))
+    return false;
+  // 한국 날짜로 견줌(본편 밤 10시 · 클립 다음 날 = 1일)
+  const gap = kstDay(c.publishedAt) - kstDay(m.publishedAt);
+  if (!Number.isFinite(gap)) return false;
+  if (gap < 0 || gap > relatedDays) return false;
+  // 같은 날이면 본편보다 늦게 올라온 것만(시각이 있을 때)
+  if (gap === 0 && dayOf(c.publishedAt) < dayOf(m.publishedAt)) return false;
+  const gm = new Set(meaningfulGroups(m.groups));
+  if (!meaningfulGroups(c.groups).some((g) => gm.has(g))) return false;
+  return !episodeNumbersConflict(c.title, m.title);
+}
+
+function meaningfulGroups(groups: string[] | undefined): string[] {
+  return (groups || []).filter((g) => g && g !== OTHER_GROUP);
+}
+
+/**
+ * typeorm(postgres) query 는 UPDATE·DELETE … RETURNING 을 [행들, 바뀐 수] 로 돌려준다(SELECT 는 행들).
+ * 둘 다 행들로 — Q12 broadcastArchivedIds 가 [] 로 남은 까닭(행은 옮겨졌음).
+ */
+export function returnedRows<T>(res: unknown): T[] {
+  if (
+    Array.isArray(res) &&
+    res.length === 2 &&
+    Array.isArray(res[0]) &&
+    typeof res[1] === 'number'
+  )
+    return res[0] as T[];
+  return Array.isArray(res) ? (res as T[]) : [];
 }
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
@@ -165,21 +257,35 @@ export async function existingEpisodeMains(
   try {
     const rows = await query(
       // published_at 은 글(varchar) 또는 date — ::text 앞 10자로 읽고 견줌(어느 꼴이든 · 시간대로 하루 밀리지 않음)
-      `SELECT title, left(published_at::text, 10) AS published_at FROM articles
+      `SELECT title, keywords::text AS keywords, left(published_at::text, 10) AS published_at FROM articles
         WHERE source = $1 AND source_type = 'broadcast' AND COALESCE(tier, 'publish') = 'publish'
           AND NOT blocked${cols.deletedAt ? ' AND deleted_at IS NULL' : ''}
           AND left(published_at::text, 10) >= $2 AND left(published_at::text, 10) <= $3
         ORDER BY id LIMIT 200`,
       [program, from, to],
     );
+    const names = new Set(keywordGroupNames());
     return (
-      (rows || []) as Array<{ title?: unknown; published_at?: unknown }>
-    ).map((r) => ({
-      title: typeof r.title === 'string' ? r.title : '',
-      program,
-      publishedAt:
-        typeof r.published_at === 'string' ? r.published_at.slice(0, 10) : '',
-    }));
+      (rows || []) as Array<{
+        title?: unknown;
+        keywords?: unknown;
+        published_at?: unknown;
+      }>
+    ).map((r) => {
+      const title = typeof r.title === 'string' ? r.title : '';
+      // keywords = simple-array(쉼표 글) — 저장 때 붙인 방송 관문 subtopic 이 들어 있다
+      const tagged = (typeof r.keywords === 'string' ? r.keywords : '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => names.has(s));
+      return {
+        title,
+        program,
+        publishedAt:
+          typeof r.published_at === 'string' ? r.published_at.slice(0, 10) : '',
+        groups: [...new Set([...tagged, ...keywordGroupsOf(title)])],
+      };
+    });
   } catch {
     return [];
   }
@@ -196,13 +302,49 @@ export async function archiveListedBroadcasts(
   const want = ids.filter((n) => Number.isInteger(n) && n > 0);
   if (!want.length) return [];
   try {
-    const rows = (await query(
+    const res = await query(
       `UPDATE articles SET tier = 'archive'
         WHERE id = ANY($1::int[]) AND source_type = 'broadcast' AND COALESCE(tier, 'publish') = 'publish'
         RETURNING id`,
       [want],
-    )) as Array<{ id?: unknown }>;
-    return (rows || []).map((r) => Number(r.id)).filter(Number.isFinite);
+    );
+    return returnedRows<{ id?: unknown }>(res)
+      .map((r) => Number(r.id))
+      .filter(Number.isFinite);
+  } catch {
+    return [];
+  }
+}
+
+/** 설정 archive_ids 가운데 keep_ids 에 없는 것(되돌림이 앞섬 · 둘 다 있는 id 를 오가며 옮기지 않게). */
+export function listedArchiveIds(
+  archive: number[] = [],
+  keep: number[] = [],
+): number[] {
+  const k = new Set(keep);
+  return archive.filter((id) => !k.has(id));
+}
+
+/**
+ * NEWS-Q13 ■2: 설정 sources.broadcast.keep_ids — 자동 묶기가 보관층으로 보낸 방송을 실림으로 되돌림(오너 손 · 이 id · 방송 · 보관층만).
+ * 몇 번 돌아도 같음 · 실패면 [].
+ */
+export async function restoreKeptBroadcasts(
+  query: QueryFn,
+  ids: number[],
+): Promise<number[]> {
+  const want = ids.filter((n) => Number.isInteger(n) && n > 0);
+  if (!want.length) return [];
+  try {
+    const res = await query(
+      `UPDATE articles SET tier = 'publish'
+        WHERE id = ANY($1::int[]) AND source_type = 'broadcast' AND tier = 'archive'
+        RETURNING id`,
+      [want],
+    );
+    return returnedRows<{ id?: unknown }>(res)
+      .map((r) => Number(r.id))
+      .filter(Number.isFinite);
   } catch {
     return [];
   }
@@ -216,17 +358,25 @@ export function shiftYmd(ymd: string, days: number): string {
     : new Date(t + days * 86400000).toISOString().slice(0, 10);
 }
 
-export type EpisodeRole = 'main' | 'clip' | 'episode_dup';
+export type EpisodeRole = 'main' | 'clip' | 'episode_dup' | 'related';
 
 /**
  * 실림 후보(같은 실행 · 한 프로그램 또는 여럿) → 각자의 역할.
- * main = 실림 · clip = 클립 표지(보관) · episode_dup = 이미 실린 본편이나 이번 본편과 같은 회차(보관).
+ * main = 실림 · clip = 클립 표지(보관) · episode_dup = 이미 실린 본편이나 이번 본편과 같은 회차(보관)
+ * · related = 단독 채널에서 본편 뒤 0~relatedDays 일 · 하위 주제 겹치는 관련 클립(보관 · NEWS-Q13 ■2 · solo 일 때만).
  * existing = 이미 실린 본편(DB · 지난 실행).
  */
 export function foldEpisodes<T extends EpisodeItem>(
   items: T[],
   existing: EpisodeItem[] = [],
-  opts: { markers?: string[]; days?: number; generic?: string[] } = {},
+  opts: {
+    markers?: string[];
+    days?: number;
+    generic?: string[];
+    solo?: boolean;
+    relatedDays?: number;
+    mainEvidence?: string[];
+  } = {},
 ): EpisodeRole[] {
   const markers = opts.markers ?? DEFAULT_CLIP_MARKERS;
   const days = opts.days ?? DEFAULT_EPISODE_DAYS;
@@ -234,17 +384,23 @@ export function foldEpisodes<T extends EpisodeItem>(
   const roles: EpisodeRole[] = items.map((it) =>
     isClipTitle(it.title, markers) ? 'clip' : 'main',
   );
-  // 본편 후보 순서: [full]/풀버전 먼저 · 그다음 이른 것
+  // 본편 후보 순서: [full]/풀버전 먼저 · 본편 표시(방송 꼬리) 있는 것 · 그다음 이른 것
+  // (NEWS-Q13 반박 리뷰: 표시 없는 클립이 먼저 올라와도 본편이 episode_dup 으로 밀리지 않게)
+  const evidence = opts.mainEvidence ?? DEFAULT_MAIN_EVIDENCE;
+  const rank = (i: number) =>
+    FULL_MARK.test(items[i].title)
+      ? 0
+      : hasMainEvidence(items[i].title, evidence)
+        ? 1
+        : 2;
   const order = items
     .map((it, i) => i)
     .filter((i) => roles[i] === 'main')
-    .sort((a, b) => {
-      const fa = FULL_MARK.test(items[a].title) ? 0 : 1;
-      const fb = FULL_MARK.test(items[b].title) ? 0 : 1;
-      return (
-        fa - fb || dayOf(items[a].publishedAt) - dayOf(items[b].publishedAt)
-      );
-    });
+    .sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        dayOf(items[a].publishedAt) - dayOf(items[b].publishedAt),
+    );
   // Q12 전에 실린 예고·클립은 본편으로 치지 않는다(옛 예고가 진짜 본편을 보관층으로 미는 것 막음)
   const mains: EpisodeItem[] = existing.filter(
     (e) => !isClipTitle(e.title, markers),
@@ -258,6 +414,14 @@ export function foldEpisodes<T extends EpisodeItem>(
       )
     ) {
       roles[i] = 'episode_dup';
+    } else if (
+      opts.solo &&
+      mains.some((m) =>
+        relatedClip(items[i], m, opts.relatedDays, opts.mainEvidence),
+      )
+    ) {
+      // 관련 클립은 본편 목록에 넣지 않는다(클립 둘째가 첫째에 딸리지 않게 · 본편에만 견줌)
+      roles[i] = 'related';
     } else {
       mains.push(items[i]);
     }

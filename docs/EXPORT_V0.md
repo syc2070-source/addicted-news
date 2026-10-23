@@ -29,7 +29,7 @@ GET /api/export/articles?since=&kind=&tier=&cursor=
 |----|----|------|----|
 | `since` | `2026-10-01` 또는 `2026-10-01T00:00:00+09:00` | 없음(처음부터) | 이 시각 뒤에 **들어온**(created_at) 기사. 날짜만 주면 KST 0시. 시각은 시각대(Z · ±hh:mm) 필수. |
 | `kind` | `article` · `broadcast` · `all` | `all` | 기사 / 방송(source_type = broadcast) / 둘 다 |
-| `tier` | `publish` · `archive` · `all` | `all` | 게재 / 보관 / 둘 다. 거부 기사는 articles 표에 없으므로 나오지 않는다. |
+| `tier` | `publish` | `publish` | 게재만(NEWS-Q13 ■4 CTO 판정 ③ · 10-23). `archive` · `all` = **400**. 보관층(관문 「언급」 · 본편에 묶인 예고·클립)은 내보내지 않는다. 거부 기사는 articles 표에 없으므로 나오지 않는다. |
 | `cursor` | 앞 응답의 `nextCursor` 그대로 | 없음 | 다음 쪽 |
 
 - 한 쪽 = **200** 행. `id` 오름차순(들어온 차례). `nextCursor` 가 `null` 이면 끝.
@@ -93,7 +93,7 @@ GET /api/export/articles?since=&kind=&tier=&cursor=
 | `field` | 분야 꼬리표(분야 설정 field) | — |
 | `category` | 분야 안 분류(중독정책 · 알코올·약물중독 · 도박중독 · 게임·디지털중독 · 중독사회와 회복) | — |
 | `clusterId` | 사건 묶음 id(같은 소식 기사끼리 같음 · 가장 이른 보도의 id) | 열(cluster_id)이 없거나 값이 없으면 `null` |
-| `tier` | `publish`(게재) · `archive`(보관) | 열(tier)이 없으면 모두 `publish` |
+| `tier` | 늘 `publish`(게재 · NEWS-Q13 부터 보관은 내보내지 않음 — 칸은 남김) | 열(tier)이 없으면 모두 `publish` |
 | `sourceGrade` | 출처 등급(press · institution · academic · aggregator …) | 열(source_grade)이 없거나 값이 없으면 `null` |
 | `sourceType` | 출처 종류(NEWS-Q12 · `broadcast` · `kr_press` · `world_press` · `institution` · `academic` · `specialty` · `aggregator` …) | 값이 없으면 `null` |
 | `subtype` | 하위 분야 영문 id 배열(NEWS-Q12 · 아래 표) — 여럿일 수 있음 | 어느 묶음에도 안 들면 `[]` |
@@ -118,27 +118,29 @@ GET /api/export/articles?since=&kind=&tier=&cursor=
 
 ### sourceEn — 방송 9 채널 (backend/data/broadcast_youtube_rss.json `program_en`)
 
-| source | sourceEn |
-|--------|----------|
-| MBC PD수첩 | MBC PD Notebook |
-| MBC 스트레이트 | MBC Straight |
-| SBS 그것이 알고 싶다 | SBS Unanswered Questions |
-| SBS 스페셜 | SBS Special |
-| KBS 추적60분 | KBS In-Depth 60 Minutes |
-| KBS 시사기획 창 | KBS Current Affairs Window |
-| KBS 다큐인사이트 | KBS Docu Insight |
-| EBS 다큐프라임 | EBS Docuprime |
-| 뉴스타파 | Newstapa |
+sourceEn 은 `program_en` 한 칸에서만 나온다. `name_source`(NEWS-Q13 ■5 · 10-23 웹 읽기) = official(방송사·채널이 스스로 쓰는 영어 이름) | translation(공식 표기를 못 찾아 번역).
+
+| source | sourceEn | name_source |
+|--------|----------|-------------|
+| MBC PD수첩 | MBC PD Notebook | translation(영어 신문 표기) |
+| MBC 스트레이트 | MBC Straight | translation |
+| SBS 그것이 알고 싶다 | SBS Unanswered Questions | translation |
+| SBS 스페셜 | SBS Special | official(SBS Star · SBSi) |
+| KBS 추적60분 | KBS In-Depth 60 Minutes | translation |
+| KBS 시사기획 창 | KBS Current Affairs Window | translation |
+| KBS 다큐인사이트 | KBS Docu Insight | translation |
+| EBS 다큐프라임 | EBS Docuprime | translation |
+| 뉴스타파 | Newstapa | official(YouTube 채널 이름) |
 
 내보내지 않는 것: 본문(raw_body) · 요약(summary) · 맛보기(teaser) · 핵심어 원문(subtype 셈에만 읽음) · 그림 주소 · 구글 링크 · 내부 표시(blocked_reason · judge_status) · 만든/고친 시각.
 기사에 사람 이름이 나오는 것은 제목뿐이다(원문 매체가 이미 공개한 제목).
 
 ## 읽는 쪽 권장(Statory)
 
-1. 처음: `?since=<시작일>&tier=all` → `nextCursor` 가 `null` 이 될 때까지.
+1. 처음: `?since=<시작일>` → `nextCursor` 가 `null` 이 될 때까지.
 2. 다음부터: 마지막으로 읽은 날을 `since` 로(겹침은 `id` 로 걸러 냄).
 3. 같은 소식은 `clusterId` 로 묶어 이슈 하나로 보인다.
-4. `tier = archive` 는 「근거로는 읽되 첫 화면에는 싣지 않음」으로 쓴다(사건·사고 보도 등 관문이 보관한 것).
+4. (NEWS-Q13 ■4) 보관층은 v0 에서 나오지 않는다 — 문을 켜기 전(10-23 · 404) 바꿈이라 읽는 쪽 영향 0. 이미 받은 행이 뒤에 보관으로 바뀌어도 v0 는 알리지 않는다(지움·바뀜 알림은 v1 몫).
 
 ## ECO-LINK1 계약 초안이 정할 것(이 문서 밖)
 

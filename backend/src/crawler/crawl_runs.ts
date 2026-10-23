@@ -60,6 +60,11 @@ export interface RunProgressLike {
   oldDatedArchived?: number;
   /** NEWS-Q12 ■3: 본문 추출 단락기 */
   bodyBreaker?: object;
+  /** NEWS-Q12 ■1 · Q13 ■2: 설정 archive_ids / keep_ids 로 옮긴 방송 id */
+  broadcastArchivedIds?: number[];
+  broadcastRestoredIds?: number[];
+  /** NEWS-Q13 ■3: 100일 한 번 메우기 기록 */
+  broadcastBackfill?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';

@@ -114,7 +114,7 @@ describe('export v0 — GET /api/export/articles(NEWS-Q10 ■3)', () => {
     });
     const page = await ctl.articles(
       { 'x-export-key': FAKE_KEY },
-      { since: '2026-10-01', tier: 'all' },
+      { since: '2026-10-01', tier: 'publish' },
     );
     expect(Object.keys(page).sort()).toEqual([
       'field',
@@ -160,6 +160,13 @@ describe('export v0 — GET /api/export/articles(NEWS-Q10 ■3)', () => {
     await expect(
       ctl.articles({ 'x-export-key': FAKE_KEY }, { tier: 'reject' }),
     ).rejects.toBeInstanceOf(BadRequestException);
+    // NEWS-Q13 ■4: v0 은 실림만 — 보관·전부 요청은 400 · 기본 = publish
+    for (const tier of ['archive', 'all']) {
+      await expect(
+        ctl.articles({ 'x-export-key': FAKE_KEY }, { tier }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+    expect(parseExportQuery({}).tier).toBe('publish');
     await expect(
       ctl.articles({ 'x-export-key': FAKE_KEY }, { cursor: 'xx' }),
     ).rejects.toBeInstanceOf(BadRequestException);
@@ -174,13 +181,16 @@ describe('export v0 — GET /api/export/articles(NEWS-Q10 ■3)', () => {
       deletedAt: false,
       publishedTs: false,
     };
-    const a = buildExportSql(
-      parseExportQuery({ tier: 'archive', kind: 'broadcast' }),
-      none,
-    );
-    expect(a.sql).toContain('false');
+    const a = buildExportSql(parseExportQuery({ kind: 'broadcast' }), none);
+    expect(a.sql).not.toContain(`IN ('publish', 'archive')`);
     expect(a.sql).toContain(`source_type = 'broadcast'`);
     expect(a.sql).toContain('NULL AS tier');
+    const pub = buildExportSql(parseExportQuery({ kind: 'broadcast' }), {
+      ...none,
+      tier: true,
+    });
+    expect(pub.sql).toContain(`COALESCE(tier, 'publish') = $1`);
+    expect(pub.params[0]).toBe('publish');
     const all = {
       tier: true,
       sourceGrade: true,

@@ -8,7 +8,7 @@
 //  · 막힌 피드(blocked): Render 망에서만 막힘(blocked_from_host) = 주 1회(KST 월요일) · 어디서나 403 = 월 1회(KST 1일)만
 //    원 피드를 다시 해 본다. 그 밖의 날은 건너뛰고 대체 피드(구글뉴스 site: 검색)가 읽는다.
 // ============================================================
-import type { BroadcastApiRecord } from './youtube_api';
+import type { BackfillRecord, BroadcastApiRecord } from './youtube_api';
 import type { BroadcastFeedStatus } from './broadcast_feeds';
 import type { BroadcastGateStats } from './broadcast_gate';
 import type { GroupCounts } from './keyword_groups';
@@ -68,6 +68,10 @@ export interface BlockedInfo {
   local_ok?: string;
   /** 대체 피드 id */
   substitute?: string;
+  /** NEWS-Q13 ■6: 기록으로 남은 재시도 결과(KST 날짜) — 실행 기록과 합쳐 「잇달아 성공」을 센다 */
+  retry_log?: Array<{ date: string; ok: boolean }>;
+  /** NEWS-Q13 ■6: 재시도가 이만큼 잇달아 성공하면 원 피드 = 주 피드 · 대체 = 예비(기본 2) */
+  promote_after?: number;
 }
 
 function kstParts(now: number): { weekday: number; day: number } {
@@ -97,13 +101,15 @@ export function planSources<T extends { id: string; blocked?: Pick<BlockedInfo, 
   sorted: T[],
   lastId: string | null | undefined,
   now = Date.now(),
+  /** NEWS-Q13 ■6: 주 피드로 오른 막힌 피드(날마다 돎 · 재시도 아님) */
+  promoted: ReadonlySet<string> = new Set(),
 ): SourcePlan<T> {
   const { order, startIndex } = rotateSources(sorted, lastId);
   const skipped: T[] = [];
   const retrying: T[] = [];
   const kept: T[] = [];
   for (const s of order) {
-    if (!s.blocked) { kept.push(s); continue; }
+    if (!s.blocked || promoted.has(s.id)) { kept.push(s); continue; }
     if (blockedRetryDue(s.blocked, now)) { retrying.push(s); kept.push(s); } else skipped.push(s);
   }
   return { order: kept, startIndex, startId: kept[0]?.id ?? null, skipped, retrying };
@@ -258,13 +264,21 @@ export interface RunProgress {
   bodyBreaker?: { tripped: string[]; skipped: Record<string, number> };
   /** NEWS-Q12 ■1: 설정 archive_ids 로 이번 실행이 보관층으로 옮긴 방송 id */
   broadcastArchivedIds?: number[];
+  /** NEWS-Q13 ■2: 설정 keep_ids 로 이번 실행이 실림으로 되돌린 방송 id */
+  broadcastRestoredIds?: number[];
+  /** NEWS-Q13 ■6: 주 피드로 오른 막힌 피드 · 그 날마다 결과 · 원 피드 성공이라 판정 안 한 예비 피드 */
+  blockedPromoted?: string[];
+  blockedPrimary?: Array<{ id: string; ok: boolean }>;
+  standbySkipped?: string[];
+  /** NEWS-Q13 ■3: 100일 한 번 메우기(설정 backfill_search_once · done = 끝) */
+  broadcastBackfill?: BackfillRecord;
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {
   return {
     startId: null, startIndex: 0, lastId: null, reached: 0, total, timedOut: false, stoppedAt: null,
     timeouts: [], blockedSkipped: [], blockedRetried: [], blockedFromHost: 0,
-    broadcastFirst: true, broadcastMs: null,
+    broadcastFirst: true, broadcastMs: null, oldDatedArchived: 0,
     concurrency: SOURCE_CONCURRENCY, sourceCapSec: SOURCE_CAP_MS / 1000, googleCapSec: GOOGLE_SEARCH_CAP_MS / 1000, deadlineMin: Math.round(deadlineMs / 60_000),
   };
 }

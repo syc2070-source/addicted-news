@@ -59,7 +59,12 @@ export function blockedOf(f: Record<string, unknown> | ProfileFeed): BlockedInfo
   const kind = b.kind === 'blocked_from_host' || b.kind === 'blocked_everywhere' ? b.kind : null;
   const retry = b.retry === 'weekly' || b.retry === 'monthly' ? b.retry : null;
   if (!kind || !retry) return null;
-  return { kind, retry, since: b.since, local_ok: b.local_ok, substitute: b.substitute };
+  return {
+    kind, retry, since: b.since, local_ok: b.local_ok, substitute: b.substitute,
+    // NEWS-Q13 ■6: 재시도 기록 · 주 피드로 올릴 잇단 성공 수
+    ...(Array.isArray(b.retry_log) ? { retry_log: b.retry_log } : {}),
+    ...(typeof b.promote_after === 'number' ? { promote_after: b.promote_after } : {}),
+  };
 }
 
 export const GRADE_RANK: Record<SourceGrade, number> = { institution: 0, academic: 1, press: 2, aggregator: 3 };
