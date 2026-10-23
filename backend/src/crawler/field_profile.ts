@@ -121,6 +121,11 @@ export interface FieldProfile {
     deepseek_daily_cap: number;
     /** NEWS-Q12 ■2: 보도 날짜가 수집일보다 이 날 수 넘게 오래된 기사(방송 아님)는 실림 대신 보관 · 없으면 끔 · 앞으로만 */
     old_dated_archive_days?: number;
+    /**
+     * NEWS-Q14 ■3: 본문 추출 단락기로 본문을 못 읽은 기사는 RSS 요약(description · 제목·매체 이름 뺀 글)이 이 글자 수 이상이면
+     * 제목 + 요약으로 판정(관문 1번 그대로 · 추가 호출 0). 없거나 0 이면 끔(옛 규칙: 본문 부실 건너뜀).
+     */
+    breaker_summary_min_chars?: number;
   };
   prompts: {
     summary_system: string;
@@ -162,6 +167,13 @@ export interface FieldProfile {
       keep_ids?: number[];
       /** 본편 표시 정규식(없으면 코드 기본 · 방송 꼬리 「… 방송」·「N회」·날짜·[full]) */
       main_evidence?: string[];
+      /**
+       * NEWS-Q14 ■4: 영상 길이로 본편·클립 가리기(videos.list contentDetails · 50편 1단위) — 본편 = 방송 꼬리 ∨ 길이 ≥ main_min_seconds ·
+       * 클립 = 길이 < clip_max_seconds · 길이 읽기는 하루 duration_unit_cap_day 단위 안(하루 가드 그대로). 없거나 0 이면 끔.
+       */
+      main_min_seconds?: number;
+      clip_max_seconds?: number;
+      duration_unit_cap_day?: number;
       /** NEWS-Q13 ■3: 못 닿은 채널만 search.list 로 한 번 메움(id 가 runs 에 done 이면 다시 안 돎) */
       backfill_search_once?: {
         id: string;
@@ -175,6 +187,11 @@ export interface FieldProfile {
     statory_query: string;
     /** NEWS-Q7 ■3: 놓친 날 되짚기(국내지 구글 site: 날짜 검색) — 없으면 끔 */
     missed_day?: { query: string; max_items?: number; max_days?: number; locale?: string };
+    /**
+     * NEWS-Q14 ■1: 집계기(구글뉴스 · Statory) 스팸 출처 — 피드 <source> 또는 제목 끝 「 - 출처」가 names 가운데 하나면 거부(판정 호출 0 · 격리 0).
+     * archive_ids = 이미 실린 그 출처 글을 다음 실행 시작에 보관층으로(이 id · 기사 · 실림층 · 출처가 names 에 맞는 행만 · 지움 0).
+     */
+    spam_publishers?: { names?: string[]; archive_ids?: number[] };
   };
   messages: { notify_prefix: string };
   smoke_samples: Array<{ label: string; title: string; content: string; category: string }>;
@@ -246,6 +263,7 @@ function withDefaults(p: any): FieldProfile {
       broadcast: { file: '', keywords: [], false_friends: [], ...(s.broadcast || {}) },
       statory_query: s.statory_query || '',
       missed_day: s.missed_day && typeof s.missed_day.query === 'string' ? s.missed_day : undefined,
+      spam_publishers: s.spam_publishers && typeof s.spam_publishers === 'object' ? s.spam_publishers : undefined,
     },
     messages: { notify_prefix: p.site_name, ...(p.messages || {}) },
     smoke_samples: p.smoke_samples || [],

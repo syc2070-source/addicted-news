@@ -39,6 +39,8 @@ export interface AlertFacts {
   broadcastExpected: boolean;
   broadcastChannelsRead: number;
   worldSaved: number;
+  /** NEWS-Q14 ■2: 세계신문 보관층 저장 수(없는 옛 사실 = 0) — 경보는 실림 + 보관이 0 일 때만 */
+  worldArchived?: number;
   /** 구글 링크 해석 실패 수(옛 실행은 기록 없음 = null → 규칙 건너뜀) */
   urlResolveFail: number | null;
   deepseekCalls: number;
@@ -61,6 +63,7 @@ export function alertFactsOf(r: RunPublic): AlertFacts {
     broadcastExpected: p?.broadcastFirst !== false,
     broadcastChannelsRead: r.sources.broadcastChannelsRead,
     worldSaved: r.sources.worldSaved,
+    worldArchived: r.sources.worldArchived ?? 0,
     urlResolveFail: typeof p?.urlResolveFail === 'number' ? p.urlResolveFail : null,
     deepseekCalls: r.deepseekCalls,
     saved: r.saved,
@@ -83,7 +86,9 @@ export function evaluateRunAlerts(runs: AlertFacts[]): RunAlert[] {
   if (cur.timedOut) out.push({ code: 'timed_out', value: cur.reachedOf ?? 1 });
   if (cur.broadcastExpected && cur.broadcastChannelsRead === 0) out.push({ code: 'broadcast_zero', value: 0 });
   const prevDay = runs.slice(1).find((r) => kstDay(r.startedAt) < day);
-  if (cur.worldSaved === 0 && prevDay && prevDay.worldSaved === 0) {
+  // NEWS-Q14 ■2: 세계 「실림 + 보관」 이 이틀 0 일 때만(사건 보관 규칙으로 실림 0 · 보관 있음 = 수집은 됨 → 울리지 않음)
+  const worldKept = (f: AlertFacts) => f.worldSaved + (f.worldArchived ?? 0);
+  if (worldKept(cur) === 0 && prevDay && worldKept(prevDay) === 0) {
     out.push({ code: 'world_zero_2d', value: 0, limit: 2 });
   }
   if (cur.urlResolveFail != null && cur.urlResolveFail >= ALERT_URL_FAIL) {
@@ -99,7 +104,7 @@ const LABEL: Record<AlertCode, string> = {
   slow_run: '소요',
   timed_out: '전체 상한 걸림',
   broadcast_zero: '방송 읽힘 0',
-  world_zero_2d: '세계신문 저장 0 이틀 연속',
+  world_zero_2d: '세계신문 실림+보관 0 이틀 연속',
   url_resolve_fail: '구글 링크 해석 실패',
   deepseek_high: 'DeepSeek 하루',
   saved_zero: '저장 0',

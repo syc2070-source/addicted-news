@@ -32,13 +32,13 @@ import {
   parseBroadcastVerdict, partialNoteOf,
 } from './broadcast_gate';
 import {
-  DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, DEFAULT_MAIN_EVIDENCE, DEFAULT_RELATED_DAYS, archiveListedBroadcasts, existingEpisodeMains, foldEpisodes,
-  listedArchiveIds, restoreKeptBroadcasts, shiftYmd,
+  DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, DEFAULT_MAIN_EVIDENCE, DEFAULT_RELATED_DAYS, EpisodeItem, LengthRule, archiveListedBroadcasts,
+  existingEpisodeMains, foldEpisodes, hasMainEvidence, isClipTitle, listedArchiveIds, longByLength, restoreKeptBroadcasts, shiftYmd, shortByLength,
 } from './broadcast_episode';
 import { GroupCounter, keywordGroupsOf } from './keyword_groups';
 import {
   BACKFILL_MAX_TRIES, BackfillRecord, CONTINUITY_MARGIN_DAYS, DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, UPLOAD_PAGES_MAX,
-  YOUTUBE_API_ENV, apiTodayFromRuns, backfillSearch, backfillStateFromRuns, emptyApiRecord, lastLookbackFromRuns, lookbackUploads,
+  YOUTUBE_API_ENV, apiTodayFromRuns, backfillSearch, backfillStateFromRuns, emptyApiRecord, fetchDurations, lastLookbackFromRuns, lookbackUploads,
   planChannel, rss404Outlets, youtubeApiKey,
 } from './youtube_api';
 import { feedStatusOf } from './broadcast_feeds';
@@ -50,6 +50,8 @@ import { DeepseekBudget, dailyCap, estimateCostUsd, priceOf, usedTodayFromRuns }
 import { decideTier, effectiveTier, oldDatedTier, Tier } from './tier';
 import { HostBreaker } from './host_breaker';
 import { attemptsFromRuns, planPromotion, standbyLast } from './blocked_promote';
+import { archiveSpamArticles, spamPublisherOf } from './spam_publisher';
+import { breakerSummaryOf } from './breaker_summary';
 import {
   CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, recentCrawlRuns, recordCrawlRun,
 } from './crawl_runs';
@@ -168,6 +170,7 @@ let crawlStats = {
   dateParseFail: 0,     // v5.4.1 3-3: published_at 파싱 실패(now 대체)
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
   thinBodySkip: 0,      // v5.2 #3: 본문 부실 스킵
+  spamPublisherSkip: 0, // NEWS-Q14 ■1: 스팸 출처(설정 spam_publishers.names) 거부
   bodyExtractTried: 0,  // v5.2 #3: 원문 추출 시도 수
   bodyExtractOk: 0,     // v5.2 #3: 원문 추출 성공 수(>=MIN_BODY_CHARS)
   broadcastSeen: 0,          // NEWS-Q1 ■4: 방송 RSS 항목
@@ -233,6 +236,18 @@ async function markRunToday(): Promise<void> {
 
 // ---------- Spam block ----------
 const BLOCKED_DOMAINS = new Set<string>(['termokonteiner.ru']);
+// NEWS-Q14 ■1: 집계기 스팸 출처 이름(분야 설정 sources.spam_publishers.names)
+const SPAM_NAMES: string[] = PROFILE.sources.spam_publishers?.names ?? [];
+
+/** NEWS-Q14 ■1: 스팸 출처 거부 셈(판정 호출 0 · 격리 0) */
+function countSpam(name: string, title: string): void {
+  crawlStats.spamPublisherSkip++;
+  if (RUN.progress) {
+    const m = (RUN.progress.spamRejected ||= {});
+    m[name] = (m[name] || 0) + 1;
+  }
+  console.log(`  │   ⛔ 스팸 출처(${name}) 거부: ${title.slice(0, 30)}...`);
+}
 
 function getHostname(url?: string): string {
   if (!url) return '';
@@ -750,6 +765,12 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     generic: bcCfg.episode_generic_words ?? [], relatedDays: bcCfg.related_days ?? DEFAULT_RELATED_DAYS,
     mainEvidence: bcCfg.main_evidence ?? DEFAULT_MAIN_EVIDENCE,
   };
+  // NEWS-Q14 ■4: 길이 규칙(본편 ≥ main_min_seconds · 클립 < clip_max_seconds) · 길이 읽기 단위 상한(하루 1회 실행 = 이 실행)
+  const lengthRule: LengthRule = { mainMinSec: bcCfg.main_min_seconds, clipMaxSec: bcCfg.clip_max_seconds };
+  const lengthOn = (Number(bcCfg.main_min_seconds) > 0 || Number(bcCfg.clip_max_seconds) > 0) && Number(bcCfg.duration_unit_cap_day) > 0;
+  const durationBudget = { left: Number(bcCfg.duration_unit_cap_day) || 0 };
+  const durationRec = { calls: 0, units: 0, videos: 0, mainByLength: 0, clipByLength: 0 } as NonNullable<RunProgress['broadcastDuration']>;
+  if (apiKey && lengthOn && RUN.progress) RUN.progress.broadcastDuration = durationRec;
   // NEWS-Q13 ■3: 「이어짐」 — 채널마다 지난번 잘 되짚은 실행 시각(없는 채널은 옛 cover_days 규칙)
   const lastOk = apiKey && RUN.flags.crawlRuns && RUN.query ? await lastLookbackFromRuns(RUN.query, PROFILE.field) : {};
   // NEWS-Q13 ■3: 100일 한 번 메우기(설정 깃발 · runs 에 done 이면 다시 안 돎)
@@ -967,14 +988,38 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
             { deletedAt: RUN.flags.deletedAt },
           )
           : [];
+        const episodes: EpisodeItem[] = pendingPublish.map((p) => ({
+          title: p.item.title, description: p.item.description, program: source.program,
+          publishedAt: p.item.publishedAt || p.row.publishedAt, groups: [...(p.row.kwGroups || []), p.subtopic],
+          videoId: p.item.videoId,
+        }));
+        // NEWS-Q14 ■4: 실림 후보 + 이미 실린 본편의 영상 길이(50편 1단위 · 이 실행 길이 상한 · 하루 가드) — 못 읽으면 제목 규칙만
+        if (apiKey && lengthOn) {
+          const ids = [...episodes, ...existing].map((e) => e.videoId || '').filter(Boolean);
+          const dr = await fetchDurations(ids, apiKey, guard, durationBudget);
+          durationRec.calls += dr.calls;
+          durationRec.units += dr.units;
+          durationRec.videos += dr.durations.size;
+          if (dr.stopped) durationRec.stopped = dr.stopped;
+          api.units += dr.units;
+          api.unitsToday = guard.used;
+          api.quotaStopped = guard.stopped;
+          for (const e of [...episodes, ...existing]) {
+            const sec = e.videoId ? dr.durations.get(e.videoId) : undefined;
+            if (sec !== undefined) e.durationSec = sec;
+          }
+        }
         roles = foldEpisodes(
-          pendingPublish.map((p) => ({
-            title: p.item.title, description: p.item.description, program: source.program,
-            publishedAt: p.item.publishedAt || p.row.publishedAt, groups: [...(p.row.kwGroups || []), p.subtopic],
-          })),
+          episodes,
           // NEWS-Q13 ■2: 관련 클립 묶기는 단독 채널에서만
-          existing, { ...fold, solo: source.soloChannel },
+          existing, { ...fold, solo: source.soloChannel, length: lengthOn ? lengthRule : undefined },
         );
+        if (lengthOn) {
+          episodes.forEach((e, i) => {
+            if (roles[i] === 'clip' && shortByLength(e, lengthRule) && !isClipTitle(e.title, fold.markers)) durationRec.clipByLength++;
+            if (roles[i] === 'main' && longByLength(e, lengthRule) && !hasMainEvidence(e.title, fold.mainEvidence)) durationRec.mainByLength++;
+          });
+        }
       }
       pendingPublish.forEach((p, i) => {
         const role = roles[i];
@@ -1074,6 +1119,10 @@ interface ReadItem {
   /** 원문 추출로 본문이 길어졌으면 그 길이 */
   bodyGrewTo: number;
   bodyOk: boolean;
+  /** NEWS-Q14 ■1: 스팸 출처 이름(맞으면 네트워크 일 0 · 판정에서 거부) */
+  spam: string | null;
+  /** NEWS-Q14 ■3: 단락기로 본문 추출을 건너뜀 */
+  breakerSkipped: boolean;
 }
 
 interface ReadSource {
@@ -1091,12 +1140,15 @@ async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<strin
   const r: ReadItem = {
     it, rawTitle, itemLink, sameSourceDup: false, preDup: false, publishedAt: '', publishedTs: new Date(), rawContent: '',
     ogImageHint: null, fieldOk: false, snippetSkip: false, isGoogle: false, resolvedUrl: itemLink, urlResolve: null,
-    resolvedDup: false, bodyTried: false, bodyGrewTo: 0, bodyOk: false,
+    resolvedDup: false, bodyTried: false, bodyGrewTo: 0, bodyOk: false, spam: null, breakerSkipped: false,
   };
   if (!rawTitle) return r;
   const key = normalizeForDuplicateCheck(rawTitle);
   if (seenHere.has(key)) { r.sameSourceDup = true; return r; }
   seenHere.add(key);
+  // NEWS-Q14 ■1: 스팸 출처(피드 <source> · 제목 끝 「 - 출처」) → DB·링크 풀기·본문 추출 0
+  r.spam = spamPublisherOf(rawTitle, feedSourceName(it), SPAM_NAMES);
+  if (r.spam) return r;
 
   // ■2: DeepSeek·본문 추출 앞 중복 확인(링크·제목 → 기억표 · DB) — 읽기만
   if (await preDuplicate(RUN.known, RUN.query, { urls: [itemLink], titles: [rawTitle] })) { r.preDup = true; return r; }
@@ -1126,7 +1178,10 @@ async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<strin
   // NEWS-Q12 ■3: 이번 실행에서 본문 추출이 거듭 멈춘 호스트는 건너뜀(제목·스니펫으로 판정)
   // 못 푼 구글 링크(news.google.com)는 단락기 밖 — 여러 매체가 한 호스트 이름으로 묶이면 안 되므로
   const breakerOn = !isGoogleNewsLink(r.resolvedUrl);
-  if ((!r.fieldOk || !r.rawContent || r.rawContent.length < MIN_BODY_CHARS) && r.resolvedUrl && !(breakerOn && bodyBreaker.skip(r.resolvedUrl))) {
+  const needBody = (!r.fieldOk || !r.rawContent || r.rawContent.length < MIN_BODY_CHARS) && !!r.resolvedUrl;
+  // NEWS-Q14 ■3: 단락기가 건너뛴 기사 표시(판정에서 RSS 요약으로 볼 수 있게)
+  if (needBody && breakerOn && bodyBreaker.skip(r.resolvedUrl)) r.breakerSkipped = true;
+  else if (needBody) {
     r.bodyTried = true;
     const t0 = Date.now();
     const data = await extractArticleData(r.resolvedUrl);
@@ -1228,6 +1283,11 @@ async function judgeSource(
       crawlStats.itemsSeen++;
       const { it, rawTitle, itemLink } = r;
       if (!rawTitle) continue;
+      // NEWS-Q14 ■1: 스팸 출처 → 거부(판정 호출 0 · 격리 0 · 이름별 셈)
+      if (r.spam) {
+        countSpam(r.spam, rawTitle);
+        continue;
+      }
       const sessionDup = sessionDuplicate(rawTitle);
       if (sessionDup === 'exact') continue;
       // 닮은 기사인데 묶음 기억이 없으면(옛 동작) 바로 건너뜀
@@ -1246,7 +1306,7 @@ async function judgeSource(
       }
 
       const { publishedAt, publishedTs, ogImageHint, resolvedUrl, urlResolve, isGoogle } = r;
-      const rawContent = r.rawContent;
+      let rawContent = r.rawContent;
       const fieldOk = r.fieldOk;
 
       // 스니펫만으로 이미 걸러진 경우(사건사고 vs 일반 필터) 로그 구분
@@ -1321,7 +1381,17 @@ async function judgeSource(
       }
       // v5.2 #3: 본문이 부실하면(제목만·짧은 스니펫) 추측 요약 방지 위해 스킵
       const usableLen = rawContent && rawContent !== rawTitle ? rawContent.length : 0;
-      if (usableLen < MIN_BODY_CHARS) {
+      // NEWS-Q14 ■3: 단락기가 본문 추출을 건너뛴 기사는 RSS 요약(제목·매체 뺀 글)이 넉넉하면 제목 + 요약으로 판정(호출 수 그대로)
+      // 리뷰(Q14): 관문(DeepSeek)이 있을 때만(없으면 실림으로 떨어질 수 있음) · 판정 재료 = 제목 밖 요약만(제목 되풀이·매체 이름 뺌)
+      const breakerSum = usableLen < MIN_BODY_CHARS && r.breakerSkipped && deepseekAvailable
+        ? breakerSummaryOf(rawContent, rawTitle, sourceName, PROFILE.gate.breaker_summary_min_chars)
+        : null;
+      if (breakerSum) rawContent = breakerSum;
+      if (usableLen < MIN_BODY_CHARS && r.breakerSkipped && RUN.progress?.breakerSummary) {
+        if (breakerSum) RUN.progress.breakerSummary.judged++;
+        else RUN.progress.breakerSummary.thin++;
+      }
+      if (usableLen < MIN_BODY_CHARS && !breakerSum) {
         crawlStats.thinBodySkip++;
         console.log(`  │   ✂️ 본문부실 스킵(${usableLen}자<${MIN_BODY_CHARS}): ${rawTitle.slice(0, 30)}...`);
         continue;
@@ -1636,6 +1706,12 @@ async function finalizeStatoryCandidate(
 ): Promise<Candidate | null> {
   const rawTitle = normalizeText(partial.originalTitle || partial.title);
   if (!rawTitle) return null;
+  // NEWS-Q14 ■1: Statory(gnews_rss)로 들어온 스팸 출처 글도 같은 규칙(제목 끝 「 - 출처」)
+  const spam = spamPublisherOf(rawTitle, null, SPAM_NAMES);
+  if (spam) {
+    countSpam(spam, rawTitle);
+    return null;
+  }
   // Statory 후보는 묶음 상속 없이 예전대로: 같은 제목·닮은 제목이면 건너뜀
   if (sessionDuplicate(rawTitle)) { crawlStats.dupSkipKeyword++; return null; }
 
@@ -2099,6 +2175,15 @@ async function main() {
     progress.broadcastArchivedIds = await archiveListedBroadcasts(RUN.query, listed);
     console.log(`📺 방송 보관층으로(설정 archive_ids ${listed.length}): 이번에 옮김 ${progress.broadcastArchivedIds.length}`);
   }
+  // NEWS-Q14 ■1: 설정 spam_publishers.archive_ids — 이미 실린 스팸 출처 글 → 보관층(기사 · 실림층 · 출처가 names 에 맞는 행만 · 지움 0)
+  const spamIds = PROFILE.sources.spam_publishers?.archive_ids ?? [];
+  if (spamIds.length && SPAM_NAMES.length && RUN.flags.tier && RUN.query) {
+    const sa = await archiveSpamArticles(RUN.query, spamIds, SPAM_NAMES, { deletedAt: RUN.flags.deletedAt });
+    progress.spamArchivedIds = sa.archived;
+    progress.spamArchiveSkipped = sa.skipped.length;
+    if (sa.error) progress.spamArchiveError = true;
+    console.log(`⛔ 스팸 출처 글 보관층으로(설정 archive_ids ${spamIds.length}): 이번에 옮김 ${sa.archived.length} · 안 옮김 ${sa.skipped.length}`);
+  }
 
   // NEWS-Q1 ■4: 방송은 기사 통계(한국 비중 등)에 섞지 않고 저장만 함께 한다.
   // NEWS-Q4 ■1ⓓ: 방송 9채널을 맨 앞에(작고 빠름 · 5분 몫) — 기사 소스가 상한에 걸려도 방송은 빠지지 않는다.
@@ -2405,6 +2490,7 @@ async function main() {
           broadcastExpected: RUN.progress.broadcastFirst,
           broadcastChannelsRead: digest.broadcastChannelsRead,
           worldSaved: digest.worldSaved,
+          worldArchived: digest.worldArchived,
           urlResolveFail: crawlStats.urlResolveFail,
           deepseekCalls: deepseekStats.calls,
           saved: summary.saved,

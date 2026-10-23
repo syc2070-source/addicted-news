@@ -500,6 +500,69 @@ export async function backfillSearch(
   return { items, units, pages };
 }
 
+// ---------- NEWS-Q14 ■4: 영상 길이(videos.list contentDetails · 50편 1단위) ----------
+export const DURATION_BATCH = 50;
+
+/** ISO 8601 길이(PT1H2M3S · P1DT2H) → 초. 못 읽으면 null(P0D = 생방송 예정 등은 0). */
+export function parseIsoDuration(s: unknown): number | null {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(String(s ?? ''));
+  if (!m || String(s) === 'P' || String(s) === 'PT') return null;
+  const [, d, h, mi, se] = m;
+  return Number(d || 0) * 86400 + Number(h || 0) * 3600 + Number(mi || 0) * 60 + Math.floor(Number(se || 0));
+}
+
+/** videos.list(part=contentDetails) 응답 → videoId → 초(못 읽은 영상은 빠짐). */
+export function parseDurations(json: any): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const it of Array.isArray(json?.items) ? json.items : []) {
+    const sec = parseIsoDuration(it?.contentDetails?.duration);
+    if (it?.id && sec !== null) out.set(String(it.id), sec);
+  }
+  return out;
+}
+
+export interface DurationResult {
+  durations: Map<string, number>;
+  calls: number;
+  units: number;
+  /** 다 못 읽고 멈춘 까닭(unit_cap = 이 실행 길이 상한 · quota_guard = 하루 가드 · 오류 reason) */
+  stopped?: string;
+}
+
+/**
+ * 영상 길이 읽기: ids 를 50개씩 videos.list(contentDetails · 1단위). 부르기 전마다 budget.left(이 실행 길이 상한 · 하루 1회 실행이라
+ * 하루 상한)와 하루 가드를 본다. 오류면 거기서 멈춤(읽은 것만 · 열쇠·URL 은 담지 않음).
+ */
+export async function fetchDurations(
+  ids: string[],
+  key: string,
+  guard: QuotaGuard,
+  budget: { left: number },
+  opts: { get?: HttpGet } = {},
+): Promise<DurationResult> {
+  const get = opts.get ?? defaultGet;
+  const headers = { 'x-goog-api-key': key, accept: 'application/json' };
+  const want = [...new Set(ids.filter((id) => /^[\w-]{11}$/.test(id)))];
+  const out: DurationResult = { durations: new Map(), calls: 0, units: 0 };
+  for (let i = 0; i < want.length; i += DURATION_BATCH) {
+    if (budget.left < VIDEOS_UNITS) return { ...out, stopped: 'unit_cap' };
+    if (!guard.spend(VIDEOS_UNITS)) return { ...out, stopped: 'quota_guard' };
+    budget.left -= VIDEOS_UNITS;
+    out.calls++;
+    out.units += VIDEOS_UNITS;
+    try {
+      const batch = want.slice(i, i + DURATION_BATCH);
+      const json = await get(`${API}/videos`, { part: 'contentDetails', id: batch.join(','), maxResults: DURATION_BATCH }, headers);
+      for (const [id, sec] of parseDurations(json)) out.durations.set(id, sec);
+    } catch (e) {
+      const err = apiErrorOf(e);
+      if (err.reason === 'quotaExceeded' || err.reason === 'dailyLimitExceeded') guard.stopped = true;
+      return { ...out, stopped: err.reason };
+    }
+  }
+  return out;
+}
+
 /** 이번 실행 되짚기 기록(per_source.__run.broadcastApi · health). */
 export interface BroadcastApiRecord {
   mode: 'on' | 'off';

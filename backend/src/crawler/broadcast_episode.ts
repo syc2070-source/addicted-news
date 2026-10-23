@@ -22,6 +22,43 @@ export interface EpisodeItem {
   publishedAt: string;
   /** NEWS-Q13 ■2: 하위 주제(핵심어 묶음 · 방송 관문 subtopic) — 관련 클립 묶기에만 */
   groups?: string[];
+  /** NEWS-Q14 ■4: 유튜브 영상 id · 길이(초 · videos.list contentDetails · 못 읽으면 없음 = 제목 규칙만) */
+  videoId?: string;
+  durationSec?: number;
+}
+
+/** NEWS-Q14 ■4: 길이 규칙 — 본편 = 방송 꼬리 ∨ 길이 ≥ mainMinSec · 클립 = 길이 < clipMaxSec(0 · 없음 = 끔) */
+export interface LengthRule {
+  mainMinSec?: number;
+  clipMaxSec?: number;
+}
+
+/** 유튜브 주소 → 영상 id(watch?v= · youtu.be/ · shorts/) · 없으면 ''. */
+export function videoIdOfUrl(url: string): string {
+  const m =
+    /(?:[?&]v=|youtu\.be\/|\/shorts\/|\/embed\/)([\w-]{11})(?![\w-])/.exec(
+      url || '',
+    );
+  return m ? m[1] : '';
+}
+
+/** 길이로 클립(짧은 영상)인가 — 길이를 읽었고 clipMaxSec 보다 짧을 때만. */
+export function shortByLength(it: EpisodeItem, rule: LengthRule = {}): boolean {
+  return (
+    Number(rule.clipMaxSec) > 0 &&
+    typeof it.durationSec === 'number' &&
+    it.durationSec > 0 &&
+    it.durationSec < Number(rule.clipMaxSec)
+  );
+}
+
+/** 길이로 본편인가 — 길이를 읽었고 mainMinSec 이상일 때만. */
+export function longByLength(it: EpisodeItem, rule: LengthRule = {}): boolean {
+  return (
+    Number(rule.mainMinSec) > 0 &&
+    typeof it.durationSec === 'number' &&
+    it.durationSec >= Number(rule.mainMinSec)
+  );
 }
 
 export const DEFAULT_CLIP_MARKERS = [
@@ -200,6 +237,15 @@ export function hasMainEvidence(
   });
 }
 
+/** NEWS-Q14 ■4: 본편 표시 — 제목 방송 꼬리 ∨ 길이 ≥ mainMinSec(길이를 읽었을 때만). */
+export function isMainItem(
+  it: EpisodeItem,
+  evidence: string[] = DEFAULT_MAIN_EVIDENCE,
+  rule: LengthRule = {},
+): boolean {
+  return hasMainEvidence(it.title, evidence) || longByLength(it, rule);
+}
+
 /**
  * NEWS-Q13 ■2: 관련 클립 c 가 본편 m 에 딸렸나(제목·설명이 본편과 달라 sameEpisode 가 못 잡는 것 · LLM 0).
  * 다섯 조건 모두: 단독 채널(호출하는 쪽이 본다) ∧ m 은 실린 본편(본편 표시 있음 · c 는 표시 없음)
@@ -210,9 +256,11 @@ export function relatedClip(
   m: EpisodeItem,
   relatedDays = DEFAULT_RELATED_DAYS,
   evidence: string[] = DEFAULT_MAIN_EVIDENCE,
+  rule: LengthRule = {},
 ): boolean {
   if (c.program !== m.program || FULL_MARK.test(c.title)) return false;
-  if (!hasMainEvidence(m.title, evidence) || hasMainEvidence(c.title, evidence))
+  // NEWS-Q14 ■4: 본편 표시 = 방송 꼬리 ∨ 길이 ≥ 20분(길이를 읽었을 때)
+  if (!isMainItem(m, evidence, rule) || isMainItem(c, evidence, rule))
     return false;
   // 한국 날짜로 견줌(본편 밤 10시 · 클립 다음 날 = 1일)
   const gap = kstDay(c.publishedAt) - kstDay(m.publishedAt);
@@ -257,7 +305,7 @@ export async function existingEpisodeMains(
   try {
     const rows = await query(
       // published_at 은 글(varchar) 또는 date — ::text 앞 10자로 읽고 견줌(어느 꼴이든 · 시간대로 하루 밀리지 않음)
-      `SELECT title, keywords::text AS keywords, left(published_at::text, 10) AS published_at FROM articles
+      `SELECT title, source_url, keywords::text AS keywords, left(published_at::text, 10) AS published_at FROM articles
         WHERE source = $1 AND source_type = 'broadcast' AND COALESCE(tier, 'publish') = 'publish'
           AND NOT blocked${cols.deletedAt ? ' AND deleted_at IS NULL' : ''}
           AND left(published_at::text, 10) >= $2 AND left(published_at::text, 10) <= $3
@@ -268,10 +316,15 @@ export async function existingEpisodeMains(
     return (
       (rows || []) as Array<{
         title?: unknown;
+        source_url?: unknown;
         keywords?: unknown;
         published_at?: unknown;
       }>
     ).map((r) => {
+      // NEWS-Q14 ■4: 길이를 함께 읽을 수 있게 영상 id(없으면 제목 규칙만)
+      const videoId = videoIdOfUrl(
+        typeof r.source_url === 'string' ? r.source_url : '',
+      );
       const title = typeof r.title === 'string' ? r.title : '';
       // keywords = simple-array(쉼표 글) — 저장 때 붙인 방송 관문 subtopic 이 들어 있다
       const tagged = (typeof r.keywords === 'string' ? r.keywords : '')
@@ -284,6 +337,7 @@ export async function existingEpisodeMains(
         publishedAt:
           typeof r.published_at === 'string' ? r.published_at.slice(0, 10) : '',
         groups: [...new Set([...tagged, ...keywordGroupsOf(title)])],
+        ...(videoId ? { videoId } : {}),
       };
     });
   } catch {
@@ -303,7 +357,8 @@ export async function archiveListedBroadcasts(
   if (!want.length) return [];
   try {
     const res = await query(
-      `UPDATE articles SET tier = 'archive'
+      // NEWS-Q14 ■5: updated_at = 층이 바뀐 때(공개 보관 목록 changedAt)
+      `UPDATE articles SET tier = 'archive', updated_at = now()
         WHERE id = ANY($1::int[]) AND source_type = 'broadcast' AND COALESCE(tier, 'publish') = 'publish'
         RETURNING id`,
       [want],
@@ -337,7 +392,7 @@ export async function restoreKeptBroadcasts(
   if (!want.length) return [];
   try {
     const res = await query(
-      `UPDATE articles SET tier = 'publish'
+      `UPDATE articles SET tier = 'publish', updated_at = now()
         WHERE id = ANY($1::int[]) AND source_type = 'broadcast' AND tier = 'archive'
         RETURNING id`,
       [want],
@@ -376,48 +431,76 @@ export function foldEpisodes<T extends EpisodeItem>(
     solo?: boolean;
     relatedDays?: number;
     mainEvidence?: string[];
+    /** NEWS-Q14 ■4: 길이 규칙(길이를 읽은 항목만 · 없으면 제목 규칙만) */
+    length?: LengthRule;
   } = {},
 ): EpisodeRole[] {
   const markers = opts.markers ?? DEFAULT_CLIP_MARKERS;
   const days = opts.days ?? DEFAULT_EPISODE_DAYS;
   const generic = new Set((opts.generic ?? []).map(squash));
+  const lengthRule = opts.length ?? {};
+  // NEWS-Q14 ■4: 60초 미만(길이를 읽었을 때) = 클립 · 단 [full]/풀버전 표시는 클립으로 치지 않음
   const roles: EpisodeRole[] = items.map((it) =>
-    isClipTitle(it.title, markers) ? 'clip' : 'main',
+    isClipTitle(it.title, markers) ||
+    (shortByLength(it, lengthRule) && !FULL_MARK.test(it.title))
+      ? 'clip'
+      : 'main',
   );
-  // 본편 후보 순서: [full]/풀버전 먼저 · 본편 표시(방송 꼬리) 있는 것 · 그다음 이른 것
+  // 본편 후보 순서: [full]/풀버전 먼저 · 본편 표시(방송 꼬리 · 길이 ≥ 20분) 있는 것 · 그다음 이른 것
   // (NEWS-Q13 반박 리뷰: 표시 없는 클립이 먼저 올라와도 본편이 episode_dup 으로 밀리지 않게)
   const evidence = opts.mainEvidence ?? DEFAULT_MAIN_EVIDENCE;
+  // 리뷰(Q14): 길이로만 본편인 것(꼬리 없는 20분+ 「몰아보기」 등)은 제목 꼬리 본편보다 뒤 — 진짜 본편이 episode_dup 으로 밀리지 않게
+  // 반박 리뷰(Q14): [full] 이어도 60초 미만이면 0 순위 아님 · 같은 순위는 길이 긴 것 먼저(꼬리 붙은 6분 클립이 60분 본편보다 먼저 서지 않게)
   const rank = (i: number) =>
-    FULL_MARK.test(items[i].title)
+    FULL_MARK.test(items[i].title) && !shortByLength(items[i], lengthRule)
       ? 0
       : hasMainEvidence(items[i].title, evidence)
         ? 1
-        : 2;
+        : longByLength(items[i], lengthRule)
+          ? 2
+          : 3;
   const order = items
     .map((it, i) => i)
     .filter((i) => roles[i] === 'main')
     .sort(
       (a, b) =>
         rank(a) - rank(b) ||
+        (items[b].durationSec ?? 0) - (items[a].durationSec ?? 0) ||
         dayOf(items[a].publishedAt) - dayOf(items[b].publishedAt),
     );
   // Q12 전에 실린 예고·클립은 본편으로 치지 않는다(옛 예고가 진짜 본편을 보관층으로 미는 것 막음)
   const mains: EpisodeItem[] = existing.filter(
-    (e) => !isClipTitle(e.title, markers),
+    (e) => !isClipTitle(e.title, markers) && !shortByLength(e, lengthRule),
   );
   for (const i of order) {
+    // 리뷰 · 반박(Q14): 본편 표시(꼬리 ∨ 20분+)가 있는 이번 후보는, 길이를 읽어 20분 미만으로 확인된 옛 실린 행에 밀려 보관되지 않는다.
+    // 옛 행 길이를 모르면(열쇠 없음 · 상한 · id 없음) 옛 규칙 그대로 막음(꼬리 붙은 클립이 꼬리 없는 옛 본편과 함께 실리지 않게).
+    const candMain = isMainItem(items[i], evidence, lengthRule);
+    const weakOld = (m: EpisodeItem) =>
+      existing.includes(m) &&
+      Number(lengthRule.mainMinSec) > 0 &&
+      typeof m.durationSec === 'number' &&
+      m.durationSec > 0 &&
+      !longByLength(m, lengthRule);
     if (
       mains.some(
         (m) =>
-          sameEpisode(items[i], m, days, generic) ||
-          sameEpisode(m, items[i], days, generic),
+          !(candMain && weakOld(m)) &&
+          (sameEpisode(items[i], m, days, generic) ||
+            sameEpisode(m, items[i], days, generic)),
       )
     ) {
       roles[i] = 'episode_dup';
     } else if (
       opts.solo &&
       mains.some((m) =>
-        relatedClip(items[i], m, opts.relatedDays, opts.mainEvidence),
+        relatedClip(
+          items[i],
+          m,
+          opts.relatedDays,
+          opts.mainEvidence,
+          lengthRule,
+        ),
       )
     ) {
       // 관련 클립은 본편 목록에 넣지 않는다(클립 둘째가 첫째에 딸리지 않게 · 본편에만 견줌)

@@ -36,6 +36,7 @@ import {
   candidateReason, cleanupMode, CleanupMode, hardDeleteEnabled, isCandidate, isDeletionBasis, JudgedRow,
 } from './cleanup_policy';
 import { columnExists, QueryFn } from './schema_probe';
+import { returnedRows } from './broadcast_episode';
 import { defaultDbName, fieldProfile } from './field_profile';
 import { cleanupRunOf, CleanupRunPublic, recordCleanupRun, safeError } from './cleanup_runs';
 
@@ -173,16 +174,17 @@ export async function runCleanup(opts: {
   let softDeleted = 0;
   let hardDeleted = 0;
   if (ids.length > 0 && mode === 'soft_delete') {
-    const res = (await opts.query(
+    // NEWS-Q14 ■6: 수 = 돌려받은 행 수. pg Client(.rows) 는 행들 · typeorm query 는 [행들, 수] → 둘 다 행들로(returnedRows)
+    const res: unknown = await opts.query(
       `UPDATE articles SET deleted_at = now() WHERE id = ANY($1::int[]) AND deleted_at IS NULL RETURNING id`,
       [ids],
-    )) as unknown[];
-    softDeleted = res.length;
+    );
+    softDeleted = returnedRows(res).length;
     log(`🙈 soft 삭제(deleted_at): ${softDeleted}건 — 행은 DB 에 남음(복원 = deleted_at NULL)`);
   } else if (ids.length > 0 && mode === 'hard_delete') {
     if (opts.beforeHardDelete) await opts.beforeHardDelete(ids);
-    const res = (await opts.query(`DELETE FROM articles WHERE id = ANY($1::int[]) RETURNING id`, [ids])) as unknown[];
-    hardDeleted = res.length;
+    const res: unknown = await opts.query(`DELETE FROM articles WHERE id = ANY($1::int[]) RETURNING id`, [ids]);
+    hardDeleted = returnedRows(res).length;
     log(`🗑️  하드 삭제(CLEANUP_HARD_DELETE=1): ${hardDeleted}건`);
   } else {
     log(`삭제 0 — ${mode === 'candidates_only' ? '후보 목록만' : '삭제 근거(AI 판정) 없음'} (AI 근거 ${ids.length}건 · 전체 후보 ${candidates.length}건)`);

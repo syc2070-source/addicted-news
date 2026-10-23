@@ -65,6 +65,14 @@ export interface RunProgressLike {
   broadcastRestoredIds?: number[];
   /** NEWS-Q13 ■3: 100일 한 번 메우기 기록 */
   broadcastBackfill?: object;
+  /** NEWS-Q14 ■1: 스팸 출처 — 보관층으로 옮긴 id · 옮기지 않은 수 · 이름별 거부 수 */
+  spamArchivedIds?: number[];
+  spamArchiveSkipped?: number;
+  spamArchiveError?: boolean;
+  spamRejected?: Record<string, number>;
+  /** NEWS-Q14 ■3 · ■4: 단락기 요약 판정 · 영상 길이 읽기 */
+  breakerSummary?: object;
+  broadcastDuration?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';
@@ -184,6 +192,8 @@ export interface PerSourceDigest {
   slowest: Array<{ id: string; readSec: number; judgeSec: number }>;
   /** NEWS-Q5 ■1: 세계신문(wp-* · 대체 검색 피드 포함) 저장 수 */
   worldSaved: number;
+  /** NEWS-Q14 ■2: 세계신문 보관층 저장 수(경보 world_zero_2d = 실림 + 보관) */
+  worldArchived: number;
   /** NEWS-Q5 ■0: 소스 무리별 합(소스 수 · 읽음 · 후보 · 중복 · 판정 호출 · 저장/보관/거부 · 상한 · 실패) */
   groups: Record<string, SourceGroupStat>;
 }
@@ -231,6 +241,7 @@ export function digestPerSource(raw: unknown): { progress: RunProgressLike | nul
   let timeouts = 0;
   let blocked = 0;
   let worldSaved = 0;
+  let worldArchived = 0;
   const groups: Record<string, SourceGroupStat> = {};
   const timing: Array<{ id: string; readSec: number; judgeSec: number }> = [];
   for (const [id, st] of Object.entries(ps)) {
@@ -241,7 +252,10 @@ export function digestPerSource(raw: unknown): { progress: RunProgressLike | nul
     for (const k of ['read', 'candidates', 'dup', 'calls', 'saved', 'archived', 'rejected'] as const) g[k] += Number(st[k] || 0);
     if (st.timeout) g.timeouts++;
     if (st.failed) g.failed++;
-    if (gname === 'world') worldSaved += Number(st.saved || 0);
+    if (gname === 'world') {
+      worldSaved += Number(st.saved || 0);
+      worldArchived += Number(st.archived || 0);
+    }
     if (id.startsWith('broadcast:')) {
       if (!st.failed) { broadcastChannelsRead++; broadcastItems += Number(st.read || 0); }
       continue;
@@ -254,7 +268,7 @@ export function digestPerSource(raw: unknown): { progress: RunProgressLike | nul
   }
   if (progress) blocked += Array.isArray(progress.blockedSkipped) ? progress.blockedSkipped.length : 0;
   timing.sort((a, b) => b.readSec + b.judgeSec - (a.readSec + a.judgeSec));
-  return { progress, sources: { broadcastChannelsRead, broadcastItems, timeouts, blocked, slowest: timing.slice(0, 5), worldSaved, groups } };
+  return { progress, sources: { broadcastChannelsRead, broadcastItems, timeouts, blocked, slowest: timing.slice(0, 5), worldSaved, worldArchived, groups } };
 }
 
 /** NEWS-Q3 ■0·■5: 최근 실행 n 개(공개 · 숫자와 실패 피드 이름만 · 열쇠·본문 0). 표가 없거나 실패면 []. */

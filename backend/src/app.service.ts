@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { ArchiveList, ARCHIVE_LIST_DAYS, ARCHIVE_LIST_MAX, broadcastArchiveList } from './crawler/broadcast_archive_list';
 import type { BroadcastFeedStatus } from './crawler/broadcast_feeds';
 import { CleanupRunPublic, recentCleanupRuns } from './crawler/cleanup_runs';
 import { lastCrawlRun, LastRunPublic, recentCrawlRuns, RunPublic } from './crawler/crawl_runs';
@@ -131,6 +132,33 @@ export class AppService {
       value = [];
     }
     this.cleanupCache = { at: now, n: lim, value };
+    return value;
+  }
+
+  private archiveCache: Partial<Record<'archive' | 'all', { at: number; value: ArchiveList }>> = {};
+
+  /**
+   * NEWS-Q14 ■5: 공개 방송 보관 목록(id · tier · changedAt 만 · 최근 120일 · 60초 기억). tier 열이 없거나 DB 못 닿으면
+   * available false · items [](200). 제목·내용·주소 0.
+   */
+  async broadcastArchive(tier: 'archive' | 'all', now = Date.now()): Promise<ArchiveList> {
+    const hit = this.archiveCache[tier];
+    if (hit && now - hit.at < LAST_RUN_TTL_MS) return hit.value;
+    let items: ArchiveList['items'] | null = null;
+    try {
+      if (this.dataSource?.isInitialized) {
+        const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
+        const [tierCol, deletedAt] = await Promise.all([columnExists(q, 'articles', 'tier'), columnExists(q, 'articles', 'deleted_at')]);
+        if (tierCol) items = await broadcastArchiveList(q, { tier, deletedAt });
+      }
+    } catch {
+      items = null;
+    }
+    const value: ArchiveList = {
+      kind: 'broadcast', tier, days: ARCHIVE_LIST_DAYS, generatedAt: new Date(now).toISOString(),
+      available: items !== null, count: items?.length ?? 0, truncated: (items?.length ?? 0) >= ARCHIVE_LIST_MAX, items: items ?? [],
+    };
+    this.archiveCache[tier] = { at: now, value };
     return value;
   }
 

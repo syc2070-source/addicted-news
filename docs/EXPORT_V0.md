@@ -146,3 +146,12 @@ sourceEn 은 `program_en` 한 칸에서만 나온다. `name_source`(NEWS-Q13 ■
 
 - 분야 id 이름표(`addiction` → Statory 분야 id) · 출처 등급 값 목록 고정 · 승인(누가 열쇠를 돌리나) · slug.
 - v0 칸은 늘리기만 하고 빼거나 뜻을 바꾸지 않는다(바꾸면 v1).
+
+## 변경 기록
+
+| 날 | 판 | 바뀐 것 | 판 번호 |
+|---|---|---|---|
+| 2026-10-19 | NEWS-Q10 ■3 | v0 문 처음(꺼진 채 404 · 열쇠 env 있을 때만 켜짐) | v0 |
+| 2026-10-22 | NEWS-Q12 ■4 | 칸 셋 더함(subtype · sourceEn · clusterId) — 늘리기만 | v0 |
+| 2026-10-23 | NEWS-Q13 ■4 | `tier` 기본값 실림만(`publish`) · `archive` · `all` = 400. 보관층은 내보내지 않음 | **v0 유지**(읽는 쪽 0 — 문이 꺼진 채 404 였고 받아 간 쪽 없음 · NEWS-Q14 ■6 CTO 판정 ⑤) |
+| 2026-10-24 | NEWS-Q14 ■5 | 방송 보관 목록은 이 문이 아니라 따로 공개(`GET /api/broadcast/archive` · docs/BROADCAST_ARCHIVE_LIST.md) — 이 문 칸은 그대로 | v0 |

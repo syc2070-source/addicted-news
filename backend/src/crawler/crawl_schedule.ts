@@ -272,13 +272,24 @@ export interface RunProgress {
   standbySkipped?: string[];
   /** NEWS-Q13 ■3: 100일 한 번 메우기(설정 backfill_search_once · done = 끝) */
   broadcastBackfill?: BackfillRecord;
+  /** NEWS-Q14 ■1: 설정 spam_publishers.archive_ids 로 이번 실행이 보관층으로 옮긴 id · 옮기지 않은 수(이미 보관 · 출처 안 맞음) */
+  spamArchivedIds?: number[];
+  spamArchiveSkipped?: number;
+  /** DB 오류로 못 옮김(다음 실행이 다시) */
+  spamArchiveError?: boolean;
+  /** NEWS-Q14 ■1: 스팸 출처라 거부한 항목 수(출처 이름별 · 판정 호출 0) */
+  spamRejected?: Record<string, number>;
+  /** NEWS-Q14 ■3: 단락기로 본문을 못 읽어 RSS 요약으로 판정한 수 · 요약이 짧아 옛 규칙(본문 부실)으로 건너뛴 수 */
+  breakerSummary?: { judged: number; thin: number };
+  /** NEWS-Q14 ■4: 영상 길이 읽기(videos.list contentDetails) — 부른 수 · 단위 · 길이 읽은 영상 · 길이로 본편/클립이 된 수 · 멈춘 까닭 */
+  broadcastDuration?: { calls: number; units: number; videos: number; mainByLength: number; clipByLength: number; stopped?: string };
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {
   return {
     startId: null, startIndex: 0, lastId: null, reached: 0, total, timedOut: false, stoppedAt: null,
     timeouts: [], blockedSkipped: [], blockedRetried: [], blockedFromHost: 0,
-    broadcastFirst: true, broadcastMs: null, oldDatedArchived: 0,
+    broadcastFirst: true, broadcastMs: null, oldDatedArchived: 0, spamRejected: {}, breakerSummary: { judged: 0, thin: 0 },
     concurrency: SOURCE_CONCURRENCY, sourceCapSec: SOURCE_CAP_MS / 1000, googleCapSec: GOOGLE_SEARCH_CAP_MS / 1000, deadlineMin: Math.round(deadlineMs / 60_000),
   };
 }
