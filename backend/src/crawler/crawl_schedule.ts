@@ -282,7 +282,11 @@ export interface RunProgress {
   /** NEWS-Q14 ■3: 단락기로 본문을 못 읽어 RSS 요약으로 판정한 수 · 요약이 짧아 옛 규칙(본문 부실)으로 건너뛴 수 */
   breakerSummary?: { judged: number; thin: number };
   /** NEWS-Q14 ■4: 영상 길이 읽기(videos.list contentDetails) — 부른 수 · 단위 · 길이 읽은 영상 · 길이로 본편/클립이 된 수 · 멈춘 까닭 */
-  broadcastDuration?: { calls: number; units: number; videos: number; mainByLength: number; clipByLength: number; stopped?: string };
+  broadcastDuration?: {
+    calls: number; units: number; videos: number; mainByLength: number; clipByLength: number; stopped?: string;
+    /** NEWS-Q15 ■3: 오늘(KST) 앞 실행들이 이미 쓴 길이 단위(하루 상한에서 뺌) */
+    unitsTodayBefore?: number;
+  };
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

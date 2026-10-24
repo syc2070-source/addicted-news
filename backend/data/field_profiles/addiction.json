@@ -1328,8 +1328,9 @@
       "related_days": 3,
       "keep_ids": [],
       "_duration_comment": "NEWS-Q14 ■4 CTO 판정 ④: 본편 = 제목 방송 꼬리(main_evidence) ∨ 영상 길이 ≥ main_min_seconds(20분) · 길이 < clip_max_seconds(60초) = 클립(보관). 길이 = videos.list contentDetails(50편 1단위 · 실림 후보와 이미 실린 본편만) · 하루 duration_unit_cap_day 단위 안 · 하루 2,000 가드 그대로. 열쇠 없거나 길이를 못 읽으면 옛 규칙(제목만).",
+      "_shorts_comment": "NEWS-Q15 ■2 CTO 판정(10-24): 쇼츠 상한까지 — 길이 ≤ clip_max_seconds(180초) = 클립(60초 미만 → 180초 이하) · 단 제목에 [full]/풀버전 · 방송 꼬리(main_evidence)가 있으면 본편. duration_unit_cap_day = KST 하루 합(앞 실행들이 쓴 길이 단위를 뺌 · NEWS-Q15 ■3).",
       "main_min_seconds": 1200,
-      "clip_max_seconds": 60,
+      "clip_max_seconds": 180,
       "duration_unit_cap_day": 20,
       "_backfill_comment": "NEWS-Q13 ■3: 3~6쪽으로 100일에 못 닿은 넷만 search.list 로 한 번 메움(q = 대표어 OR · 지난 100일 · 채널당 최대 2쪽 · 그날만 단위 상한 1,000 · 하루 2,000 가드 그대로). 다 끝나면 runs 에 done=true → 같은 id 는 다시 안 돎. 그 뒤 날마다는 「이어짐」(지난번 잘 되짚은 실행보다 오래된 영상에 닿으면 멈춤 · cover.gap).",
       "backfill_search_once": {

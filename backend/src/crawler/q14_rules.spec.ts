@@ -23,6 +23,7 @@ import { digestPerSource } from './crawl_runs';
 import {
   broadcastArchiveList,
   parseArchiveTier,
+  redactArchiveList,
 } from './broadcast_archive_list';
 import { runCleanup, JudgeFn, Row } from './judge_cleanup';
 import type { QueryFn } from './schema_probe';
@@ -328,9 +329,10 @@ describe('NEWS-Q14 ■4 — 영상 길이로 본편·클립', () => {
     expect(foldEpisodes([main], [{ ...tagClip, publishedAt: '2026-10-20T09:00:00Z' }], { length: RULE })).toEqual(['main']);
   });
 
-  it('설정: 20분 · 60초 · 하루 20단위', () => {
+  it('설정: 20분 · 180초(Q15) · 하루 20단위', () => {
     const b = profileJson().sources.broadcast;
-    expect([b.main_min_seconds, b.clip_max_seconds, b.duration_unit_cap_day]).toEqual([1200, 60, 20]);
+    // NEWS-Q15 ■2: 쇼츠 상한 180초
+    expect([b.main_min_seconds, b.clip_max_seconds, b.duration_unit_cap_day]).toEqual([1200, 180, 20]);
   });
 });
 
@@ -374,32 +376,44 @@ describe('NEWS-Q14 ■2 — world_zero_2d = 세계 실림 + 보관 0', () => {
 });
 
 // ---------- ■5 보관 목록 ----------
-describe('NEWS-Q14 ■5 — 공개 방송 보관 목록', () => {
-  it('id · tier · changedAt 만 · 방송 · 120일 · 숨김·막힘 뺌', async () => {
+describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
+  it('id · tier · changedAt · videoId 만 · 방송 · 보관 전 기간 · 지운 편 = deleted · 막힘 뺌', async () => {
     const query = jest.fn().mockResolvedValue([
       // pg bigint = 글
-      { id: 5868, tier: 'archive', changed: String(Date.parse('2026-10-23T03:00:41.120Z')) },
+      { id: 5868, source_url: 'https://www.youtube.com/watch?v=abcdefghijk', tier: 'archive', changed: String(Date.parse('2026-10-23T03:00:41.120Z')) },
+      { id: 5000, source_url: 'https://example.com/x', tier: 'deleted', changed: String(Date.parse('2026-06-01T00:00:00.000Z')) },
       { id: 'x', tier: 'archive', changed: '1' },
       { id: 6141, tier: 'archive', changed: null },
     ]);
-    const items = await broadcastArchiveList(query, { tier: 'archive', deletedAt: true });
-    expect(items).toEqual([{ id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.120Z' }]);
+    const res = await broadcastArchiveList(query, { tier: 'archive', deletedAt: true });
+    expect(res?.truncated).toBe(false);
+    const items = res?.items;
+    expect(items).toEqual([
+      { id: 5000, tier: 'deleted', changedAt: '2026-06-01T00:00:00.000Z', videoId: null },
+      { id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.120Z', videoId: 'abcdefghijk' },
+    ]);
     const sql = sqlOf(query);
     expect(sql).toMatch(/source_type = 'broadcast'/);
-    expect(sql).toMatch(/tier = 'archive'/);
-    expect(sql).toMatch(/deleted_at IS NULL/);
+    expect(sql).toMatch(/deleted_at IS NOT NULL OR tier = 'archive'/);
+    expect(sql).toMatch(/WHEN deleted_at IS NOT NULL THEN 'deleted'/);
     expect(sql).toMatch(/NOT blocked/);
-    expect(sql).not.toMatch(/title|summary|source_url|description/);
-    expect((query.mock.calls as unknown[][])[0][1]).toEqual([120]);
+    // 넘칠 때 보관 · 지운 편이 실림보다 먼저 남음
+    expect(sql).toMatch(/ORDER BY CASE WHEN [\s\S]* = 'publish' THEN 1 ELSE 0 END/);
+    // 보관 · 지운 편은 날 수 제한 없음
+    expect(sql).not.toMatch(/interval/);
+    expect((query.mock.calls as unknown[][])[0][1]).toEqual([]);
+    expect(sql).not.toMatch(/title|summary|description/);
+    expect(JSON.stringify(items)).not.toMatch(/https?:/);
   });
 
-  it('tier=all = 실림 포함 · 그 밖의 값 = archive · 실패면 null', async () => {
+  it('tier=all = 실림(최근 120일) 포함 · 그 밖의 값 = archive · deleted_at 열 없으면 deleted 0 · 실패면 null', async () => {
     expect(parseArchiveTier('all')).toBe('all');
     expect(parseArchiveTier('publish')).toBe('archive');
     expect(parseArchiveTier(undefined)).toBe('archive');
     const query = jest.fn().mockResolvedValue([]);
     await broadcastArchiveList(query, { tier: 'all', deletedAt: false });
-    expect(sqlOf(query)).toMatch(/IN \('archive', 'publish'\)/);
+    expect(sqlOf(query)).toMatch(/COALESCE\(tier, 'publish'\) = 'publish' AND updated_at >= now\(\) - \(\$1::int \* interval '1 day'\)/);
+    expect((query.mock.calls as unknown[][])[0][1]).toEqual([120]);
     expect(sqlOf(query)).not.toMatch(/deleted_at/);
     await expect(
       broadcastArchiveList(jest.fn().mockRejectedValue(new Error('x')), { tier: 'archive', deletedAt: false }),
@@ -412,16 +426,27 @@ describe('NEWS-Q14 ■5 — 공개 방송 보관 목록', () => {
 
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('information_schema.columns')) return [{ x: 1 }];
-      return [{ id: 5868, tier: 'archive', changed: Date.parse('2026-10-23T03:00:41Z') }];
+      return [{ id: 5868, source_url: 'https://youtu.be/abcdefghijk', tier: 'archive', changed: Date.parse('2026-10-23T03:00:41Z') }];
     });
     const svc = new AppService({ isInitialized: true, query } as never);
-    const out = redactPublic(await svc.broadcastArchive('all'));
+    const out = redactArchiveList(await svc.broadcastArchive('all'));
     expect(out).toMatchObject({ tier: 'all', available: true, count: 1, truncated: false });
-    expect(out.items).toEqual([{ id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z' }]);
+    expect(out.items).toEqual([{ id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'abcdefghijk' }]);
     const text = JSON.stringify(out);
     for (const re of [/postgres(ql)?:\/\//i, /\.render\.com/i, /password/i, /sk-[a-z0-9]{16,}/i, /AIza[0-9A-Za-z_-]{20,}/]) {
       expect(text).not.toMatch(re);
     }
+    // 리뷰(Q15): 「sk-」 · 「eyJ」 로 시작하는 진짜 영상 id 는 열쇠 꼴 가림에 지워지지 않음 · 꼴이 틀린 id 는 null
+    const kept = redactArchiveList({
+      ...out,
+      items: [
+        { id: 1, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'sk-abcdefgh' },
+        { id: 2, tier: 'deleted', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'eyJabcdefgh' },
+        { id: 3, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'https://x/y' },
+      ],
+    });
+    expect(kept.items.map((x) => x.videoId)).toEqual(['sk-abcdefgh', 'eyJabcdefgh', null]);
+    expect(redactPublic('sk-abcdefgh')).toBe('<key>');
     // 60초 기억
     await svc.broadcastArchive('all');
     expect(query.mock.calls.filter((c) => String(c[0]).includes('FROM articles')).length).toBe(1);

@@ -33,12 +33,12 @@ import {
 } from './broadcast_gate';
 import {
   DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, DEFAULT_MAIN_EVIDENCE, DEFAULT_RELATED_DAYS, EpisodeItem, LengthRule, archiveListedBroadcasts,
-  existingEpisodeMains, foldEpisodes, hasMainEvidence, isClipTitle, listedArchiveIds, longByLength, restoreKeptBroadcasts, shiftYmd, shortByLength,
+  existingEpisodeMains, foldEpisodes, hasMainEvidence, isClipTitle, listedArchiveIds, longByLength, restoreKeptBroadcasts, shiftYmd, shortClip,
 } from './broadcast_episode';
 import { GroupCounter, keywordGroupsOf } from './keyword_groups';
 import {
   BACKFILL_MAX_TRIES, BackfillRecord, CONTINUITY_MARGIN_DAYS, DAILY_UNIT_CAP, PLAYLIST_UNITS, QuotaGuard, UPLOAD_PAGES_DEFAULT, UPLOAD_PAGES_MAX,
-  YOUTUBE_API_ENV, apiTodayFromRuns, backfillSearch, backfillStateFromRuns, emptyApiRecord, fetchDurations, lastLookbackFromRuns, lookbackUploads,
+  YOUTUBE_API_ENV, apiTodayFromRuns, backfillSearch, backfillStateFromRuns, durationBudgetLeft, emptyApiRecord, fetchDurations, lastLookbackFromRuns, lookbackUploads,
   planChannel, rss404Outlets, youtubeApiKey,
 } from './youtube_api';
 import { feedStatusOf } from './broadcast_feeds';
@@ -747,7 +747,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
   }
   // NEWS-Q6 ■4: 되짚기(YouTube Data API) — 열쇠 있을 때만 · 채널당 하루 1회 · 하루 2,000 단위 가드 · 열쇠 값 로그 0
   const apiKey = youtubeApiKey();
-  const today = apiKey && RUN.flags.crawlRuns && RUN.query ? await apiTodayFromRuns(RUN.query, PROFILE.field) : { units: 0, channels: [] };
+  const today = apiKey && RUN.flags.crawlRuns && RUN.query ? await apiTodayFromRuns(RUN.query, PROFILE.field) : { units: 0, channels: [], durationUnits: 0 };
   const guard = new QuotaGuard(DAILY_UNIT_CAP, today.units);
   const api = emptyApiRecord(apiKey ? 'on' : 'off', today.units);
   if (RUN.progress) RUN.progress.broadcastApi = api;
@@ -765,11 +765,13 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     generic: bcCfg.episode_generic_words ?? [], relatedDays: bcCfg.related_days ?? DEFAULT_RELATED_DAYS,
     mainEvidence: bcCfg.main_evidence ?? DEFAULT_MAIN_EVIDENCE,
   };
-  // NEWS-Q14 ■4: 길이 규칙(본편 ≥ main_min_seconds · 클립 < clip_max_seconds) · 길이 읽기 단위 상한(하루 1회 실행 = 이 실행)
+  // NEWS-Q14 ■4: 길이 규칙(본편 ≥ main_min_seconds · 클립 ≤ clip_max_seconds) · NEWS-Q15 ■3: 길이 읽기 단위 = 하루 합(오늘 앞 실행들이 쓴 것 뺌)
   const lengthRule: LengthRule = { mainMinSec: bcCfg.main_min_seconds, clipMaxSec: bcCfg.clip_max_seconds };
   const lengthOn = (Number(bcCfg.main_min_seconds) > 0 || Number(bcCfg.clip_max_seconds) > 0) && Number(bcCfg.duration_unit_cap_day) > 0;
-  const durationBudget = { left: Number(bcCfg.duration_unit_cap_day) || 0 };
-  const durationRec = { calls: 0, units: 0, videos: 0, mainByLength: 0, clipByLength: 0 } as NonNullable<RunProgress['broadcastDuration']>;
+  const durationBudget = { left: durationBudgetLeft(bcCfg.duration_unit_cap_day, today.durationUnits) };
+  const durationRec = {
+    calls: 0, units: 0, videos: 0, mainByLength: 0, clipByLength: 0, unitsTodayBefore: today.durationUnits,
+  } as NonNullable<RunProgress['broadcastDuration']>;
   if (apiKey && lengthOn && RUN.progress) RUN.progress.broadcastDuration = durationRec;
   // NEWS-Q13 ■3: 「이어짐」 — 채널마다 지난번 잘 되짚은 실행 시각(없는 채널은 옛 cover_days 규칙)
   const lastOk = apiKey && RUN.flags.crawlRuns && RUN.query ? await lastLookbackFromRuns(RUN.query, PROFILE.field) : {};
@@ -1016,7 +1018,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         );
         if (lengthOn) {
           episodes.forEach((e, i) => {
-            if (roles[i] === 'clip' && shortByLength(e, lengthRule) && !isClipTitle(e.title, fold.markers)) durationRec.clipByLength++;
+            if (roles[i] === 'clip' && shortClip(e, lengthRule, fold.mainEvidence) && !isClipTitle(e.title, fold.markers)) durationRec.clipByLength++;
             if (roles[i] === 'main' && longByLength(e, lengthRule) && !hasMainEvidence(e.title, fold.mainEvidence)) durationRec.mainByLength++;
           });
         }

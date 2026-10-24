@@ -1,31 +1,43 @@
 // ============================================================
 // broadcast_archive_list.ts (NEWS-Q14 ■5 · SOC 판정 ③) — 공개 방송 보관 목록(읽기만 · LLM 0).
 // SOC(R13) 연대기가 「어느 방송이 실림에서 빠졌나」를 짐작 대신 목록으로 맞추게 한다.
-// 칸 = id · tier · changedAt(층이 바뀐 때 = updated_at) 만 — 제목·내용·주소·열쇠 0.
+// 칸 = id · tier · changedAt(층이 바뀐 때 = updated_at) · videoId(유튜브 영상 id · NEWS-Q15 ■1) 만 — 제목·내용·주소·열쇠 0.
+// NEWS-Q15 ■1 CTO 판정(10-24): 보관층은 전 기간(120일 제한 없음) · 지운 편(deleted_at 있는 방송 행)은 tier 'deleted'(전 기간) ·
+//   실림(?tier=all)만 최근 120일.
 // changedAt: Q14 부터 층을 옮기는 SQL(archive_ids · keep_ids · 스팸)이 updated_at 을 함께 바꾼다.
-//   관문·묶기로 처음부터 보관층에 저장된 행은 저장 때 · 그 앞(Q12 archive_ids 등)에 옮긴 행은 마지막 고친 때.
+//   관문·묶기로 처음부터 보관층에 저장된 행은 저장 때 · 그 앞(Q12 archive_ids 등)에 옮긴 행은 마지막 고친 때 ·
+//   지운 편은 updated_at 과 deleted_at 가운데 늦은 때.
 // ============================================================
+import { videoIdOfUrl } from './broadcast_episode';
+import { redactPublic } from './public_redact';
+
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
+/** 실림(?tier=all)만 이 날 수 안 · 보관 · 지운 편은 전 기간 */
 export const ARCHIVE_LIST_DAYS = 120;
 export const ARCHIVE_LIST_MAX = 5000;
 
+export type ArchiveListTier = 'archive' | 'publish' | 'deleted';
+
 export interface ArchiveListItem {
   id: number;
-  tier: 'archive' | 'publish';
+  tier: ArchiveListTier;
   changedAt: string;
+  /** 유튜브 영상 id(11자 · 주소에서 뽑음 · 못 뽑으면 null) */
+  videoId: string | null;
 }
 
 export interface ArchiveList {
   kind: 'broadcast';
-  /** archive = 보관층만(기본) · all = 실림 포함(keep_ids 로 되돌린 편도 보임) */
+  /** archive = 보관 + 지운 편(기본 · 전 기간) · all = 그에 더해 실림(최근 120일 · keep_ids 로 되돌린 편도 보임) */
   tier: 'archive' | 'all';
+  /** 실림(publish) 행에만 거는 날 수(보관 · 지운 편은 전 기간) */
   days: number;
   generatedAt: string;
   /** tier 열이 없는 DB(묶음 SQL 전) · DB 못 닿음 = false · items [] */
   available: boolean;
   count: number;
-  /** 최대 5,000 에 닿아 오래된 id 가 잘렸나 */
+  /** 최대 5,000 에 닿아 오래전에 바뀐 행이 잘렸나 */
   truncated: boolean;
   items: ArchiveListItem[];
 }
@@ -34,43 +46,99 @@ export function parseArchiveTier(v?: string): 'archive' | 'all' {
   return v === 'all' ? 'all' : 'archive';
 }
 
-/** 최근 days 일 안에 층이 바뀐(또는 그 층으로 저장된) 방송 행 — id 차례 · 숨김(deleted_at) · blocked 뺌. 실패면 null. */
+const VIDEO_ID = /^[\w-]{11}$/;
+
+/**
+ * 리뷰(Q15): 공개 가림. 겉 칸은 redactPublic · 항목은 만들 때부터 안전한 값만(정수 · 층 이름 · ISO 시각 · 11자 영상 id)이라
+ * 꼴을 다시 확인해 둔다 — redactPublic 의 열쇠 꼴(sk-… · eyJ… 8자+)이 「sk-」로 시작하는 진짜 영상 id 를 지우지 않게.
+ */
+export function redactArchiveList(list: ArchiveList): ArchiveList {
+  return {
+    ...redactPublic({ ...list, items: [] }),
+    items: list.items.map((it) => ({
+      id: it.id,
+      tier: it.tier,
+      changedAt: redactPublic(it.changedAt),
+      videoId: it.videoId && VIDEO_ID.test(it.videoId) ? it.videoId : null,
+    })),
+  };
+}
+
+/**
+ * 방송 행 목록 — 보관(전 기간) · 지운 편(deleted_at 열 있을 때 · 전 기간 · tier deleted) · tier=all 이면 실림(최근 days 일).
+ * blocked 행은 뺌 · id 차례 · 실패면 null.
+ */
 export async function broadcastArchiveList(
   query: QueryFn,
   opts: { tier: 'archive' | 'all'; days?: number; deletedAt: boolean },
-): Promise<ArchiveListItem[] | null> {
+): Promise<{ items: ArchiveListItem[]; truncated: boolean } | null> {
   const days = Math.max(
     1,
     Math.min(ARCHIVE_LIST_DAYS, Math.floor(opts.days ?? ARCHIVE_LIST_DAYS)),
   );
+  const del = opts.deletedAt;
+  // 지운 편이 먼저(층이 무엇이든 deleted) · 그다음 보관 · tier=all 이면 최근 실림
+  const tierExpr = del
+    ? `CASE WHEN deleted_at IS NOT NULL THEN 'deleted' ELSE COALESCE(tier, 'publish') END`
+    : `COALESCE(tier, 'publish')`;
+  const changedExpr = del
+    ? `GREATEST(updated_at::timestamptz, deleted_at::timestamptz)`
+    : `updated_at::timestamptz`;
+  const conds = [
+    ...(del ? ['deleted_at IS NOT NULL'] : []),
+    `tier = 'archive'`,
+    ...(opts.tier === 'all'
+      ? [
+          `(COALESCE(tier, 'publish') = 'publish' AND updated_at >= now() - ($1::int * interval '1 day'))`,
+        ]
+      : []),
+  ];
   try {
     const rows = (await query(
-      // 바뀐 때 = epoch 밀리초(서버 시간대·글 꼴에 기대지 않음)
-      `SELECT id, COALESCE(tier, 'publish') AS tier, floor(extract(epoch FROM updated_at::timestamptz) * 1000)::bigint AS changed
+      // 바뀐 때 = epoch 밀리초(서버 시간대·글 꼴에 기대지 않음) · source_url 은 영상 id 를 뽑는 데만 쓰고 내보내지 않음
+      `SELECT id, source_url, ${tierExpr} AS tier, floor(extract(epoch FROM ${changedExpr}) * 1000)::bigint AS changed
          FROM articles
         WHERE source_type = 'broadcast'
-          AND ${opts.tier === 'all' ? `COALESCE(tier, 'publish') IN ('archive', 'publish')` : `tier = 'archive'`}
-          AND NOT blocked${opts.deletedAt ? ' AND deleted_at IS NULL' : ''}
-          AND updated_at >= now() - ($1::int * interval '1 day')
-        ORDER BY updated_at DESC, id DESC LIMIT ${ARCHIVE_LIST_MAX}`,
-      [days],
-    )) as Array<{ id?: unknown; tier?: unknown; changed?: unknown }>;
+          AND NOT blocked
+          AND (${conds.join(' OR ')})
+        ORDER BY CASE WHEN ${tierExpr} = 'publish' THEN 1 ELSE 0 END, ${changedExpr} DESC, id DESC LIMIT ${ARCHIVE_LIST_MAX + 1}`,
+      opts.tier === 'all' ? [days] : [],
+    )) as Array<{
+      id?: unknown;
+      source_url?: unknown;
+      tier?: unknown;
+      changed?: unknown;
+    }>;
     const out: ArchiveListItem[] = [];
-    for (const r of rows || []) {
+    // 반박(Q15): MAX+1 을 읽어 넘쳤는지 알고 MAX 까지만 씀
+    for (const r of (rows || []).slice(0, ARCHIVE_LIST_MAX)) {
       const id = Number(r.id);
       const t =
         r.changed === null || r.changed === undefined || r.changed === ''
           ? NaN
           : Number(r.changed);
       if (!Number.isInteger(id) || !Number.isFinite(t)) continue;
+      const vid = videoIdOfUrl(
+        typeof r.source_url === 'string' ? r.source_url : '',
+      );
       out.push({
         id,
-        tier: r.tier === 'archive' ? 'archive' : 'publish',
+        tier:
+          r.tier === 'deleted'
+            ? 'deleted'
+            : r.tier === 'archive'
+              ? 'archive'
+              : 'publish',
         changedAt: new Date(t).toISOString(),
+        videoId: vid || null,
       });
     }
-    // 리뷰(Q14): 넘치면 최근에 바뀐 것을 남기고(updated_at DESC LIMIT) 내보낼 때는 id 오름차순
-    return out.sort((a, b) => a.id - b.id);
+    // 리뷰(Q14 · Q15): 넘치면 보관 · 지운 편을 먼저, 그 안에서 최근에 바뀐 것을 남기고(LIMIT) 내보낼 때는 id 오름차순 ·
+    // 잘림은 걸러내기 전 행 수로 판단
+    return {
+      items: out.sort((a, b) => a.id - b.id),
+      truncated: (rows || []).length > ARCHIVE_LIST_MAX,
+    };
   } catch {
     return null;
   }

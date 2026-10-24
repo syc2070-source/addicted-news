@@ -27,7 +27,7 @@ export interface EpisodeItem {
   durationSec?: number;
 }
 
-/** NEWS-Q14 ■4: 길이 규칙 — 본편 = 방송 꼬리 ∨ 길이 ≥ mainMinSec · 클립 = 길이 < clipMaxSec(0 · 없음 = 끔) */
+/** NEWS-Q14 ■4 · Q15 ■2: 길이 규칙 — 본편 = 방송 꼬리 ∨ 길이 ≥ mainMinSec · 클립 = 길이 ≤ clipMaxSec(shortClip · 0 · 없음 = 끔) */
 export interface LengthRule {
   mainMinSec?: number;
   clipMaxSec?: number;
@@ -42,13 +42,35 @@ export function videoIdOfUrl(url: string): string {
   return m ? m[1] : '';
 }
 
-/** 길이로 클립(짧은 영상)인가 — 길이를 읽었고 clipMaxSec 보다 짧을 때만. */
+/**
+ * 길이로 짧은 영상인가 — 길이를 읽었고 clipMaxSec 이하(NEWS-Q15 ■2 CTO 판정: 쇼츠 상한 180초까지 · 「미만」 → 「이하」).
+ * 클립으로 칠지는 shortClip(제목에 [full] · 방송 꼬리가 있으면 본편).
+ */
 export function shortByLength(it: EpisodeItem, rule: LengthRule = {}): boolean {
   return (
     Number(rule.clipMaxSec) > 0 &&
     typeof it.durationSec === 'number' &&
     it.durationSec > 0 &&
-    it.durationSec < Number(rule.clipMaxSec)
+    it.durationSec <= Number(rule.clipMaxSec)
+  );
+}
+
+/** 이 길이 이하는 방송 꼬리가 있어도 클립(Q14 의 「60초 미만 = 클립」을 꼬리로 풀지 않음 · 예고에도 꼬리가 붙음) */
+export const TAIL_CLIP_MAX_SEC = 60;
+
+/**
+ * NEWS-Q15 ■2: 길이로 클립 — 짧은 영상(≤ clipMaxSec) ∧ 제목에 [full]/풀버전 없음 ∧ (60초 이하 ∨ 방송 꼬리 없음).
+ * 61~180초는 방송 꼬리(본편 표시)가 있으면 본편(CTO 판정) · 60초 이하는 꼬리가 있어도 클립(리뷰: 꼬리 붙은 예고·쇼츠).
+ */
+export function shortClip(
+  it: EpisodeItem,
+  rule: LengthRule = {},
+  evidence: string[] = DEFAULT_MAIN_EVIDENCE,
+): boolean {
+  if (!shortByLength(it, rule) || FULL_MARK.test(it.title)) return false;
+  return (
+    (it.durationSec ?? 0) <= TAIL_CLIP_MAX_SEC ||
+    !hasMainEvidence(it.title, evidence)
   );
 }
 
@@ -439,18 +461,17 @@ export function foldEpisodes<T extends EpisodeItem>(
   const days = opts.days ?? DEFAULT_EPISODE_DAYS;
   const generic = new Set((opts.generic ?? []).map(squash));
   const lengthRule = opts.length ?? {};
-  // NEWS-Q14 ■4: 60초 미만(길이를 읽었을 때) = 클립 · 단 [full]/풀버전 표시는 클립으로 치지 않음
+  const evidence = opts.mainEvidence ?? DEFAULT_MAIN_EVIDENCE;
+  // NEWS-Q14 ■4 · Q15 ■2: 길이 ≤ clip_max_seconds(180초 · 쇼츠) = 클립 · 단 제목에 [full]/풀버전 · 방송 꼬리가 있으면 본편
   const roles: EpisodeRole[] = items.map((it) =>
-    isClipTitle(it.title, markers) ||
-    (shortByLength(it, lengthRule) && !FULL_MARK.test(it.title))
+    isClipTitle(it.title, markers) || shortClip(it, lengthRule, evidence)
       ? 'clip'
       : 'main',
   );
   // 본편 후보 순서: [full]/풀버전 먼저 · 본편 표시(방송 꼬리 · 길이 ≥ 20분) 있는 것 · 그다음 이른 것
   // (NEWS-Q13 반박 리뷰: 표시 없는 클립이 먼저 올라와도 본편이 episode_dup 으로 밀리지 않게)
-  const evidence = opts.mainEvidence ?? DEFAULT_MAIN_EVIDENCE;
   // 리뷰(Q14): 길이로만 본편인 것(꼬리 없는 20분+ 「몰아보기」 등)은 제목 꼬리 본편보다 뒤 — 진짜 본편이 episode_dup 으로 밀리지 않게
-  // 반박 리뷰(Q14): [full] 이어도 60초 미만이면 0 순위 아님 · 같은 순위는 길이 긴 것 먼저(꼬리 붙은 6분 클립이 60분 본편보다 먼저 서지 않게)
+  // 반박 리뷰(Q14): [full] 이어도 짧은 영상(≤ clip_max_seconds)이면 0 순위 아님 · 같은 순위는 길이 긴 것 먼저(꼬리 붙은 6분 클립이 60분 본편보다 먼저 서지 않게)
   const rank = (i: number) =>
     FULL_MARK.test(items[i].title) && !shortByLength(items[i], lengthRule)
       ? 0
@@ -470,7 +491,14 @@ export function foldEpisodes<T extends EpisodeItem>(
     );
   // Q12 전에 실린 예고·클립은 본편으로 치지 않는다(옛 예고가 진짜 본편을 보관층으로 미는 것 막음)
   const mains: EpisodeItem[] = existing.filter(
-    (e) => !isClipTitle(e.title, markers) && !shortByLength(e, lengthRule),
+    // 반박(Q15): 60초 이하 옛 행은 [full] 이어도 본편으로 치지 않음(Q14 규칙 그대로)
+    (e) =>
+      !isClipTitle(e.title, markers) &&
+      !shortClip(e, lengthRule, evidence) &&
+      !(
+        shortByLength(e, lengthRule) &&
+        (e.durationSec ?? 0) <= TAIL_CLIP_MAX_SEC
+      ),
   );
   for (const i of order) {
     // 리뷰 · 반박(Q14): 본편 표시(꼬리 ∨ 20분+)가 있는 이번 후보는, 길이를 읽어 20분 미만으로 확인된 옛 실린 행에 밀려 보관되지 않는다.

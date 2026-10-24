@@ -169,7 +169,8 @@ export interface FieldProfile {
       main_evidence?: string[];
       /**
        * NEWS-Q14 ■4: 영상 길이로 본편·클립 가리기(videos.list contentDetails · 50편 1단위) — 본편 = 방송 꼬리 ∨ 길이 ≥ main_min_seconds ·
-       * 클립 = 길이 < clip_max_seconds · 길이 읽기는 하루 duration_unit_cap_day 단위 안(하루 가드 그대로). 없거나 0 이면 끔.
+       * 클립 = 길이 ≤ clip_max_seconds(NEWS-Q15 ■2 · 61초부터는 [full] · 방송 꼬리면 본편) · 길이 읽기는 KST 하루 합 duration_unit_cap_day 단위 안
+       * (NEWS-Q15 ■3 · 하루 가드 그대로). 없거나 0 이면 끔.
        */
       main_min_seconds?: number;
       clip_max_seconds?: number;

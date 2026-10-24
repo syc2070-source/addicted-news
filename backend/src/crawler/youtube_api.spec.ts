@@ -57,8 +57,9 @@ describe('youtube_api — 방송 되짚기(NEWS-Q6 ■4)', () => {
     expect(g2.stopped).toBe(true);
     // 오늘 앞 실행들의 단위·채널(crawl_runs.per_source.__run.broadcastApi)
     const q = jest.fn(async () => [{ api: { units: 909, channels: ['mbc_pd_note'] } }, { api: JSON.stringify({ units: 100, channels: ['sbs_truth'] }) }, { api: null }]);
-    expect(await apiTodayFromRuns(q, 'addiction')).toEqual({ units: 1009, channels: ['mbc_pd_note', 'sbs_truth'] });
-    expect(await apiTodayFromRuns(async () => { throw new Error('no table'); }, 'addiction')).toEqual({ units: 0, channels: [] });
+    // NEWS-Q15 ■3: durationUnits(오늘 길이 읽기 단위) 칸 더함
+    expect(await apiTodayFromRuns(q, 'addiction')).toEqual({ units: 1009, channels: ['mbc_pd_note', 'sbs_truth'], durationUnits: 0 });
+    expect(await apiTodayFromRuns(async () => { throw new Error('no table'); }, 'addiction')).toEqual({ units: 0, channels: [], durationUnits: 0 });
   });
 
   it('열쇠 없음 길: env 없으면 RSS 만(API 0) · health off · 공백 값도 없음으로', () => {

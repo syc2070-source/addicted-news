@@ -70,27 +70,43 @@ export interface ApiTodayState {
   units: number;
   /** 오늘 이미 되짚은 채널(outlet_id) */
   channels: string[];
+  /** NEWS-Q15 ■3: 오늘(KST) 앞 실행들이 영상 길이 읽기에 쓴 단위(progress.broadcastDuration.units 합) */
+  durationUnits: number;
+}
+
+/** NEWS-Q15 ■3: 영상 길이 읽기의 오늘 남은 단위 = 하루 상한 − 오늘 앞 실행들이 쓴 것(0 아래로 안 감). */
+export function durationBudgetLeft(capDay: number | undefined, usedToday: number): number {
+  const cap = Number(capDay) || 0;
+  return Math.max(0, cap - (Number(usedToday) || 0));
 }
 
 /** 오늘(KST) 앞 실행들의 되짚기 기록(crawl_runs.per_source.__run.broadcastApi). 없거나 실패면 0. */
 export async function apiTodayFromRuns(query: QueryFn, field: string): Promise<ApiTodayState> {
   try {
     const rows = await query(
-      `SELECT per_source->'__run'->'broadcastApi' AS api FROM crawl_runs
+      `SELECT per_source->'__run'->'broadcastApi' AS api, per_source->'__run'->'broadcastDuration' AS dur FROM crawl_runs
         WHERE field = $1 AND (started_at AT TIME ZONE 'Asia/Seoul')::date = (now() AT TIME ZONE 'Asia/Seoul')::date`,
       [field],
     );
     let units = 0;
+    let durationUnits = 0;
     const channels = new Set<string>();
     for (const r of rows) {
+      // 반박(Q15): 길이 칸 하나가 깨져도 하루 단위·채널 기록 전체가 0 으로 돌아가지 않게 따로 읽음
+      try {
+        const d = typeof r.dur === 'string' ? JSON.parse(r.dur) : r.dur;
+        if (d) durationUnits += Number(d.units) || 0;
+      } catch {
+        /* 이 행 길이 단위는 0 으로 */
+      }
       const a = typeof r.api === 'string' ? JSON.parse(r.api) : r.api;
       if (!a) continue;
       units += Number(a.units) || 0;
       for (const c of Array.isArray(a.channels) ? a.channels : []) channels.add(String(c));
     }
-    return { units, channels: [...channels] };
+    return { units, channels: [...channels], durationUnits };
   } catch {
-    return { units: 0, channels: [] };
+    return { units: 0, channels: [], durationUnits: 0 };
   }
 }
 
@@ -530,8 +546,8 @@ export interface DurationResult {
 }
 
 /**
- * 영상 길이 읽기: ids 를 50개씩 videos.list(contentDetails · 1단위). 부르기 전마다 budget.left(이 실행 길이 상한 · 하루 1회 실행이라
- * 하루 상한)와 하루 가드를 본다. 오류면 거기서 멈춤(읽은 것만 · 열쇠·URL 은 담지 않음).
+ * 영상 길이 읽기: ids 를 50개씩 videos.list(contentDetails · 1단위). 부르기 전마다 budget.left(오늘 남은 길이 단위 ·
+ * NEWS-Q15 ■3 하루 합 = durationBudgetLeft)와 하루 가드를 본다. 오류면 거기서 멈춤(읽은 것만 · 열쇠·URL 은 담지 않음).
  */
 export async function fetchDurations(
   ids: string[],
