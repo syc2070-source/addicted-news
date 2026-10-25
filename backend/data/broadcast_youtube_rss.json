@@ -2,6 +2,7 @@
   "_comment": "NEWS-Q1 ■4: 탐사·시사 방송의 중독 편 추적. YouTube 공개 채널 RSS(열쇠 불필요). channel_id 는 2026-10-10 채널 페이지 소스(externalId)로 실측. 공용 채널(달리·KBS 다큐·EBS 다큐)은 다른 프로그램도 올라오므로 핵심어 관문이 거른다.",
   "_solo_comment": "NEWS-Q13 ■2: solo_channel = 한 프로그램 전용 채널(관련 클립 자동 묶기는 여기서만). 10-23 RSS 최근 15편 실측 — PD수첩 12/15(나머지 3 = 같은 팀 「스피디 수첩」) · 스트레이트 전용 채널(쇼츠가 제목에 이름 없이 올라옴) · 추적60분 11/15(나머지 = 같은 팀 「씬종범죄사전」·「추적人사이트」). 아님: 그알 6/15(시그널·스캔 섞임) · 뉴스타파(언론사 채널 · 여러 보도) · 공용 넷(0~1/15).",
   "_program_en_comment": "NEWS-Q12 ■4: program_en = 내보내기 sourceEn(영어 화면용 프로그램 영어 이름 · 이 칸 하나에서만). NEWS-Q13 ■5(10-23 웹 읽기): name_source = official(방송사·채널이 스스로 쓰는 영어 이름 · name_source_url = 출처) | translation(공식 영어 표기를 못 찾음 · 지금 번역 유지). 공식 누리집·공식 YouTube 채널 정보에서 영어 이름이 나온 것은 뉴스타파(채널 이름 「뉴스타파 Newstapa」)·SBS 스페셜(SBS 계열 SBSi 가 운영하는 영어 연예 뉴스 SBS Star 기사) 둘뿐. PD수첩은 영어 신문(Korea Times · Korea JoongAng Daily)이 「PD Notebook」, 영어 위키백과가 「PD Note」 — 방송사 표기 아님이라 translation.",
+  "_clip_max_comment": "NEWS-Q16 ■3 CTO 판정(Q15 ③): clip_max_seconds = 채널별 클립 길이 문턱(초 · 이하 = 클립 · 없으면 분야 설정 sources.broadcast.clip_max_seconds 180). 뉴스타파 = 60(짧은 정상 보도를 올리는 언론사 채널 — 61~180초 꼬리 없는 보도가 클립으로 보관되지 않게). 60초 이하 꼬리 영상 = 클립 그대로(Q15 ④).",
   "feeds": [
     { "outlet_id": "mbc_pd_note", "program": "MBC PD수첩", "program_en": "MBC PD Notebook", "name_source": "translation", "channel_title": "MBC PD수첩", "handle": "@MBCPDnote", "channel_id": "UCawCv9kO2UXbTtsK4EammRQ", "solo_channel": true },
     { "outlet_id": "mbc_straight", "program": "MBC 스트레이트", "program_en": "MBC Straight", "name_source": "translation", "channel_title": "탐사기획 스트레이트", "handle": "@mbc-straight", "channel_id": "UCSnghwknYf04dRFBtOtY8xA", "solo_channel": true },
@@ -11,6 +12,6 @@
     { "outlet_id": "kbs_sisa_chang", "program": "KBS 시사기획 창", "program_en": "KBS Current Affairs Window", "name_source": "translation", "channel_title": "KBS시사", "handle": "@kbssisa", "channel_id": "UCEb31RoX5RnfYENmnyokN8A", "shared_channel": true },
     { "outlet_id": "kbs_docu_insight", "program": "KBS 다큐인사이트", "program_en": "KBS Docu Insight", "name_source": "translation", "channel_title": "KBS 다큐", "handle": "@KBSDocumentary", "channel_id": "UC4LW3sOslC14Vn5bcoNUBkg", "shared_channel": true },
     { "outlet_id": "ebs_docuprime", "program": "EBS 다큐프라임", "program_en": "EBS Docuprime", "name_source": "translation", "channel_title": "EBSDocumentary (EBS 다큐)", "handle": "@EBSDocumentary", "channel_id": "UCFCtZJTuJhE18k8IXwmXTYQ", "shared_channel": true },
-    { "outlet_id": "newstapa", "program": "뉴스타파", "program_en": "Newstapa", "name_source": "official", "name_source_url": "https://www.youtube.com/@news_tapa", "channel_title": "뉴스타파 Newstapa", "handle": "@news_tapa", "channel_id": "UCeFUGS2VCOb6DO3BiUgvwNA" }
+    { "outlet_id": "newstapa", "program": "뉴스타파", "program_en": "Newstapa", "name_source": "official", "name_source_url": "https://www.youtube.com/@news_tapa", "channel_title": "뉴스타파 Newstapa", "handle": "@news_tapa", "channel_id": "UCeFUGS2VCOb6DO3BiUgvwNA", "clip_max_seconds": 60 }
   ]
 }

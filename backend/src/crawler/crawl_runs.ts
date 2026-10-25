@@ -73,6 +73,9 @@ export interface RunProgressLike {
   /** NEWS-Q14 ■3 · ■4: 단락기 요약 판정 · 영상 길이 읽기 */
   breakerSummary?: object;
   broadcastDuration?: object;
+  /** NEWS-Q16 ■1 · ■2: 이미 저장된 재업로드 방송을 원 방송일로 맞춘 기록 · 방송 관문 한 번 다시 판정 기록 */
+  broadcastAired?: object;
+  broadcastRejudge?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';

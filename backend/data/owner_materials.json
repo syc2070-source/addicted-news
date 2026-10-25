@@ -1,0 +1,4 @@
+{
+  "_comment": "NEWS-Q16 ■5: 오너 공개 자료(보고서 · 현황자료) — 기획기사 · 리포트 칸으로 들어오는 문. 스위치 = 분야 설정 sources.owner_materials.enabled(지금 false). 한 항목 꼴: { id(소문자·숫자·- 1~60자) · kind(report | status) · title(1~200자) · summary(1~600자) · body(본문 · 20,000자까지) 또는 link(https 주소) 가운데 하나 이상 · date(YYYY-MM-DD) · source(\"오너\") · public(true 만 나감) }. 꼴이 틀린 항목은 내보내지 않는다(서버 로그 한 번). 자세히 = docs/OWNER_MATERIALS.md.",
+  "items": []
+}

@@ -24,7 +24,7 @@ import { decodeEntities, crossMediaSimilarity } from './text_utils';
 import { crawlerConnectionOptions } from './crawler_db';
 import { insertArticleWithRawBody, RawBodyWriteState } from './raw_body_store';
 import {
-  BROADCAST_SOURCE_TYPE, BroadcastItem, buildBroadcastRow, fetchBroadcastItems, loadBroadcastSources, orderFailedFirst,
+  BROADCAST_SOURCE_TYPE, BroadcastItem, buildBroadcastRow, channelLengthRule, fetchBroadcastItems, kstYmd, loadBroadcastSources, orderFailedFirst,
   passesBroadcastKeywordGate,
 } from './broadcast';
 import {
@@ -51,6 +51,9 @@ import { decideTier, effectiveTier, oldDatedTier, Tier } from './tier';
 import { HostBreaker } from './host_breaker';
 import { attemptsFromRuns, planPromotion, standbyLast } from './blocked_promote';
 import { archiveSpamArticles, spamPublisherOf } from './spam_publisher';
+import { alignAiredDates } from './broadcast_aired';
+import { columnExists } from './schema_probe';
+import { rejudgeBroadcasts, rejudgeStateFromRuns } from './broadcast_rejudge';
 import { breakerSummaryOf } from './breaker_summary';
 import {
   CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, recentCrawlRuns, recordCrawlRun,
@@ -456,6 +459,8 @@ type RunContext = {
   groups: GroupCounter;
   /** NEWS-Q11 ■2: 방송 전용 관문 수 */
   broadcastGate: BroadcastGateStats;
+  /** NEWS-Q16 리뷰: articles.raw_body 열이 있나(원 방송일 맞춤 · 게시일 창 · 다시 판정의 설명) — 실행 시작에 한 번 확인 */
+  rawBodyCol: boolean;
 };
 const RUN: RunContext = {
   flags: {
@@ -471,6 +476,7 @@ const RUN: RunContext = {
   progress: null,
   groups: new GroupCounter(),
   broadcastGate: emptyBroadcastGateStats(),
+  rawBodyCol: false,
 };
 // 이번 실행 묶음 후보의 임시 id(음수 · DB id 와 겹치지 않음)
 let clusterTempId = 0;
@@ -960,6 +966,11 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       }
       const tier: Tier = decision.action === 'archive' ? 'archive' : 'publish';
       const base = buildBroadcastRow(source, item, { summary, category: provCategory });
+      // NEWS-Q16 ■1: 재업로드 = 원 방송일로 놓음(세기만)
+      if (base.airedReupload) {
+        gate.reupload = (gate.reupload || 0) + 1;
+        console.log(`  │   📼 재업로드 → 원 방송일 ${base.airedReupload}(게시 ${kstYmd(item.publishedAt) ?? '-'}): ${item.title.slice(0, 40)}`);
+      }
       const row: Candidate = {
         ...(base as Candidate),
         keywords: base.keywords.includes(decision.subtopic) ? base.keywords : [...base.keywords, decision.subtopic],
@@ -983,11 +994,12 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     if (pendingPublish.length) {
       let roles = pendingPublish.map(() => 'main' as string);
       if (RUN.flags.tier) {
-        const ymds = pendingPublish.map((p) => p.row.publishedAt).sort();
+        // NEWS-Q16 ■1: 날짜 창은 게시일(재업로드의 원 방송일로 창이 몇 해씩 넓어지지 않게)
+        const ymds = pendingPublish.map((p) => kstYmd(p.item.publishedAt) || p.row.publishedAt).sort();
         const existing = RUN.query
           ? await existingEpisodeMains(
             RUN.query, source.program, shiftYmd(ymds[0], -Math.max(fold.days, fold.relatedDays)), shiftYmd(ymds[ymds.length - 1], fold.days),
-            { deletedAt: RUN.flags.deletedAt },
+            { deletedAt: RUN.flags.deletedAt, rawBody: RUN.rawBodyCol },
           )
           : [];
         const episodes: EpisodeItem[] = pendingPublish.map((p) => ({
@@ -1011,15 +1023,17 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
             if (sec !== undefined) e.durationSec = sec;
           }
         }
+        // NEWS-Q16 ■3: 클립 길이 문턱은 채널별(뉴스타파 60초 · 나머지 분야 설정 180초)
+        const chRule = channelLengthRule(lengthRule, source);
         roles = foldEpisodes(
           episodes,
           // NEWS-Q13 ■2: 관련 클립 묶기는 단독 채널에서만
-          existing, { ...fold, solo: source.soloChannel, length: lengthOn ? lengthRule : undefined },
+          existing, { ...fold, solo: source.soloChannel, length: lengthOn ? chRule : undefined },
         );
         if (lengthOn) {
           episodes.forEach((e, i) => {
-            if (roles[i] === 'clip' && shortClip(e, lengthRule, fold.mainEvidence) && !isClipTitle(e.title, fold.markers)) durationRec.clipByLength++;
-            if (roles[i] === 'main' && longByLength(e, lengthRule) && !hasMainEvidence(e.title, fold.mainEvidence)) durationRec.mainByLength++;
+            if (roles[i] === 'clip' && shortClip(e, chRule, fold.mainEvidence) && !isClipTitle(e.title, fold.markers)) durationRec.clipByLength++;
+            if (roles[i] === 'main' && longByLength(e, chRule) && !hasMainEvidence(e.title, fold.mainEvidence)) durationRec.mainByLength++;
           });
         }
       }
@@ -1050,6 +1064,25 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     console.log(`  📺 100일 메우기 ${backfill.id}: ${backfill.done ? '끝(다음 실행부터 안 돎)' : '덜 됨(다음 실행이 다시)'}`);
   }
   return out;
+}
+
+/** NEWS-Q16 ■2: 설정 rejudge_once(id · ids) — runs 에 done 이면 안 돎 · DeepSeek · 방송 관문 설정 · tier 열 · runs 표가 있을 때만. */
+async function rejudgeOnce(progress: RunProgress): Promise<void> {
+  const cfg = PROFILE.sources.broadcast.rejudge_once;
+  const system = broadcastGateSystem();
+  if (!cfg?.id || !cfg.ids?.length || !system || !deepseekAvailable || !RUN.flags.tier || !RUN.flags.crawlRuns || !RUN.query) return;
+  const st = await rejudgeStateFromRuns(RUN.query, PROFILE.field, cfg.id);
+  if (st.done) return;
+  if (!deepseekRoomLeft()) return;
+  const rec = await rejudgeBroadcasts(
+    RUN.query, { id: cfg.id, try: st.tries + 1 }, cfg.ids, system,
+    // 리뷰: 한 편마다 상한 · 끊김을 다시 봄(넘치면 판정 없음 = 다음 실행이 다시)
+    (s, u) => (deepseekRoomLeft() ? askDeepSeekJson(s, u, ['fit', 'subtopic']) : Promise.resolve(null)), { deletedAt: RUN.flags.deletedAt, rawBody: RUN.rawBodyCol },
+  );
+  progress.broadcastRejudge = rec;
+  console.log(`📺 방송 다시 판정 ${rec.id}(${rec.try}번째): ` +
+    rec.results.map((r) => `${r.id} ${r.before}→${r.fit ?? '판정 없음'}${r.moved ? '(실림으로)' : ''}`).join(' · ') +
+    (rec.missing.length ? ` · 없음 ${rec.missing.join(',')}` : '') + ` · ${rec.done ? '끝' : '덜 됨(다음 실행이 다시)'}`);
 }
 
 function calculateTitleSimilarity(title1: string, title2: string): number {
@@ -2186,6 +2219,18 @@ async function main() {
     if (sa.error) progress.spamArchiveError = true;
     console.log(`⛔ 스팸 출처 글 보관층으로(설정 archive_ids ${spamIds.length}): 이번에 옮김 ${sa.archived.length} · 안 옮김 ${sa.skipped.length}`);
   }
+  // NEWS-Q16 ■1: 이미 저장된 재업로드 방송 → 원 방송일(published_at · 층 · updated_at 그대로 · 몇 번 돌아도 같음)
+  if (RUN.query) RUN.rawBodyCol = await columnExists(RUN.query, 'articles', 'raw_body');
+  const airedDays = PROFILE.sources.broadcast.aired_date_min_days;
+  if (Number(airedDays) > 0 && RUN.query) {
+    progress.broadcastAired = await alignAiredDates(
+      RUN.query, airedDays, { deletedAt: RUN.flags.deletedAt, publishedTs: RUN.flags.publishedTs, rawBody: RUN.rawBodyCol },
+      PROFILE.sources.broadcast.aired_skip_ids ?? [],
+    );
+    const fx = progress.broadcastAired.fixed;
+    console.log(`📼 재업로드 방송 원 방송일로: 읽음 ${progress.broadcastAired.checked} · 고침 ${fx.length}` +
+      (fx.length ? ` (${fx.map((f) => `${f.id} ${f.from}→${f.to}`).join(' · ')})` : '') + (progress.broadcastAired.error ? ' · 오류' : ''));
+  }
 
   // NEWS-Q1 ■4: 방송은 기사 통계(한국 비중 등)에 섞지 않고 저장만 함께 한다.
   // NEWS-Q4 ■1ⓓ: 방송 9채널을 맨 앞에(작고 빠름 · 5분 몫) — 기사 소스가 상한에 걸려도 방송은 빠지지 않는다.
@@ -2199,6 +2244,12 @@ async function main() {
       broadcasts = await crawlBroadcastSources(Math.min(crawlDeadline, b0 + BROADCAST_SHARE_MS));
     } catch (e) {
       console.warn('[broadcast] 방송 추적 실패(기사 저장은 계속):', (e as Error).message);
+    }
+    // NEWS-Q16 ■2: 설정 rejudge_once — 보관한 방송 몇 편을 관문(no 예시 더함)으로 한 번 다시 판정(편당 DeepSeek 1번)
+    try {
+      await rejudgeOnce(progress);
+    } catch (e) {
+      console.warn('[broadcast] 다시 판정 실패(다음 실행이 다시):', (e as Error).message);
     }
     progress.broadcastMs = Date.now() - b0;
   }

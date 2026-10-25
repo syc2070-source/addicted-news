@@ -322,15 +322,20 @@ export async function existingEpisodeMains(
   program: string,
   from: string,
   to: string,
-  cols: { deletedAt: boolean },
+  cols: { deletedAt: boolean; rawBody?: boolean },
 ): Promise<EpisodeItem[]> {
+  // NEWS-Q16 리뷰: 재업로드라 published_at 을 원 방송일로 옮긴 행(raw_body 「원 방송일:」)은 게시일(raw_body 「게시 시각:」 앞 10자 · UTC)로 창에 넣고 견줌
+  const uploaded = `left(substring(raw_body from '게시 시각: ([0-9]{4}-[0-9]{2}-[0-9]{2})'), 10)`;
+  const dateExpr = cols.rawBody
+    ? `CASE WHEN raw_body LIKE '%원 방송일:%' AND ${uploaded} IS NOT NULL THEN ${uploaded} ELSE left(published_at::text, 10) END`
+    : `left(published_at::text, 10)`;
   try {
     const rows = await query(
       // published_at 은 글(varchar) 또는 date — ::text 앞 10자로 읽고 견줌(어느 꼴이든 · 시간대로 하루 밀리지 않음)
-      `SELECT title, source_url, keywords::text AS keywords, left(published_at::text, 10) AS published_at FROM articles
+      `SELECT title, source_url, keywords::text AS keywords, ${dateExpr} AS published_at FROM articles
         WHERE source = $1 AND source_type = 'broadcast' AND COALESCE(tier, 'publish') = 'publish'
           AND NOT blocked${cols.deletedAt ? ' AND deleted_at IS NULL' : ''}
-          AND left(published_at::text, 10) >= $2 AND left(published_at::text, 10) <= $3
+          AND ${dateExpr} >= $2 AND ${dateExpr} <= $3
         ORDER BY id LIMIT 200`,
       [program, from, to],
     );

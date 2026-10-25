@@ -44,6 +44,8 @@ export interface BroadcastGateStats {
   folded: { clip: number; episode_dup: number; related: number };
   /** NEWS-Q13 ■4: partial(언급 → 보관) 판정 하나마다 {id(저장 뒤) · 제목 · 사유} */
   partials?: BroadcastPartialNote[];
+  /** NEWS-Q16 ■1: 저장(실림·보관)한 편 가운데 재업로드라 원 방송일로 놓은 수 */
+  reupload?: number;
 }
 
 export interface BroadcastPartialNote {

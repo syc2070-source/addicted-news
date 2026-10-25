@@ -12,6 +12,8 @@ import type { BackfillRecord, BroadcastApiRecord } from './youtube_api';
 import type { BroadcastFeedStatus } from './broadcast_feeds';
 import type { BroadcastGateStats } from './broadcast_gate';
 import type { GroupCounts } from './keyword_groups';
+import type { AiredFixResult } from './broadcast_aired';
+import type { RejudgeRecord } from './broadcast_rejudge';
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
@@ -287,6 +289,10 @@ export interface RunProgress {
     /** NEWS-Q15 ■3: 오늘(KST) 앞 실행들이 이미 쓴 길이 단위(하루 상한에서 뺌) */
     unitsTodayBefore?: number;
   };
+  /** NEWS-Q16 ■1: 이미 저장된 재업로드 방송 → 원 방송일(읽은 행 수 · 고친 id) */
+  broadcastAired?: AiredFixResult;
+  /** NEWS-Q16 ■2: 방송 관문 한 번 다시 판정(설정 rejudge_once) */
+  broadcastRejudge?: RejudgeRecord;
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

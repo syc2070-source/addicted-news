@@ -314,7 +314,12 @@ function loadRaphaNews() {
 function reportToSlotItem(report) {
   var base = (typeof ADDICTION_SOCIETY_URL === 'string' ? ADDICTION_SOCIETY_URL : '').replace(/\/+$/, '');
   var link = null;
-  if (base && report && report.id) {
+  // NEWS-Q16 ■5: 오너 공개 자료(origin owner)는 자기 링크(link_url · 없으면 링크 없음) · 출처 이름 source_label
+  var isOwner = report && report.origin === 'owner';
+  if (isOwner) {
+    // href 에 그대로 들어가므로 https 이고 따옴표 · <> · 빈칸이 없는 것만(백엔드 validLink 와 같은 거름)
+    link = typeof report.link_url === 'string' && /^https:\/\/[^"'<>\s`\\]+$/.test(report.link_url) ? report.link_url : null;
+  } else if (base && report && report.id) {
     link = base + '/reports/' + report.id;
   }
   var summary = report.summary_ko || '';
@@ -322,7 +327,7 @@ function reportToSlotItem(report) {
     title: report.title_ko || '',
     summary: summary,
     teaser: summary.substring(0, 100),
-    source: 'Statory 보고서',
+    source: isOwner ? (report.source_label || '오너') : 'Statory 보고서',
     publishedAt: report.published_at || '',
     sourceUrl: link,
     category: report.domain || '',

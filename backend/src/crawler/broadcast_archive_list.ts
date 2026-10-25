@@ -4,6 +4,8 @@
 // 칸 = id · tier · changedAt(층이 바뀐 때 = updated_at) · videoId(유튜브 영상 id · NEWS-Q15 ■1) 만 — 제목·내용·주소·열쇠 0.
 // NEWS-Q15 ■1 CTO 판정(10-24): 보관층은 전 기간(120일 제한 없음) · 지운 편(deleted_at 있는 방송 행)은 tier 'deleted'(전 기간) ·
 //   실림(?tier=all)만 최근 120일.
+// NEWS-Q16 ■4 (SOC-R14 C3): 실림(?tier=all)도 전 기간 — 120일 제한 때문에 오래 숨겼던 편이 복원(keep_ids)돼도 목록에 못 돌아오던 것.
+//   days = null(전 기간) · 이 목록은 방송만(기사 목록은 그대로).
 // changedAt: Q14 부터 층을 옮기는 SQL(archive_ids · keep_ids · 스팸)이 updated_at 을 함께 바꾼다.
 //   관문·묶기로 처음부터 보관층에 저장된 행은 저장 때 · 그 앞(Q12 archive_ids 등)에 옮긴 행은 마지막 고친 때 ·
 //   지운 편은 updated_at 과 deleted_at 가운데 늦은 때.
@@ -13,8 +15,8 @@ import { redactPublic } from './public_redact';
 
 export type QueryFn = (sql: string, params?: unknown[]) => Promise<any[]>;
 
-/** 실림(?tier=all)만 이 날 수 안 · 보관 · 지운 편은 전 기간 */
-export const ARCHIVE_LIST_DAYS = 120;
+/** NEWS-Q16 ■4: 날 수 제한 없음(실림 · 보관 · 지운 편 모두 전 기간) — 응답 days = null */
+export const ARCHIVE_LIST_DAYS = null;
 export const ARCHIVE_LIST_MAX = 5000;
 
 export type ArchiveListTier = 'archive' | 'publish' | 'deleted';
@@ -29,10 +31,10 @@ export interface ArchiveListItem {
 
 export interface ArchiveList {
   kind: 'broadcast';
-  /** archive = 보관 + 지운 편(기본 · 전 기간) · all = 그에 더해 실림(최근 120일 · keep_ids 로 되돌린 편도 보임) */
+  /** archive = 보관 + 지운 편(기본 · 전 기간) · all = 그에 더해 실림(NEWS-Q16 ■4 · 전 기간 · keep_ids 로 되돌린 편도 보임) */
   tier: 'archive' | 'all';
-  /** 실림(publish) 행에만 거는 날 수(보관 · 지운 편은 전 기간) */
-  days: number;
+  /** 날 수 제한(NEWS-Q16 ■4 부터 null = 전 기간 · Q14~Q15 는 실림에만 120) */
+  days: number | null;
   generatedAt: string;
   /** tier 열이 없는 DB(묶음 SQL 전) · DB 못 닿음 = false · items [] */
   available: boolean;
@@ -65,19 +67,15 @@ export function redactArchiveList(list: ArchiveList): ArchiveList {
 }
 
 /**
- * 방송 행 목록 — 보관(전 기간) · 지운 편(deleted_at 열 있을 때 · 전 기간 · tier deleted) · tier=all 이면 실림(최근 days 일).
+ * 방송 행 목록 — 보관(전 기간) · 지운 편(deleted_at 열 있을 때 · 전 기간 · tier deleted) · tier=all 이면 실림(전 기간 · NEWS-Q16 ■4).
  * blocked 행은 뺌 · id 차례 · 실패면 null.
  */
 export async function broadcastArchiveList(
   query: QueryFn,
-  opts: { tier: 'archive' | 'all'; days?: number; deletedAt: boolean },
+  opts: { tier: 'archive' | 'all'; deletedAt: boolean },
 ): Promise<{ items: ArchiveListItem[]; truncated: boolean } | null> {
-  const days = Math.max(
-    1,
-    Math.min(ARCHIVE_LIST_DAYS, Math.floor(opts.days ?? ARCHIVE_LIST_DAYS)),
-  );
   const del = opts.deletedAt;
-  // 지운 편이 먼저(층이 무엇이든 deleted) · 그다음 보관 · tier=all 이면 최근 실림
+  // 지운 편이 먼저(층이 무엇이든 deleted) · 그다음 보관 · tier=all 이면 실림
   const tierExpr = del
     ? `CASE WHEN deleted_at IS NOT NULL THEN 'deleted' ELSE COALESCE(tier, 'publish') END`
     : `COALESCE(tier, 'publish')`;
@@ -87,11 +85,7 @@ export async function broadcastArchiveList(
   const conds = [
     ...(del ? ['deleted_at IS NOT NULL'] : []),
     `tier = 'archive'`,
-    ...(opts.tier === 'all'
-      ? [
-          `(COALESCE(tier, 'publish') = 'publish' AND updated_at >= now() - ($1::int * interval '1 day'))`,
-        ]
-      : []),
+    ...(opts.tier === 'all' ? [`COALESCE(tier, 'publish') = 'publish'`] : []),
   ];
   try {
     const rows = (await query(
@@ -102,7 +96,7 @@ export async function broadcastArchiveList(
           AND NOT blocked
           AND (${conds.join(' OR ')})
         ORDER BY CASE WHEN ${tierExpr} = 'publish' THEN 1 ELSE 0 END, ${changedExpr} DESC, id DESC LIMIT ${ARCHIVE_LIST_MAX + 1}`,
-      opts.tier === 'all' ? [days] : [],
+      [],
     )) as Array<{
       id?: unknown;
       source_url?: unknown;

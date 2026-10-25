@@ -406,14 +406,15 @@ describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
     expect(JSON.stringify(items)).not.toMatch(/https?:/);
   });
 
-  it('tier=all = 실림(최근 120일) 포함 · 그 밖의 값 = archive · deleted_at 열 없으면 deleted 0 · 실패면 null', async () => {
+  it('tier=all = 실림 포함(NEWS-Q16 ■4: 전 기간) · 그 밖의 값 = archive · deleted_at 열 없으면 deleted 0 · 실패면 null', async () => {
     expect(parseArchiveTier('all')).toBe('all');
     expect(parseArchiveTier('publish')).toBe('archive');
     expect(parseArchiveTier(undefined)).toBe('archive');
     const query = jest.fn().mockResolvedValue([]);
     await broadcastArchiveList(query, { tier: 'all', deletedAt: false });
-    expect(sqlOf(query)).toMatch(/COALESCE\(tier, 'publish'\) = 'publish' AND updated_at >= now\(\) - \(\$1::int \* interval '1 day'\)/);
-    expect((query.mock.calls as unknown[][])[0][1]).toEqual([120]);
+    expect(sqlOf(query)).toMatch(/tier = 'archive' OR COALESCE\(tier, 'publish'\) = 'publish'\)/);
+    expect(sqlOf(query)).not.toMatch(/interval/);
+    expect((query.mock.calls as unknown[][])[0][1]).toEqual([]);
     expect(sqlOf(query)).not.toMatch(/deleted_at/);
     await expect(
       broadcastArchiveList(jest.fn().mockRejectedValue(new Error('x')), { tier: 'archive', deletedAt: false }),
@@ -422,7 +423,7 @@ describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
 
   it('AppService: DB 없으면 available false · 200 꼴 · 공개 가림 뒤에도 DB 주소·열쇠 꼴 0', async () => {
     const none = await new AppService().broadcastArchive('archive');
-    expect(none).toMatchObject({ kind: 'broadcast', available: false, count: 0, items: [], days: 120 });
+    expect(none).toMatchObject({ kind: 'broadcast', available: false, count: 0, items: [], days: null });
 
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('information_schema.columns')) return [{ x: 1 }];

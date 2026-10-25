@@ -12,6 +12,7 @@ import axios from 'axios';
 import Parser from 'rss-parser';
 import { Judgment, passesIngestionGate, rejectReason } from './judge_article';
 import { fieldProfile } from './field_profile';
+import { originalAirDate, withAiredLine } from './broadcast_aired';
 
 export const BROADCAST_SOURCE_TYPE = 'broadcast';
 
@@ -34,6 +35,8 @@ export interface BroadcastSource {
   programEn: string | null;
   /** NEWS-Q13 ■2: 한 프로그램 전용 채널(설정 solo_channel · 공용 채널이면 늘 false) — 관련 클립 자동 묶기는 여기서만 */
   soloChannel: boolean;
+  /** NEWS-Q16 ■3: 채널별 클립 길이 문턱(초 · 설정 clip_max_seconds · 없으면 분야 설정 sources.broadcast.clip_max_seconds) */
+  clipMaxSec?: number | null;
 }
 
 export interface BroadcastItem {
@@ -51,9 +54,10 @@ export function feedUrlFor(channelId: string): string {
 
 export function loadBroadcastSources(
   file = path.join(__dirname, '../../data', fieldProfile().sources.broadcast.file || 'missing.json'),
+  read: (f: string) => string = (f) => fs.readFileSync(f, 'utf8'),
 ): BroadcastSource[] {
   try {
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { feeds?: Array<Record<string, unknown>> };
+    const raw = JSON.parse(read(file)) as { feeds?: Array<Record<string, unknown>> };
     return (raw.feeds || [])
       .filter((f) => /^UC[\w-]{22}$/.test(String(f.channel_id || '')))
       .map((f) => ({
@@ -65,11 +69,17 @@ export function loadBroadcastSources(
         sharedChannel: f.shared_channel === true,
         programEn: typeof f.program_en === 'string' && f.program_en.trim() ? f.program_en.trim() : null,
         soloChannel: f.solo_channel === true && f.shared_channel !== true,
+        clipMaxSec: Number.isInteger(f.clip_max_seconds) && Number(f.clip_max_seconds) > 0 ? Number(f.clip_max_seconds) : null,
       }));
   } catch (e) {
     console.warn(`[broadcast] 소스 파일을 읽지 못함(방송 추적 건너뜀): ${(e as Error).message}`);
     return [];
   }
+}
+
+/** NEWS-Q16 ■3: 이 채널의 길이 규칙(채널 clip_max_seconds 가 있으면 그것 · 없으면 분야 설정 그대로). */
+export function channelLengthRule<R extends { clipMaxSec?: number }>(rule: R, source: Pick<BroadcastSource, 'clipMaxSec'>): R {
+  return source.clipMaxSec ? { ...rule, clipMaxSec: source.clipMaxSec } : rule;
 }
 
 /** NEWS-Q12 ■4: 프로그램 이름(articles.source) → 영어 이름(내보내기 sourceEn). */
@@ -222,7 +232,11 @@ export function decideBroadcast(
   return { action: 'reject', reason: rejectReason(j, false) || 'rejected' };
 }
 
-/** 저장 행(articles). 종류 구분 = source_type 'broadcast' (kind 열은 있으면 크롤러가 따로 맞춤). */
+/**
+ * 저장 행(articles). 종류 구분 = source_type 'broadcast' (kind 열은 있으면 크롤러가 따로 맞춤).
+ * NEWS-Q16 ■1: 재업로드(원 방송일이 게시일보다 aired_date_min_days 넘게 앞섬)는 published_at = 원 방송일 · published_ts 비움 ·
+ * raw_body 머리에 「원 방송일:」 줄.
+ */
 export function buildBroadcastRow(
   source: BroadcastSource,
   item: BroadcastItem,
@@ -230,12 +244,15 @@ export function buildBroadcastRow(
 ) {
   const gist = descriptionGist(item.description);
   const summary = (ai.summary && ai.summary.trim()) || gist || item.title;
+  const aired = originalAirDate(item.title, item.description, item.publishedAt, fieldProfile().sources.broadcast.aired_date_min_days);
+  const reupload = aired?.reupload ? aired : null;
+  const rawBody = broadcastRawBody(source, item);
   return {
     title: item.title,
     originalTitle: item.title,
     teaser: gist ? gist.slice(0, 220) : null,
     summary,
-    rawBody: broadcastRawBody(source, item),
+    rawBody: reupload ? withAiredLine(rawBody, reupload).slice(0, 6000) : rawBody,
     keywords: matchedBroadcastKeywords(item.title, item.description),
     category: ai.category,
     region: 'kr',
@@ -246,7 +263,7 @@ export function buildBroadcastRow(
     origin: 'crawler',
     isTop: false,
     isFeature: false,
-    publishedAt: kstYmd(item.publishedAt) || kstYmd(new Date().toISOString())!,
+    publishedAt: reupload?.aired || kstYmd(item.publishedAt) || kstYmd(new Date().toISOString())!,
     lang: 'ko' as const,
     isForeign: false,
     blocked: false,
@@ -254,7 +271,9 @@ export function buildBroadcastRow(
     sourceType: BROADCAST_SOURCE_TYPE,
     outletId: source.outletId,
     // NEWS-Q2 ■7: 게시 시각(published_ts 열이 있으면 기록) · ■5 출처 등급
-    publishedTs: Number.isNaN(Date.parse(item.publishedAt)) ? null : new Date(item.publishedAt),
+    publishedTs: reupload || Number.isNaN(Date.parse(item.publishedAt)) ? null : new Date(item.publishedAt),
+    /** NEWS-Q16 ■1: 재업로드면 원 방송일(세기 · 기록용 · 저장 칸 아님) */
+    airedReupload: reupload?.aired ?? null,
     sourceGrade: 'press' as const,
   };
 }

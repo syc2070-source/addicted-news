@@ -175,6 +175,17 @@ export interface FieldProfile {
       main_min_seconds?: number;
       clip_max_seconds?: number;
       duration_unit_cap_day?: number;
+      /**
+       * NEWS-Q16 ■1: 재업로드 = 제목 · 설명의 원 방송일이 게시일(KST)보다 이 날 수 넘게 앞섬 → published_at = 원 방송일(규칙 · LLM 0) ·
+       * 다음 실행 시작에 이미 저장된 방송 행도 같은 규칙으로 맞춤. 없거나 0 이면 끔.
+       */
+      aired_date_min_days?: number;
+      /** NEWS-Q16 리뷰: 원 방송일 맞춤에서 뺄 id(손으로 날짜를 고친 행 · 잘못 읽힌 행 — 다음 실행이 다시 옮기지 않게) */
+      aired_skip_ids?: number[];
+      /**
+       * NEWS-Q16 ■2: 방송 관문 한 번 다시 판정(id 가 runs 에 done 이면 다시 안 돎) — yes = 실림으로 · partial · no = 보관 그대로(지움 0) · 결과 progress.broadcastRejudge.
+       */
+      rejudge_once?: { id: string; ids: number[] };
       /** NEWS-Q13 ■3: 못 닿은 채널만 search.list 로 한 번 메움(id 가 runs 에 done 이면 다시 안 돎) */
       backfill_search_once?: {
         id: string;
@@ -193,6 +204,11 @@ export interface FieldProfile {
      * archive_ids = 이미 실린 그 출처 글을 다음 실행 시작에 보관층으로(이 id · 기사 · 실림층 · 출처가 names 에 맞는 행만 · 지움 0).
      */
     spam_publishers?: { names?: string[]; archive_ids?: number[] };
+    /**
+     * NEWS-Q16 ■5: 오너 공개 자료(보고서 · 현황자료) → 기획기사 · 리포트 칸(GET /reports 에 Statory 보고서와 함께).
+     * enabled = 스위치(false = 꺼짐 · 지금 응답 그대로) · file = data/ 아래 JSON(items[]) · max_items = 한 번에 내보낼 수(기본 20).
+     */
+    owner_materials?: { enabled?: boolean; file?: string; max_items?: number };
   };
   messages: { notify_prefix: string };
   smoke_samples: Array<{ label: string; title: string; content: string; category: string }>;
@@ -265,6 +281,8 @@ function withDefaults(p: any): FieldProfile {
       statory_query: s.statory_query || '',
       missed_day: s.missed_day && typeof s.missed_day.query === 'string' ? s.missed_day : undefined,
       spam_publishers: s.spam_publishers && typeof s.spam_publishers === 'object' ? s.spam_publishers : undefined,
+      // NEWS-Q16 ■5: 없거나 꼴이 틀리면 undefined(= 스위치 꺼짐)
+      owner_materials: s.owner_materials && typeof s.owner_materials === 'object' ? s.owner_materials : undefined,
     },
     messages: { notify_prefix: p.site_name, ...(p.messages || {}) },
     smoke_samples: p.smoke_samples || [],
