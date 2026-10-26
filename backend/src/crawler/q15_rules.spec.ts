@@ -83,16 +83,20 @@ describe('NEWS-Q15 ■2 — 길이 ≤ 180초 = 클립(제목 [full] · 방송 �
 
 // ---------- ■1 보관 목록 잘림 ----------
 describe('NEWS-Q15 ■1 · Q17 ■3 — 보관 목록은 다 싣는다(잘림 = 건너뛴 행이 있을 때만)', () => {
-  // NEWS-Q17 ■3: 행 한도를 없앰 → 5,001 행도 다 내보내고 truncated 는 늘 false(칸은 그대로)
-  it('NEWS-Q17: 한도 없음 — 5,001 행 그대로 · truncated false · news_id = id · LIMIT 없음', async () => {
+  // NEWS-Q17 ■3 · Q18 ■4: 옛 5,000 한도 없앰 · 안전 한도 50,000(넘으면 truncated true · 50,000 까지만)
+  it('NEWS-Q17 · Q18: 5,001 행 그대로 · 50,000 넘으면 truncated · news_id = id', async () => {
     const mk = (n: number) =>
       Array.from({ length: n }, (_, i) => ({ id: i + 1, source_url: null, tier: 'archive', changed: String(1_700_000_000_000 + i) }));
     const all = await broadcastArchiveList(jest.fn().mockResolvedValue(mk(5001)), { tier: 'archive', deletedAt: false });
     expect([all?.truncated, all?.items.length]).toEqual([false, 5001]);
     expect(all?.items.every((x) => x.news_id === x.id)).toBe(true);
+    const big = await broadcastArchiveList(jest.fn().mockResolvedValue(mk(50001)), { tier: 'archive', deletedAt: false });
+    expect([big?.truncated, big?.items.length]).toEqual([true, 50000]);
+    const exact = await broadcastArchiveList(jest.fn().mockResolvedValue(mk(50000)), { tier: 'archive', deletedAt: false });
+    expect([exact?.truncated, exact?.items.length]).toEqual([false, 50000]);
     const q = jest.fn().mockResolvedValue([]);
     await broadcastArchiveList(q, { tier: 'archive', deletedAt: false });
-    expect(String((q.mock.calls as unknown[][])[0][0])).not.toMatch(/LIMIT/);
+    expect(String((q.mock.calls as unknown[][])[0][0])).toMatch(/LIMIT 50001/);
     // 반박: 꼴이 틀려 건너뛴 행이 하나라도 있으면 truncated true(받는 쪽이 빠진 id 를 숨김으로 읽지 않게) · pg bigint 글 id 는 그대로 읽힘
     const some = await broadcastArchiveList(
       jest.fn().mockResolvedValue([...mk(2), { id: '7', source_url: null, tier: 'archive', changed: '1700000000000' }, { id: 9, tier: 'archive', changed: null }]),

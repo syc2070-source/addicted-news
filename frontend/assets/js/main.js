@@ -442,9 +442,10 @@ function renderTopNews(container, data) {
     note.textContent = articles[0].topWindow === '7d' ? '최근 7일' : (articles[0].topWindow === '72h' ? '최근 72시간' : '');
   }
 
+  // NEWS-Q18 ■1: 1위만 그림 + 요약 3줄 · 2·3위는 작은 썸네일 + 제목 한 줄 + 매체·날짜(같은 소식 고리 유지)
   container.innerHTML = '';
   articles.slice(0, 3).forEach(function(article, index) {
-    container.innerHTML += createTopNewsCard(article, index === 0);
+    container.innerHTML += index === 0 ? createTopNewsCard(article, true) : createTopNewsMini(article);
   });
 }
 
@@ -700,16 +701,27 @@ function createTopNewsCard(article, isMain) {
   var imageHtml = '<div class="top-news-image-wrap"><img src="' + articleImageSrc(article) + '" alt="" class="top-news-image" ' + imgOnErrorAttr(article) + '></div>';
 
   var summary = article.summary || article.teaser || '';
-  var maxLength = 350;
+  var maxLength = 220;
   var displaySummary = summary.length > maxLength ? summary.substring(0, maxLength) + '...' : summary;
-  
+
   return '<div class="top-news-card ' + (isMain ? 'main' : '') + '">' +
     imageHtml +
     '<div class="top-news-content">' +
-      '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="top-news-title">' + escapeHtml(article.title) + '</a>' +
-      '<p class="top-news-meta">' + freshBadge(article) + formatDate(article.publishedAt) + ' · ' + (article.source || '') + '</p>' +
+      '<a href="' + safeHref(article.sourceUrl) + '" target="_blank" rel="noopener noreferrer" class="top-news-title">' + escapeHtml(article.title) + '</a>' +
+      '<p class="top-news-meta">' + freshBadge(article) + formatDate(article.publishedAt) + ' · ' + escapeHtml(article.source || '') + '</p>' +
       '<p class="top-news-summary">' + escapeHtml(displaySummary) + '</p>' +
-      '<a href="' + (article.sourceUrl || '#') + '" target="_blank" class="top-news-more">본문가기 →</a>' +
+      clusterBlock(article) +
+    '</div>' +
+  '</div>';
+}
+
+// NEWS-Q18 ■1: TOP 2·3위 한 줄 카드(작은 썸네일 · 제목 한 줄 · 매체 · 날짜 · 같은 소식 고리)
+function createTopNewsMini(article) {
+  return '<div class="top-news-mini">' +
+    '<div class="top-news-mini-thumb"><img src="' + articleImageSrc(article) + '" alt="" ' + imgOnErrorAttr(article) + '></div>' +
+    '<div class="top-news-mini-body">' +
+      '<a href="' + safeHref(article.sourceUrl) + '" target="_blank" rel="noopener noreferrer" class="top-news-mini-title" title="' + escapeHtml(article.title).replace(/"/g, '&quot;') + '">' + escapeHtml(article.title) + '</a>' +
+      '<p class="top-news-meta">' + freshBadge(article) + escapeHtml(article.source || '') + ' · ' + formatDate(article.publishedAt) + '</p>' +
       clusterBlock(article) +
     '</div>' +
   '</div>';

@@ -385,6 +385,69 @@ a {
   text-decoration: underline;
 }
 
+/* NEWS-Q18 ■1: TOP 높이 줄임 — 1위만 그림 + 요약 3줄 · 2·3위 한 줄 카드(작은 썸네일) */
+.top-news-card.main {
+  min-height: 0;
+  padding: 14px 15px;
+  border-bottom: 1px solid #ddd;
+}
+.top-news-card.main .top-news-image-wrap {
+  flex: 0 0 160px;
+  height: 110px;
+  align-self: flex-start;
+}
+.top-news-card.main .top-news-summary {
+  -webkit-line-clamp: 3;
+  flex: none;
+}
+.top-news-mini {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 15px;
+  border-bottom: 1px solid #ddd;
+  background: #fff;
+}
+.top-news-mini:last-child {
+  border-bottom: none;
+}
+.top-news-mini-thumb {
+  flex: 0 0 64px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #f0f0f0;
+}
+.top-news-mini-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.top-news-mini-body {
+  flex: 1;
+  min-width: 0;
+}
+.top-news-mini-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-news-mini-title:hover {
+  color: var(--color-accent);
+}
+.top-news-mini .top-news-meta {
+  margin: 2px 0 0;
+}
+.top-news-mini .cluster-box,
+.top-news-card.main .cluster-box {
+  margin-top: 4px;
+}
+
 /* ========================================
    기사 카드 (메인 페이지 카테고리별)
    ======================================== */
@@ -678,6 +741,17 @@ a {
   
   .top-news-summary {
     -webkit-line-clamp: 4;
+  }
+
+  /* NEWS-Q18 ■1: 폰 — 1위 그림 높이 줄임 · 요약 3줄 · 2·3위는 한 줄 카드 그대로(가로) */
+  .top-news-card.main .top-news-image-wrap {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    height: 160px;
+  }
+  .top-news-card.main .top-news-summary {
+    -webkit-line-clamp: 3;
   }
 }
 

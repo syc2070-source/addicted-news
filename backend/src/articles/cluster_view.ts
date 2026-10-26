@@ -114,6 +114,122 @@ export function rankTop(
   return [];
 }
 
+/**
+ * NEWS-Q18 ■3(오너 결정 10-26): TOP 무게 규칙 — 상수는 분야 설정 top_rank(코드 변경 없이 조정).
+ * 묶음 점수 = 전국 매체(묶음 안 한 곳이라도) + 기관 발표(묶음 안 제목 핵심어 · 출처 등급 institution/academic) + 지역 캠페인·홍보(보이는 제목) +
+ *   같은 소식 건수(per_report × (묶음 수 − 1) · 상한 report_cap). 동점 = 묶음 큰 것 → 최신. 창 72시간 · 묶음이 take 보다 적으면 7일.
+ */
+export interface TopRule {
+  national_sources: string[];
+  national_bonus: number;
+  institution_words: string[];
+  institution_bonus: number;
+  local_words: string[];
+  /** 제목에 맞으면 지역(정규식 · 예: 머리 「OO군,」) */
+  local_patterns?: string[];
+  local_penalty: number;
+  per_report: number;
+  report_cap: number;
+}
+
+export interface TopScore {
+  national: boolean;
+  institution: boolean;
+  local: boolean;
+  reports: number;
+  score: number;
+}
+
+export interface WeightedPick extends TopPick {
+  score: TopScore;
+  newest: number;
+}
+
+const OPINION = /^\s*\[(사설|칼럼|기고|시론|오피니언)\]/;
+
+function squashName(s: string): string {
+  return String(s || '').toLowerCase().replace(/[\s·.()\-_]/g, '');
+}
+
+/** 제목 끝 「 - 매체」 꼬리(구글뉴스 · 매체 이름이 source 에 없을 때) */
+function titleOutlet(title: string): string {
+  const t = String(title || '');
+  const i = t.lastIndexOf(' - ');
+  return i > 0 && t.length - i - 3 <= 30 ? t.slice(i + 3) : '';
+}
+
+export function isNationalRow(r: Pick<LightRow, 'source' | 'title'>, names: ReadonlySet<string>): boolean {
+  return names.has(squashName(r.source)) || names.has(squashName(titleOutlet(r.title)));
+}
+
+export function scoreTopGroup(rows: LightRow[], shown: LightRow, size: number, rule: TopRule): TopScore {
+  const names = new Set(rule.national_sources.map(squashName));
+  const anyWord = (t: string, words: string[]) => words.some((w) => w && t.includes(w));
+  const national = rows.some((r) => isNationalRow(r, names));
+  // 리뷰(Q18): 사설 · 칼럼 · 기고는 기관 발표로 치지 않음
+  const institution = rows.some(
+    (r) =>
+      !OPINION.test(r.title || '') &&
+      (anyWord(r.title || '', rule.institution_words) || r.sourceGrade === 'institution' || r.sourceGrade === 'academic'),
+  );
+  const patterns = (rule.local_patterns || []).map((p) => {
+    try {
+      return new RegExp(p);
+    } catch {
+      return null;
+    }
+  });
+  const shownTitle = shown.title || '';
+  // 리뷰(Q18): 기관 발표가 있으면 지역 감점 없음(「복지부 … 운영 확대」 · 「국회 토론회 개최」)
+  const local =
+    !institution && (anyWord(shownTitle, rule.local_words) || patterns.some((re) => !!re && re.test(shownTitle)));
+  const reports = Math.min(rule.report_cap, rule.per_report * Math.max(0, size - 1));
+  const score =
+    (national ? rule.national_bonus : 0) + (institution ? rule.institution_bonus : 0) + (local ? rule.local_penalty : 0) + reports;
+  return { national, institution, local, reports, score: Math.round(score * 100) / 100 };
+}
+
+export function rankTopWeighted(
+  light: Map<number, LightRow>,
+  index: Map<number, ClusterInfo>,
+  now: number,
+  rule: TopRule,
+  take = 3,
+): WeightedPick[] {
+  const names = new Set(rule.national_sources.map(squashName));
+  let last: WeightedPick[] = [];
+  for (const [window, hours] of [['72h', 72], ['7d', 24 * 7]] as const) {
+    const since = now - hours * 3600 * 1000;
+    const inWin = [...light.values()].filter((r) => Number.isFinite(r.ts) && r.ts >= since && r.ts <= now + 3600 * 1000);
+    const byKey = new Map<string, { info: ClusterInfo | null; rows: LightRow[]; newest: number }>();
+    for (const r of inWin) {
+      const info = index.get(r.id);
+      const key = info && info.size > 1 ? `c${info.clusterId}` : `a${r.id}`;
+      const g = byKey.get(key);
+      if (g) {
+        g.rows.push(r);
+        g.newest = Math.max(g.newest, r.ts);
+      } else byKey.set(key, { info: info && info.size > 1 ? info : null, rows: [r], newest: r.ts });
+    }
+    const picks = [...byKey.values()].map((g) => {
+      // 묶음 기사 전부(창 밖 것 포함 · light 에 있는 만큼)로 무게를 봄
+      const all = g.info ? g.info.memberIds.map((id) => light.get(id)).filter((x): x is LightRow => !!x) : g.rows;
+      const rep = g.info ? light.get(g.info.representativeId) || g.rows[0] : g.rows[0];
+      // 대표가 전국 매체가 아니면 묶음 안 전국 매체 기사를 보임(가장 새 것)
+      const nat = isNationalRow(rep, names)
+        ? rep
+        : [...all].filter((r) => isNationalRow(r, names)).sort((a, b) => b.ts - a.ts)[0];
+      const shown = nat || rep;
+      const size = g.info?.size || 1;
+      return { id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest } as WeightedPick;
+    });
+    // 리뷰(Q18): 동점 = 묶음 큰 것 → 최신
+    last = picks.sort((a, b) => b.score.score - a.score.score || b.size - a.size || b.newest - a.newest).slice(0, take);
+    if (last.length >= take) return last;
+  }
+  return last;
+}
+
 /** 공개 조건(raw SQL · 기사만 · publish 층) — 묶음 계산용 가벼운 읽기에. */
 export function visibleSql(flags: { deletedAt: boolean; tier: boolean }, alias = ''): string {
   const a = alias ? `${alias}.` : '';

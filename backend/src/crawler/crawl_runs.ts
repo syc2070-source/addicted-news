@@ -76,6 +76,9 @@ export interface RunProgressLike {
   /** NEWS-Q16 ■1 · ■2: 이미 저장된 재업로드 방송을 원 방송일로 맞춘 기록 · 방송 관문 한 번 다시 판정 기록 */
   broadcastAired?: object;
   broadcastRejudge?: object;
+  /** NEWS-Q18 ■2 · ■4: 주제 거름 · 503 호스트 단락기 */
+  topicExcluded?: object;
+  hostBreaker503?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';

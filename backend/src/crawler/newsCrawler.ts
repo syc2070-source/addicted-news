@@ -48,10 +48,11 @@ import { fetchFeed } from './feed_fetch';
 import { KnownIndex, loadKnownIndex, preDuplicate } from './dedup';
 import { DeepseekBudget, dailyCap, estimateCostUsd, priceOf, usedTodayFromRuns } from './deepseek_budget';
 import { decideTier, effectiveTier, oldDatedTier, Tier } from './tier';
-import { HostBreaker } from './host_breaker';
+import { FEED_BREAKER_RUN, FEED_BREAKER_STATUS, FeedStatusBreaker, HostBreaker } from './host_breaker';
 import { attemptsFromRuns, planPromotion, standbyLast } from './blocked_promote';
 import { archiveSpamArticles, spamPublisherOf } from './spam_publisher';
 import { alignAiredDates } from './broadcast_aired';
+import { TopicExcludeRule, sweepTopicExcluded, topicExcludeHit } from './topic_exclude';
 import { columnExists } from './schema_probe';
 import { rejudgeBroadcasts, rejudgeStateFromRuns } from './broadcast_rejudge';
 import { breakerSummaryOf } from './breaker_summary';
@@ -250,6 +251,18 @@ function countSpam(name: string, title: string): void {
     m[name] = (m[name] || 0) + 1;
   }
   console.log(`  │   ⛔ 스팸 출처(${name}) 거부: ${title.slice(0, 30)}...`);
+}
+
+/** NEWS-Q18 ■2: 관문 앞 주제 거름 규칙(분야 설정 gate.topic_exclude) · 요약으로 볼 본문 앞 글자 수 */
+const TOPIC_EXCLUDE: TopicExcludeRule[] = PROFILE.gate.topic_exclude ?? [];
+const TOPIC_EXCLUDE_CHARS = 600;
+
+function countTopicExcluded(id: string): void {
+  // 관문 거부 셈(countReject)에 섞지 않음 — 실행 기록 rejectReasons(rejected_articles) · progress.topicExcluded 로만
+  if (RUN.progress) {
+    const t = (RUN.progress.topicExcluded ||= { rejected: {} });
+    t.rejected[id] = (t.rejected[id] || 0) + 1;
+  }
 }
 
 function getHostname(url?: string): string {
@@ -1165,9 +1178,14 @@ interface ReadSource {
   total: number;
   retried: boolean;
   repaired: boolean;
+  /** NEWS-Q18 ■4: 503 단락기로 읽지 않음 */
+  breakerSkipped?: boolean;
 }
 
 const bodyBreaker = new HostBreaker();
+const feedBreaker = new FeedStatusBreaker();
+/** NEWS-Q18 ■4: 이번 실행에서 503 단락기로 읽지 않은 소스 id */
+const breakerSkippedIds = new Set<string>();
 
 async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<string>): Promise<ReadItem> {
   const rawTitle = normalizeText(it.title || '');
@@ -1233,11 +1251,21 @@ async function readItem(it: RssItem, allowIncident: boolean, seenHere: Set<strin
 }
 
 async function readSource(conf: SourceConfig, ctx: ReadCtx<ReadSource>): Promise<ReadSource> {
-  const { feed, retried, repaired } = await fetchFeed(
-    { url: normalizeRssFeedUrl(conf.url), format: conf.format, listPattern: conf.listPattern, jsonMap: conf.jsonMap },
-    parser,
-    { timeoutMs: RSS_TIMEOUT },
-  );
+  // NEWS-Q18 ■4: 같은 호스트 503 이 잇달아 5 번이면 이번 실행의 나머지 그 호스트 피드는 건너뜀(경보 0 · 다음 실행 다시)
+  if (feedBreaker.skip(conf.url)) return { items: [], total: 0, retried: false, repaired: false, breakerSkipped: true };
+  let fetched: Awaited<ReturnType<typeof fetchFeed>>;
+  try {
+    fetched = await fetchFeed(
+      { url: normalizeRssFeedUrl(conf.url), format: conf.format, listPattern: conf.listPattern, jsonMap: conf.jsonMap },
+      parser,
+      { timeoutMs: RSS_TIMEOUT },
+    );
+  } catch (e) {
+    feedBreaker.record(conf.url, httpStatusOf(e));
+    throw e;
+  }
+  feedBreaker.record(conf.url, 200);
+  const { feed, retried, repaired } = fetched;
   const raw = (feed.items || []).slice(0, conf.maxItems ?? 30) as RssItem[];
   const res: ReadSource = { items: [], total: raw.length, retried: !!retried, repaired: !!repaired };
   ctx.partial(res);
@@ -1300,6 +1328,13 @@ async function judgeSource(
   }
   if (!maybe) return [];
   const src = maybe;
+  // NEWS-Q18 ■4: 503 단락기로 읽지 않은 피드 — 실패 피드 목록 · 경보에 넣지 않고 실행 기록에만
+  if (src.breakerSkipped) {
+    stat.failed = `breaker:${FEED_BREAKER_STATUS}`;
+    if (RUN.progress) RUN.progress.hostBreaker503 = { tripped: feedBreaker.tripped(), skipped: { ...feedBreaker.skipped } };
+    console.log(`  └─ [${conf.id}] 같은 호스트 ${FEED_BREAKER_STATUS} 잇달아 ${FEED_BREAKER_RUN}번 → 이번 실행 건너뜀(다음 실행 다시)`);
+    return [];
+  }
   crawlStats.feedsOk++;
   if (src.retried) console.log(`  ├─ [${conf.id}] 403/406/429 → 다른 UA 재시도 성공`);
   if (src.repaired) { crawlStats.feedsRepaired++; console.log(`  ├─ [${conf.id}] 깨진 XML 고쳐 읽음`); }
@@ -1433,6 +1468,19 @@ async function judgeSource(
       }
       if (isPromotionalAd(rawTitle, rawContent)) {
         crawlStats.filterSkip++;
+        continue;
+      }
+      // NEWS-Q18 ■2: 관문 앞 주제 거름(음주운전 단속·캠페인·사고 = 분야 기사 아님 · LLM 0 · 애매하면 통과)
+      const excluded = topicExcludeHit(rawTitle, rawContent.slice(0, TOPIC_EXCLUDE_CHARS), TOPIC_EXCLUDE);
+      if (excluded) {
+        countTopicExcluded(excluded);
+        stat.rejected++;
+        console.log(`  │   🚫 주제 거름(${excluded}): ${rawTitle.slice(0, 34)}...`);
+        rejectedAll.push({
+          title: rawTitle, originalTitle: rawTitle, summary: null, category: normalizeCategory(conf.category), source: sourceName,
+          sourceUrl, googleUrl, publishedAt, lang: detectLanguage(rawTitle), sourceType: conf.sourceType, rejectReason: excluded,
+          confidence: null, domain: normalizeHost(sourceUrl) || normalizeHost(googleUrl || undefined) || null,
+        });
         continue;
       }
       crawlStats.filterPass++;
@@ -1771,6 +1819,18 @@ async function finalizeStatoryCandidate(
   }
   if (!deepseekRoomLeft()) return null;
   if (isPromotionalAd(rawTitle, rawContent)) return null;
+  // NEWS-Q18 ■2: Statory 길도 같은 주제 거름(LLM 0)
+  const excluded = topicExcludeHit(rawTitle, rawContent.slice(0, TOPIC_EXCLUDE_CHARS), TOPIC_EXCLUDE);
+  if (excluded) {
+    countTopicExcluded(excluded);
+    sourceStat('statory').rejected++;
+    rejectedAll.push({
+      title: rawTitle, originalTitle: rawTitle, summary: null, category: partial.category, source: partial.source,
+      sourceUrl: partial.sourceUrl, googleUrl: partial.googleUrl, publishedAt: partial.publishedAt, lang, sourceType: partial.sourceType,
+      rejectReason: excluded, confidence: null, domain: normalizeHost(partial.sourceUrl) || null,
+    });
+    return null;
+  }
 
   const provCategory = classifyCategory(rawTitle, rawContent, partial.category);
   const pack = await generateKoreanPack(rawTitle, rawContent, lang, provCategory);
@@ -2219,6 +2279,12 @@ async function main() {
     if (sa.error) progress.spamArchiveError = true;
     console.log(`⛔ 스팸 출처 글 보관층으로(설정 archive_ids ${spamIds.length}): 이번에 옮김 ${sa.archived.length} · 안 옮김 ${sa.skipped.length}`);
   }
+  // NEWS-Q18 ■2: 이미 실린 기사 가운데 주제 거름(음주운전 단속·캠페인·사고)에 걸리는 것 → 보관층(keep_ids 는 빼고 되돌림 · 지움 0)
+  if (TOPIC_EXCLUDE.length && RUN.flags.tier && RUN.query) {
+    const sw = await sweepTopicExcluded(RUN.query, TOPIC_EXCLUDE, { deletedAt: RUN.flags.deletedAt });
+    progress.topicExcluded = { ...(progress.topicExcluded || { rejected: {} }), sweep: sw };
+    console.log(`🚫 주제 거름 이미 실린 기사: 읽음 ${sw.checked} · 보관으로 ${sw.archived.length} · 되돌림 ${sw.restored.length}${sw.error ? ' · 오류' : ''}`);
+  }
   // NEWS-Q16 ■1: 이미 저장된 재업로드 방송 → 원 방송일(published_at · 층 · updated_at 그대로 · 몇 번 돌아도 같음)
   if (RUN.query) RUN.rawBodyCol = await columnExists(RUN.query, 'articles', 'raw_body');
   const airedDays = PROFILE.sources.broadcast.aired_date_min_days;
@@ -2314,20 +2380,32 @@ async function main() {
       all.push(...got);
       progress.reached = i + 1;
       progress.lastId = conf.id;
-      if (retry) {
+      // NEWS-Q18 ■4: 503 단락기로 읽지 않은 피드는 시도한 것이 아님 — 재시도 · 주 피드 기록에 넣지 않음(승격 · 강등 셈 그대로) ·
+      // 주 피드면 이번 실행 「성공 아님」으로 두어 예비 피드가 판정
+      const breakerSkipped = outcome.status === 'ok' && !!outcome.value?.breakerSkipped;
+      if (breakerSkipped) breakerSkippedIds.add(conf.id);
+      if (retry && !breakerSkipped) {
         const ok = outcome.status === 'ok' || (outcome.status === 'timeout' && !!outcome.value);
         const status = outcome.status === 'error' ? String(httpStatusOf(outcome.error) ?? 'ERR') : ok ? undefined : 'timeout';
         progress.blockedRetried.push({ id: conf.id, ok, ...(status ? { status } : {}) });
         console.log(`  🔁 막힌 피드 재시도 ${conf.id}: ${ok ? '성공(잇달아 성공하면 주 피드로)' : `실패(${status}) — 대체 피드 유지`}`);
       }
       if (promotion.promoted.has(conf.id)) {
-        const ok = outcome.status === 'ok' || (outcome.status === 'timeout' && !!outcome.value);
+        const ok = !breakerSkipped && (outcome.status === 'ok' || (outcome.status === 'timeout' && !!outcome.value));
         primaryOk.set(conf.id, ok);
-        (progress.blockedPrimary ||= []).push({ id: conf.id, ok });
+        if (!breakerSkipped) (progress.blockedPrimary ||= []).push({ id: conf.id, ok });
       }
       return Date.now() <= crawlDeadline;
     },
   });
+  // NEWS-Q18 ■4: 503 단락기 기록(실행 끝에 한 번 · 마감으로 끊겨도 남게) · 놓친 날 되짚기 피드가 건너뛰어졌으면 「메움」으로 치지 않음
+  if (feedBreaker.tripped().length) {
+    progress.hostBreaker503 = { tripped: feedBreaker.tripped(), skipped: { ...feedBreaker.skipped } };
+    if (progress.missedLookback && order.some((s) => s.id.endsWith('-missed') && breakerSkippedIds.has(s.id))) {
+      progress.missedLookback = { ...progress.missedLookback, covers: [] };
+      console.log('🩹 놓친 날 되짚기: 503 단락기로 건너뜀 → 다음 실행이 다시');
+    }
+  }
   if (progress.reached < order.length) {
     timedOut = true;
     progress.timedOut = true;

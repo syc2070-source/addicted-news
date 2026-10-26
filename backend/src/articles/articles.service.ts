@@ -6,7 +6,7 @@ import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile } from '../crawler/field_profile';
 import { ClusterInfo, clusterDocs, clusterRules, docTs, leadOf, paraOf, pickRepresentative } from '../crawler/event_cluster';
-import { GroupMode, LightRow, groupIds, membersOf, rankTop, shownId, visibleSql } from './cluster_view';
+import { GroupMode, LightRow, groupIds, membersOf, rankTop, rankTopWeighted, shownId, visibleSql } from './cluster_view';
 
 /** 카테고리 slug → 이름(분야 설정 categories.slugs · NEWS-Q2 ■1). */
 export function categoryKeyFor(slug: string): string {
@@ -350,8 +350,8 @@ export class ArticlesService implements OnModuleInit {
   }
 
   /**
-   * TOP 뉴스(NEWS-Q3 ■2): 72시간 안 묶음을 cluster_size 큰 순(동률 = source_grade → 새 보도).
-   * 72시간 안 기사가 없으면 최근 7일로 넓히고 topWindow='7d' 로 표시. 관리자가 고른 isTop 은 72시간 안 것만 맨 앞에.
+   * TOP 뉴스(NEWS-Q3 ■2 · NEWS-Q18 ■3): 분야 설정 top_rank 무게 점수 큰 순(동점 = 새 보도) · top_rank 가 없으면 옛 규칙(cluster_size 큰 순).
+   * 72시간 안 묶음이 3 개보다 적으면 최근 7일로 넓히고 topWindow='7d' 로 표시. 관리자가 고른 isTop 은 72시간 안 것만 맨 앞에.
    */
   async getTopNews() {
     const st = await this.clusterState();
@@ -360,7 +360,9 @@ export class ArticlesService implements OnModuleInit {
       order: { publishedAt: 'DESC' },
       take: 3,
     }))).filter((a) => a.isFresh);
-    const picks = rankTop(st.light, st.index, Date.now(), 3);
+    // NEWS-Q18 ■3: 분야 설정 top_rank 가 있으면 무게 규칙(전국 매체 · 기관 발표 · 지역 캠페인 · 같은 소식 건수) · 없으면 옛 규칙(묶음 크기)
+    const rule = fieldProfile().top_rank;
+    const picks = rule ? rankTopWeighted(st.light, st.index, Date.now(), rule, 3) : rankTop(st.light, st.index, Date.now(), 3);
     const ids = picks.map((p) => p.id).filter((id) => !manual.some((m) => m.id === id));
     const rows = ids.length ? await this.articleRepo.findBy({ id: In(ids) }) : [];
     const byId = new Map(rows.map((r) => [r.id, r]));

@@ -398,9 +398,8 @@ describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
     expect(sql).toMatch(/deleted_at IS NOT NULL OR tier = 'archive'/);
     expect(sql).toMatch(/WHEN deleted_at IS NOT NULL THEN 'deleted'/);
     expect(sql).toMatch(/NOT blocked/);
-    // NEWS-Q17 ■3: 행 한도 없음(LIMIT 0) · id 차례
-    expect(sql).toMatch(/ORDER BY id$/);
-    expect(sql).not.toMatch(/LIMIT/);
+    // NEWS-Q17 ■3 · Q18 ■4: id 차례 · 안전 한도 50,000(+1 을 읽어 넘쳤는지 앎)
+    expect(sql).toMatch(/ORDER BY id LIMIT 50001$/);
     // 보관 · 지운 편은 날 수 제한 없음
     expect(sql).not.toMatch(/interval/);
     expect((query.mock.calls as unknown[][])[0][1]).toEqual([]);

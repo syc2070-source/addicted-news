@@ -126,6 +126,11 @@ export interface FieldProfile {
      * 제목 + 요약으로 판정(관문 1번 그대로 · 추가 호출 0). 없거나 0 이면 끔(옛 규칙: 본문 부실 건너뜀).
      */
     breaker_summary_min_chars?: number;
+    /**
+     * NEWS-Q18 ■2: 관문 앞 주제 거름(LLM 0 · topic_exclude.ts) — must ∧ context ∧ ¬except 이면 거부(사유 = id) ·
+     * 이미 실린 기사는 다음 실행 시작에 보관층으로(keep_ids = 되돌림). 없으면 끔.
+     */
+    topic_exclude?: Array<{ id: string; must: string[]; context: string[]; except: string[]; keep_ids?: number[]; sweep_created_before?: string }>;
   };
   prompts: {
     summary_system: string;
@@ -216,6 +221,18 @@ export interface FieldProfile {
   encyclopedia: { file: string; link_stop: string[] };
   /** Statory 보고서 API scenario_id */
   statory_scenario_id: string;
+  /** NEWS-Q18 ■3: TOP 무게 규칙 상수(articles/cluster_view TopRule) · 없으면 옛 규칙(묶음 크기) */
+  top_rank?: {
+    national_sources: string[];
+    national_bonus: number;
+    institution_words: string[];
+    institution_bonus: number;
+    local_words: string[];
+    local_patterns?: string[];
+    local_penalty: number;
+    per_report: number;
+    report_cap: number;
+  };
 }
 
 export class FieldProfileError extends Error {}

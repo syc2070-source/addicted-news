@@ -51,3 +51,46 @@ export class HostBreaker {
       .map(([h]) => h);
   }
 }
+
+/**
+ * NEWS-Q18 ■4: 피드 읽기 단락기(실행 하나 동안만) — 같은 호스트의 피드 읽기가 status(503) 로 maxRun(5) 번 잇달아 실패하면
+ * 이번 실행의 나머지 그 호스트 피드는 읽지 않고 건너뛴다(10-26: 구글뉴스 41 곳 503 · 소요 1,529초). 경보 0 · 다음 실행은 다시 시도.
+ * 503 이 아닌 결과(성공 · 다른 오류)가 오면 그 호스트 줄은 0 으로.
+ */
+export const FEED_BREAKER_STATUS = 503;
+export const FEED_BREAKER_RUN = 5;
+
+export class FeedStatusBreaker {
+  private run = new Map<string, number>();
+  private open = new Set<string>();
+  /** 이번 실행에서 건너뛴 피드 수(호스트별) */
+  readonly skipped: Record<string, number> = {};
+
+  constructor(
+    readonly status = FEED_BREAKER_STATUS,
+    readonly maxRun = FEED_BREAKER_RUN,
+  ) {}
+
+  /** 이 피드를 건너뛸까(건너뛰면 수를 센다). */
+  skip(url: string): boolean {
+    const h = hostOf(url);
+    if (!h || !this.open.has(h)) return false;
+    this.skipped[h] = (this.skipped[h] || 0) + 1;
+    return true;
+  }
+
+  /** 피드 읽기 한 번의 결과(실패면 HTTP 상태 · 성공이면 null 이 아닌 200 등). */
+  record(url: string, status: number | null): void {
+    const h = hostOf(url);
+    if (!h) return;
+    if (status === this.status) {
+      const n = (this.run.get(h) || 0) + 1;
+      this.run.set(h, n);
+      if (n >= this.maxRun) this.open.add(h);
+    } else this.run.set(h, 0);
+  }
+
+  tripped(): string[] {
+    return [...this.open];
+  }
+}
