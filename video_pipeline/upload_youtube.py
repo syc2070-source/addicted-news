@@ -285,7 +285,30 @@ def update_video_id(term_id, video_id):
 
 # ------------------------------ YouTube ----------------------------------
 
+def _refresh_reason(exc) -> str:
+    """Only the OAuth error code (e.g. invalid_grant) — never token material."""
+    for a in getattr(exc, "args", ()):
+        if isinstance(a, dict) and a.get("error"):
+            return str(a["error"])
+    return type(exc).__name__
+
+
+def _set_aside_expired(token: Path, now=None) -> Path:
+    """Move a refused token beside itself (<name>.expired-<MMDDHHMM>); never delete."""
+    import datetime as dt
+
+    stamp = (now or dt.datetime.now()).strftime("%m%d%H%M")
+    dest = token.with_name(f"{token.name}.expired-{stamp}")
+    n = 2
+    while dest.exists():
+        dest = token.with_name(f"{token.name}.expired-{stamp}-{n}")
+        n += 1
+    os.replace(token, dest)
+    return dest
+
+
 def _get_service():
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
@@ -296,8 +319,19 @@ def _get_service():
         creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except RefreshError as exc:
+                # A refused refresh (testing-mode 7-day expiry) used to crash before the login flow.
+                if os.environ.get("YOUTUBE_PUBLISHER_NONINTERACTIVE") == "1":
+                    raise PublicationStateError(
+                        f"refresh token이 거절됐습니다({_refresh_reason(exc)}). "
+                        "무인 실행이라 다시 로그인하지 않고 안전 중단합니다."
+                    ) from None
+                moved = _set_aside_expired(TOKEN_PATH)
+                print(f"[토큰 만료] 갱신 거절({_refresh_reason(exc)}) — 옛 토큰을 {moved.name} 로 옮기고 새 로그인으로 넘어갑니다.")
+                creds = None
+        if not creds or not creds.valid:
             if os.environ.get("YOUTUBE_PUBLISHER_NONINTERACTIVE") == "1":
                 raise PublicationStateError(
                     "무인 실행에 사용할 refresh token이 없습니다. "
