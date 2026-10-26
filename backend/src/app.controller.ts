@@ -28,8 +28,8 @@ export class AppController {
     return redactPublic(await this.appService.recentRuns(Number(limit) || 5));
   }
 
-  // GET /api/broadcast/archive?tier=all — NEWS-Q14 ■5 · Q15 ■1: 방송 보관 목록(id · tier · changedAt · videoId 만 · 보관 · 지운 편 전 기간 ·
-  // 실림 최근 120일 · 인증·비밀 0).
+  // GET /api/broadcast/archive?tier=all — NEWS-Q14 ■5 · Q15 ■1 · Q16 ■4 · Q17 ■3: 방송 보관 목록(id · news_id · tier · changedAt · videoId 만 ·
+  // 보관 · 지운 편 · 실림 모두 전 기간 · 행 한도 없음 · 인증·비밀 0).
   // SOC-R13 연대기가 읽는다. 기본 보관층만 · tier=all 이면 실림 포함. docs/BROADCAST_ARCHIVE_LIST.md.
   @Get('api/broadcast/archive')
   async getBroadcastArchive(@Query('tier') tier?: string) {

@@ -386,19 +386,21 @@ describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
       { id: 6141, tier: 'archive', changed: null },
     ]);
     const res = await broadcastArchiveList(query, { tier: 'archive', deletedAt: true });
-    expect(res?.truncated).toBe(false);
+    // NEWS-Q17 반박: 꼴 틀린 행(id 'x' · changed null)을 건너뛰었으니 「다 실었다」 아님
+    expect(res?.truncated).toBe(true);
     const items = res?.items;
     expect(items).toEqual([
-      { id: 5000, tier: 'deleted', changedAt: '2026-06-01T00:00:00.000Z', videoId: null },
-      { id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.120Z', videoId: 'abcdefghijk' },
+      { id: 5000, news_id: 5000, tier: 'deleted', changedAt: '2026-06-01T00:00:00.000Z', videoId: null },
+      { id: 5868, news_id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.120Z', videoId: 'abcdefghijk' },
     ]);
     const sql = sqlOf(query);
     expect(sql).toMatch(/source_type = 'broadcast'/);
     expect(sql).toMatch(/deleted_at IS NOT NULL OR tier = 'archive'/);
     expect(sql).toMatch(/WHEN deleted_at IS NOT NULL THEN 'deleted'/);
     expect(sql).toMatch(/NOT blocked/);
-    // 넘칠 때 보관 · 지운 편이 실림보다 먼저 남음
-    expect(sql).toMatch(/ORDER BY CASE WHEN [\s\S]* = 'publish' THEN 1 ELSE 0 END/);
+    // NEWS-Q17 ■3: 행 한도 없음(LIMIT 0) · id 차례
+    expect(sql).toMatch(/ORDER BY id$/);
+    expect(sql).not.toMatch(/LIMIT/);
     // 보관 · 지운 편은 날 수 제한 없음
     expect(sql).not.toMatch(/interval/);
     expect((query.mock.calls as unknown[][])[0][1]).toEqual([]);
@@ -432,7 +434,7 @@ describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
     const svc = new AppService({ isInitialized: true, query } as never);
     const out = redactArchiveList(await svc.broadcastArchive('all'));
     expect(out).toMatchObject({ tier: 'all', available: true, count: 1, truncated: false });
-    expect(out.items).toEqual([{ id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'abcdefghijk' }]);
+    expect(out.items).toEqual([{ id: 5868, news_id: 5868, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'abcdefghijk' }]);
     const text = JSON.stringify(out);
     for (const re of [/postgres(ql)?:\/\//i, /\.render\.com/i, /password/i, /sk-[a-z0-9]{16,}/i, /AIza[0-9A-Za-z_-]{20,}/]) {
       expect(text).not.toMatch(re);
@@ -441,9 +443,9 @@ describe('NEWS-Q14 ■5 · Q15 ■1 — 공개 방송 보관 목록', () => {
     const kept = redactArchiveList({
       ...out,
       items: [
-        { id: 1, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'sk-abcdefgh' },
-        { id: 2, tier: 'deleted', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'eyJabcdefgh' },
-        { id: 3, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'https://x/y' },
+        { id: 1, news_id: 1, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'sk-abcdefgh' },
+        { id: 2, news_id: 2, tier: 'deleted', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'eyJabcdefgh' },
+        { id: 3, news_id: 3, tier: 'archive', changedAt: '2026-10-23T03:00:41.000Z', videoId: 'https://x/y' },
       ],
     });
     expect(kept.items.map((x) => x.videoId)).toEqual(['sk-abcdefgh', 'eyJabcdefgh', null]);

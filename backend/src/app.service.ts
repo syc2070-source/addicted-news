@@ -138,7 +138,7 @@ export class AppService {
   private archiveCache: Partial<Record<'archive' | 'all', { at: number; value: ArchiveList }>> = {};
 
   /**
-   * NEWS-Q14 ■5 · Q15 ■1 · Q16 ■4: 공개 방송 보관 목록(id · tier · changedAt · videoId 만 · 보관 · 지운 편 · 실림 모두 전 기간 · days null · 60초 기억). tier 열이 없거나 DB 못 닿으면
+   * NEWS-Q14 ■5 · Q15 ■1 · Q16 ■4: 공개 방송 보관 목록(id · news_id · tier · changedAt · videoId 만 · Q17 행 한도 없음 · 보관 · 지운 편 · 실림 모두 전 기간 · days null · 60초 기억). tier 열이 없거나 DB 못 닿으면
    * available false · items [](200). 제목·내용·주소 0.
    */
   async broadcastArchive(tier: 'archive' | 'all', now = Date.now()): Promise<ArchiveList> {

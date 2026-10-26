@@ -7,7 +7,7 @@ import {
   fetchDurations,
 } from './youtube_api';
 import { fieldProfile } from './field_profile';
-import { ARCHIVE_LIST_MAX, broadcastArchiveList } from './broadcast_archive_list';
+import { broadcastArchiveList } from './broadcast_archive_list';
 
 const FAKE_KEY = 'test-youtube-key-not-real';
 
@@ -82,17 +82,23 @@ describe('NEWS-Q15 ■2 — 길이 ≤ 180초 = 클립(제목 [full] · 방송 �
 });
 
 // ---------- ■1 보관 목록 잘림 ----------
-describe('NEWS-Q15 ■1 — 보관 목록 잘림 표시', () => {
-  it('MAX+1 을 읽어 넘치면 truncated · MAX 까지만 · 딱 MAX 면 잘림 아님', async () => {
+describe('NEWS-Q15 ■1 · Q17 ■3 — 보관 목록은 다 싣는다(잘림 = 건너뛴 행이 있을 때만)', () => {
+  // NEWS-Q17 ■3: 행 한도를 없앰 → 5,001 행도 다 내보내고 truncated 는 늘 false(칸은 그대로)
+  it('NEWS-Q17: 한도 없음 — 5,001 행 그대로 · truncated false · news_id = id · LIMIT 없음', async () => {
     const mk = (n: number) =>
       Array.from({ length: n }, (_, i) => ({ id: i + 1, source_url: null, tier: 'archive', changed: String(1_700_000_000_000 + i) }));
-    const over = await broadcastArchiveList(jest.fn().mockResolvedValue(mk(ARCHIVE_LIST_MAX + 1)), { tier: 'archive', deletedAt: false });
-    expect([over?.truncated, over?.items.length]).toEqual([true, ARCHIVE_LIST_MAX]);
-    const exact = await broadcastArchiveList(jest.fn().mockResolvedValue(mk(ARCHIVE_LIST_MAX)), { tier: 'archive', deletedAt: false });
-    expect([exact?.truncated, exact?.items.length]).toEqual([false, ARCHIVE_LIST_MAX]);
+    const all = await broadcastArchiveList(jest.fn().mockResolvedValue(mk(5001)), { tier: 'archive', deletedAt: false });
+    expect([all?.truncated, all?.items.length]).toEqual([false, 5001]);
+    expect(all?.items.every((x) => x.news_id === x.id)).toBe(true);
     const q = jest.fn().mockResolvedValue([]);
     await broadcastArchiveList(q, { tier: 'archive', deletedAt: false });
-    expect(String((q.mock.calls as unknown[][])[0][0])).toMatch(new RegExp(`LIMIT ${ARCHIVE_LIST_MAX + 1}`));
+    expect(String((q.mock.calls as unknown[][])[0][0])).not.toMatch(/LIMIT/);
+    // 반박: 꼴이 틀려 건너뛴 행이 하나라도 있으면 truncated true(받는 쪽이 빠진 id 를 숨김으로 읽지 않게) · pg bigint 글 id 는 그대로 읽힘
+    const some = await broadcastArchiveList(
+      jest.fn().mockResolvedValue([...mk(2), { id: '7', source_url: null, tier: 'archive', changed: '1700000000000' }, { id: 9, tier: 'archive', changed: null }]),
+      { tier: 'archive', deletedAt: false },
+    );
+    expect([some?.truncated, some?.items.map((x) => x.id)]).toEqual([true, [1, 2, 7]]);
   });
 });
 
