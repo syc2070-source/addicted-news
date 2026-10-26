@@ -3,6 +3,7 @@ NEWS-Q17 보고서 · 10-26 첫 실전 읽기 · 남은 판정 둘 · 보관 목
   받는 쪽 읽는 법: available === true ∧ tier === "all" ∧ truncated === false 일 때만 「빠진 id = 숨김」.
 지시서: docs/reports/202610/NEWS-Q17_instruction.txt · 가지 claude/news-q17(main f70d438 에서 · 로컬 main 이 40 커밋 뒤라 pull 로 맞춤)
 커밋: ⓐ d35ab42 지시서 [skip render](push 13:1x) · ⓑ 41472cc 코드(push 13:18 · 13:00 뒤) · ⓒ 이 보고서 [skip render]
+함께 실림: 가지에 b0f05fd(video_pipeline/upload_youtube.py · 만료 토큰이면 옆 이름으로 옮기고 새 로그인 · VIDEO-5 덧 2 가 넣음)가 d35ab42 와 41472cc 사이에 있어 ⓑ push(13:18)에 그대로 포함 · 되돌림 0 · 중독뉴스 백엔드 · 화면 영향 0.
 배포: health commit 41472cc(13:20 확인) · 보관 목록 ?tier=all 200 · 0.38초 · 6.5KB · 59(보관 38 · 실림 21) · days null · truncated false · 항목 칸 id · news_id · tier · changedAt · videoId(news_id = id 59/59) ·
   GET /reports 200 · 1.42초(Statory 2 편 그대로).
 
