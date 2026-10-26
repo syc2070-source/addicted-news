@@ -40,7 +40,7 @@ describe('NEWS-Q18 ■2 — 음주운전 단속·캠페인·사고 = 관문 앞 
       if (sql.startsWith('SELECT')) {
         return [
           { id: 10, title: '해경 음주운전 예방 캠페인', summary: '', tier: 'publish' },
-          { id: 11, title: '음주운전 재범자 치료 확대', summary: '단속', tier: 'publish' },
+          { id: 11, title: '음주운전 재범자 치료명령 확대', summary: '단속', tier: 'publish' },
           { id: 12, title: '음주운전 일제 단속', summary: '', tier: 'archive' },
           { id: 30, title: '음주운전 단속 통계', summary: '', tier: 'archive' },
         ];
@@ -126,19 +126,19 @@ describe('NEWS-Q18 ■3 — TOP = 무게(전국 · 기관 · 지역 캠페인 ·
     id, title, source, sourceUrl: '', publishedAt: '', publishedTs: null, sourceGrade: grade, category: null, ts: now - hoursAgo * 3600000,
   });
 
-  it('설정 상수(전국 +2 · 기관 +2 · 지역 −2 · 건수 0.5 · 상한 2)', () => {
-    expect([rule.national_bonus, rule.institution_bonus, rule.local_penalty, rule.per_report, rule.report_cap]).toEqual([2, 2, -2, 0.5, 2]);
+  it('설정 상수(전국 +1(Q19 · Q18 은 +2) · 기관 +2 · 지역 −2 · 건수 0.5 · 상한 2)', () => {
+    expect([rule.national_bonus, rule.institution_bonus, rule.local_penalty, rule.per_report, rule.report_cap]).toEqual([1, 2, -2, 0.5, 2]);
     expect(rule.national_sources).toEqual(expect.arrayContaining(['연합뉴스', '뉴시스', '동아일보']));
   });
 
   it('점수: 지역 캠페인 4건 묶음 < 장관 · 전국 매체 · 단독 연구', () => {
     const camp = row(1, '봉화군보건소, 찾아가는 금연서비스 운영 - 산청인터넷신문', '산청인터넷신문', 2);
-    expect(scoreTopGroup([camp], camp, 4, rule)).toEqual({ national: false, institution: false, local: true, reports: 1.5, score: -0.5 });
+    expect(scoreTopGroup([camp], camp, 4, rule)).toEqual({ national: false, institution: false, local: true, offTopic: false, reports: 1.5, score: -0.5 });
     const min = row(2, '원민경 성평등가족부 장관, 도박문제예방치유원 방문', '뉴스핌', 5);
-    expect(scoreTopGroup([min], min, 6, rule).score).toBe(6);
+    expect(scoreTopGroup([min], min, 6, rule).score).toBe(5);
     // 리뷰: 「장관」 낱말만으로는 기관 아님(부처 이름이 있어야)
     const bare = row(5, '원민경 장관, 치유원 방문', '뉴스핌', 5);
-    expect(scoreTopGroup([bare], bare, 6, rule).score).toBe(4);
+    expect(scoreTopGroup([bare], bare, 6, rule).score).toBe(3);
     // 구글뉴스(출처 이름 없음)는 제목 끝 「 - 매체」로 전국 매체를 앎 · 학술 등급 = 기관
     const g = row(3, '불법 도박사이트 공급조직 적발 - 연합뉴스', 'Google News (KR)', 3);
     expect(scoreTopGroup([g], g, 1, rule).national).toBe(true);
@@ -162,7 +162,7 @@ describe('NEWS-Q18 ■3 — TOP = 무게(전국 · 기관 · 지역 캠페인 ·
     add([row(30, '청소년 게임 이용 조사 결과 2', '뉴스1', 3)]);
     const neu = rankTopWeighted(light, index, now, rule, 3);
     expect(neu.map((p) => p.id)).toEqual([11, 20, 30]);
-    expect(neu[0].score.score).toBe(4.5);
+    expect(neu[0].score.score).toBe(3.5);
     expect(rankTop(light, index, now, 3)[0].id).toBe(1);
   });
 
@@ -175,7 +175,7 @@ describe('NEWS-Q18 ■3 — TOP = 무게(전국 · 기관 · 지역 캠페인 ·
     expect(one('정부에 베팅하라', 'La Tercera').institution).toBe(false);
     expect(one('FUNDING CUTS HIT clinics', 'Reuters').institution).toBe(false);
     expect(one('국립대 축제서 주류 판매 논란').institution).toBe(false);
-    expect(one('복지부, 마약 치료보호기관 운영 확대 - 연합뉴스', 'Google News (KR)')).toMatchObject({ institution: true, local: false, score: 4 });
+    expect(one('복지부, 마약 치료보호기관 운영 확대 - 연합뉴스', 'Google News (KR)')).toMatchObject({ institution: true, local: false, score: 3 });
     expect(one('국회서 도박 대책 토론회 개최')).toMatchObject({ institution: true, local: false });
     expect(one('익산시, 청소년 도박 예방 교육 실시')).toMatchObject({ local: true, score: -2 });
     const light = new Map<number, LightRow>([
@@ -188,7 +188,7 @@ describe('NEWS-Q18 ■3 — TOP = 무게(전국 · 기관 · 지역 캠페인 ·
     const info: ClusterInfo = { clusterId: 'b', size: 2, representativeId: 2, memberIds: [2, 3] };
     index.set(2, info);
     index.set(3, info);
-    // A(2 · 1시간 전) · B(2 + 0.5 · 묶음 2) · C(2) → B 먼저 · 그다음 동점 A · C 는 최신 순
+    // A(1 · 1시간 전) · B(1 + 0.5 · 묶음 2) · C(1) → B 먼저 · 그다음 동점 A · C 는 최신 순
     expect(rankTopWeighted(light, index, now, rule, 3).map((p) => p.id)).toEqual([2, 1, 4]);
   });
 

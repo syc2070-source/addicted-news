@@ -110,6 +110,7 @@ describe('broadcast_gate — 방송 전용 관문(NEWS-Q11 ■2)', () => {
       topic_fit_false: 0,
       duplicate: 0,
       judgment_missing: 0,
+      topic_exclude: 0,
     });
   });
 });

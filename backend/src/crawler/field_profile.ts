@@ -232,6 +232,10 @@ export interface FieldProfile {
     local_penalty: number;
     per_report: number;
     report_cap: number;
+    /** NEWS-Q19 ■3: 묶음 제목에 분야 핵심어(topicTitleWords)가 하나도 없으면 더함(예: -1) · 없거나 0 이면 끔 */
+    off_topic_penalty?: number;
+    /** NEWS-Q19 리뷰: 기존 목록에 없는 제목 핵심어(TOP 감점 판단에만 · 수집 · 묶음 셈에는 안 씀) */
+    topic_words_extra?: string[];
   };
 }
 
@@ -331,4 +335,17 @@ export function flattenLang(block?: LangKeys): string[] {
   if (!block) return [];
   const rest = Object.keys(block).filter((k) => k !== 'ko' && k !== 'en' && !k.startsWith('_'));
   return ['ko', 'en', ...rest].flatMap((k) => (Array.isArray(block[k]) ? (block[k] as string[]) : [])).filter(Boolean);
+}
+
+/**
+ * NEWS-Q19 ■3: 제목 분야 핵심어 = 기존 목록 재사용(keywords.strong 모든 언어 + keywords.core + keywords.groups 낱말)
+ * + top_rank.topic_words_extra(리뷰 · TOP 전용) · 소문자 · 겹침 뺌.
+ * categories.keywords(정책 · 정부 · 교육 류)는 넓어서 넣지 않는다.
+ */
+export function topicTitleWords(p: FieldProfile = fieldProfile()): string[] {
+  const groups = Object.entries(p.keywords.groups || {})
+    .filter(([k, v]) => !k.startsWith('_') && Array.isArray(v))
+    .flatMap(([, v]) => v as string[]);
+  const all = [...flattenLang(p.keywords.strong), ...(p.keywords.core || []), ...groups, ...(p.top_rank?.topic_words_extra || [])];
+  return [...new Set(all.map((w) => String(w || '').trim().toLowerCase()).filter(Boolean))];
 }

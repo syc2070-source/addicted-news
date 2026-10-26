@@ -65,10 +65,11 @@ GET https://addicted-news-backend.onrender.com/api/broadcast/archive?tier=all
 
 ## changedAt 이 뜻하는 때
 
-- NEWS-Q14 부터 층을 옮기는 실행(설정 `archive_ids` · `keep_ids` · 스팸 `spam_publishers.archive_ids` · NEWS-Q16 다시 판정 `rejudge_once` 의 yes)은 `updated_at` 을 함께 바꾼다 → 옮긴 때.
+- NEWS-Q14 부터 층을 옮기는 실행(설정 `archive_ids` · `keep_ids` · 스팸 `spam_publishers.archive_ids` · NEWS-Q16 다시 판정 `rejudge_once` 의 yes · NEWS-Q19 주제 거름 `gate.topic_exclude` 의 방송 쓸기 = 음주운전 단속·사고 편 실림 → 보관 · 그 `keep_ids` 되돌림)은 `updated_at` 을 함께 바꾼다 → 옮긴 때.
 - 관문(언급 = partial)이나 같은 편 묶기(예고 · 클립 · 같은 회차 · 관련 클립 · 쇼츠 길이 이하)로 **처음부터 보관층에 저장된** 행 = 저장된 때.
 - Q14 전에 옮긴 행(NEWS-Q12 `archive_ids` 11 편 · 10-23 12:00 실행) = 옮김 전 마지막으로 고친 때(대개 저장된 때). 옮긴 날은 `/api/health/runs` 의 `progress.broadcastArchivedIds` 로 맞춘다.
 - NEWS-Q16 ■1 재업로드 방송의 날짜 맞춤(`published_at` = 원 방송일)은 층을 바꾸지 않으므로 `updated_at` 을 건드리지 않는다.
+  편집본(여러 회차를 묶은 영상 · 설명에 「…에 방송된 …의 일부」 줄이 여럿)은 **가장 이른 방송일**로 놓는다(NEWS-Q19 ■4 · CTO 답 10-26 · 제목에 방송일이 있으면 제목이 먼저).
 - 그림 채우기 같은 다른 고침도 이 시각을 뒤로 민다(층은 `tier` 로 본다).
 
 ## SOC-R13 · R14 이 읽는 법(권장)
@@ -91,3 +92,4 @@ GET https://addicted-news-backend.onrender.com/api/broadcast/archive?tier=all
 | 2026-10-25 | NEWS-Q16 ■4 | `?tier=all` 의 실림도 **전 기간**(120일 제한 없앰) · `days` 가 `120` → **`null`** — 숫자로만 읽던 코드는 `null` 을 「제한 없음」으로 읽어야 한다 · 「120일 밖 publish id 는 마지막 층 유지」 규칙(읽는 법 4 옛 판)은 이제 필요 없음 |
 | 2026-10-26 | NEWS-Q17 ■3 | **v1 확정** · 항목 칸 `news_id`(= `id`) 더함(기존 칸 이름 · 뜻 그대로) · 행 한도 5,000 없앰 → `truncated` 는 건너뛴 행이 있을 때만 `true` · 정렬은 `id` 오름차순 그대로 · 읽는 법 4 에 `available` · `tier` · `truncated` 세 조건 |
 | 2026-10-26 | NEWS-Q18 ■4 | 행 안전 한도 50,000(넘으면 `truncated: true` · 칸 · 뜻 그대로) · 읽는 법 4 의 「빠진 id = 숨김」은 **선택 규칙 · 중독사회는 쓰지 않음(목록에 없으면 보임)** |
+| 2026-10-26 | NEWS-Q19 ■4 | 칸 · 뜻 그대로 · 방송도 음주운전 주제 거름(실림 → `archive` 로 옮길 수 있음 · 10-26 실측 걸리는 실림 편 0) · 편집본 원 방송일 = 가장 이른 날(10-26 실측 날짜 바뀌는 편 0) |

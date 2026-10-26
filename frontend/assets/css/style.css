@@ -711,6 +711,19 @@ a {
 }
 
 @media (max-width: 768px) {
+  /* NEWS-Q19 ■5: 폰 — 단추 둘(중독사회 · 라파공동체)이 로고 위에 겹치던 것 → 로고 아래 가운데 줄로 내림 */
+  .header-logo {
+    padding: 16px 0 12px;
+  }
+  .header-logo .logo {
+    max-width: 100%;
+  }
+  .header-sub-links {
+    position: static;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
   .content-wrapper.layout-1-2-1 {
     grid-template-columns: 1fr;
   }

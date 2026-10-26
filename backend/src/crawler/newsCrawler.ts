@@ -52,7 +52,7 @@ import { FEED_BREAKER_RUN, FEED_BREAKER_STATUS, FeedStatusBreaker, HostBreaker }
 import { attemptsFromRuns, planPromotion, standbyLast } from './blocked_promote';
 import { archiveSpamArticles, spamPublisherOf } from './spam_publisher';
 import { alignAiredDates } from './broadcast_aired';
-import { TopicExcludeRule, sweepTopicExcluded, topicExcludeHit } from './topic_exclude';
+import { TopicExcludeRule, sweepTopicExcluded, sweepTopicExcludedBroadcasts, topicExcludeHit } from './topic_exclude';
 import { columnExists } from './schema_probe';
 import { rejudgeBroadcasts, rejudgeStateFromRuns } from './broadcast_rejudge';
 import { breakerSummaryOf } from './breaker_summary';
@@ -926,6 +926,25 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
         crawlStats.dupPreSkip++;
         stat.dup++;
         gate.reject.duplicate++;
+        continue;
+      }
+      // NEWS-Q19 ■4: 기사와 같은 관문 앞 주제 거름(제목 + 설명 · 음주운전 단속·사고 특집 = 분야 아님 · DeepSeek 0 · 애매하면 관문으로)
+      const excluded = topicExcludeHit(item.title, (item.description || '').slice(0, TOPIC_EXCLUDE_CHARS), TOPIC_EXCLUDE);
+      if (excluded) {
+        countTopicExcluded(`broadcast:${excluded}`);
+        crawlStats.broadcastRejected++;
+        stat.rejected++;
+        gate.reject.topic_exclude = (gate.reject.topic_exclude || 0) + 1;
+        RUN.groups.add(kwGroups, 'rejected');
+        console.log(`  │   🚫 방송 주제 거름(${excluded}): ${item.title.slice(0, 40)}`);
+        const provCat = classifyCategory(item.title, item.description, DEFAULT_CATEGORY);
+        rejectedAll.push({
+          title: item.title, originalTitle: item.title, summary: null,
+          category: provCat, source: source.program, sourceUrl: item.url, googleUrl: null,
+          publishedAt: buildBroadcastRow(source, item, { category: provCat }).publishedAt,
+          lang: 'ko', sourceType: BROADCAST_SOURCE_TYPE, rejectReason: `broadcast:${excluded}`,
+          confidence: null, domain: null,
+        });
         continue;
       }
       if (!deepseekRoomLeft()) {
@@ -2287,6 +2306,12 @@ async function main() {
   }
   // NEWS-Q16 ■1: 이미 저장된 재업로드 방송 → 원 방송일(published_at · 층 · updated_at 그대로 · 몇 번 돌아도 같음)
   if (RUN.query) RUN.rawBodyCol = await columnExists(RUN.query, 'articles', 'raw_body');
+  // NEWS-Q19 ■4: 이미 실린 방송도 같은 주제 거름(제목 + 설명 앞부분) → 보관층(지움 0 · keep_ids 되돌림)
+  if (TOPIC_EXCLUDE.length && RUN.flags.tier && RUN.query) {
+    const bw = await sweepTopicExcludedBroadcasts(RUN.query, TOPIC_EXCLUDE, { deletedAt: RUN.flags.deletedAt, rawBody: RUN.rawBodyCol }, TOPIC_EXCLUDE_CHARS);
+    progress.topicExcluded = { ...(progress.topicExcluded || { rejected: {} }), broadcastSweep: bw };
+    console.log(`🚫 주제 거름 이미 실린 방송: 읽음 ${bw.checked} · 보관으로 ${bw.archived.length} · 되돌림 ${bw.restored.length}${bw.error ? ' · 오류' : ''}`);
+  }
   const airedDays = PROFILE.sources.broadcast.aired_date_min_days;
   if (Number(airedDays) > 0 && RUN.query) {
     progress.broadcastAired = await alignAiredDates(

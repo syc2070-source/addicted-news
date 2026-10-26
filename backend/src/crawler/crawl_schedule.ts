@@ -295,7 +295,8 @@ export interface RunProgress {
   /** NEWS-Q16 ■2: 방송 관문 한 번 다시 판정(설정 rejudge_once) */
   broadcastRejudge?: RejudgeRecord;
   /** NEWS-Q18 ■2: 관문 앞 주제 거름 — 이번 실행 거부 수(규칙 id 별) · 실행 시작에 이미 실린 기사를 보관으로 옮긴 기록 */
-  topicExcluded?: { rejected: Record<string, number>; sweep?: TopicExcludeSweep };
+  /** NEWS-Q19 ■4: broadcastSweep = 이미 실린 방송 쓸기 · rejected 의 'broadcast:<id>' = 방송 관문 앞 거름 수 */
+  topicExcluded?: { rejected: Record<string, number>; sweep?: TopicExcludeSweep; broadcastSweep?: TopicExcludeSweep };
   /** NEWS-Q18 ■4: 같은 호스트 503 이 잇달아 나서 이번 실행에서 건너뛴 피드 수(호스트별) */
   hostBreaker503?: { tripped: string[]; skipped: Record<string, number> };
 }

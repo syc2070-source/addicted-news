@@ -4,7 +4,8 @@
 //   핵심어(0원 · 분야 설정 sources.broadcast.keywords) ∧ DeepSeek 한 질문(분야 설정 prompts.broadcast_gate)
 //   → yes = publish(방송 줄) · partial = archive(방송 보관층 · 포털 비노출) · no = reject(topic_fit_false)
 // 판정이 없으면(호출 실패·칸 누락) 저장도 거부도 하지 않는다(fail-closed · 다음 실행이 다시 본다).
-// 거부 사유 = no_keyword(세기만 · 격리 0) · topic_fit_false(격리 rejected_articles 'broadcast:topic_fit_false') · duplicate(세기만).
+// 거부 사유 = no_keyword(세기만 · 격리 0) · topic_fit_false(격리 rejected_articles 'broadcast:topic_fit_false') · duplicate(세기만)
+// · topic_exclude(NEWS-Q19 ■4 · 관문 앞 주제 거름 · 격리 'broadcast:<규칙 id>' · DeepSeek 0).
 // ============================================================
 import { fieldProfile } from './field_profile';
 import { keywordGroupNames, OTHER_GROUP } from './keyword_groups';
@@ -23,7 +24,9 @@ export type BroadcastGateReason =
   | 'no_keyword'
   | 'topic_fit_false'
   | 'duplicate'
-  | 'judgment_missing';
+  | 'judgment_missing'
+  /** NEWS-Q19 ■4: 관문 앞 주제 거름(gate.topic_exclude · 제목 + 설명 · LLM 0) — 격리 'broadcast:<규칙 id>' */
+  | 'topic_exclude';
 
 export type BroadcastGateDecision =
   | { action: 'publish'; subtopic: string }
@@ -74,6 +77,7 @@ export function emptyBroadcastGateStats(): BroadcastGateStats {
       topic_fit_false: 0,
       duplicate: 0,
       judgment_missing: 0,
+      topic_exclude: 0,
     },
     subtopics: {},
     folded: { clip: 0, episode_dup: 0, related: 0 },

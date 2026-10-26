@@ -91,7 +91,7 @@ function daysBetween(a: string, b: string): number {
 }
 
 /**
- * 제목 → (없으면) 설명에서 「방송·방영」 낱말이 든 줄(LINE_SKIP 뺌) → 원 방송일. 날짜 바로 뒤에 방송·방영이 오거나
+ * 제목 → (없으면) 설명에서 「방송·방영」 낱말이 든 줄(LINE_SKIP 뺌 · 여러 줄이면 가장 이른 날 · NEWS-Q19) → 원 방송일. 날짜 바로 뒤에 방송·방영이 오거나
  * (제목 맨 끝 8자리 · (yy.mm.dd)) · 설명 「방송일 :」 이름표 뒤여야 함. 게시일보다 뒤인 날(예정 안내)은 버림.
  * minDays 없거나 0 이면 끔(null).
  */
@@ -116,11 +116,20 @@ export function originalAirDate(
   let from: AiredDate['from'] = 'title';
   if (!aired) {
     from = 'description';
+    // NEWS-Q19 ■4(CTO 답 10-26): 편집본(여러 회차 묶음 · 「※ 이 영상은 …에 방송된 …의 일부」 여러 줄) = 가장 이른 방송일
+    // 리뷰(Q19): 「방송일 :」 이름표가 있으면 그것이 먼저(다른 줄의 지나가는 옛 편 언급으로 바뀌지 않게)
+    let labeled: string | null = null;
     for (const line of (description || '').split(/\r?\n/)) {
       if (!/방송|방영/.test(line) || LINE_SKIP.test(line)) continue;
-      aired = tryAll(line, LINE_PICKS);
-      if (aired) break;
+      const l = tryAll(line, [LABELED]);
+      if (l) {
+        labeled = labeled || l;
+        continue;
+      }
+      const v = tryAll(line, LINE_PICKS);
+      if (v && (!aired || v < aired)) aired = v;
     }
+    if (labeled) aired = labeled;
   }
   if (!aired) return null;
   return { aired, uploaded, reupload: daysBetween(aired, uploaded) > Number(minDays), from };

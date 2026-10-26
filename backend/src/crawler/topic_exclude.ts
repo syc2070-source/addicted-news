@@ -5,8 +5,10 @@
 // 애매하면 통과(관문이 판정) — except 낱말이 하나라도 있으면 거르지 않는다.
 // 이미 실린 기사: 다음 실행 시작에 같은 규칙으로 보관층으로(행 지움 0 · keep_ids = 되돌림 · 몇 번 돌아도 같음).
 // 규칙 낱말은 분야 설정 gate.topic_exclude(코드 변경 없이 조정).
+// NEWS-Q19 ■4: 방송도 같은 규칙(관문 앞 = 제목 + 설명 · 이미 실린 방송 = sweepTopicExcludedBroadcasts).
 // ============================================================
 import { QueryFn, returnedRows } from './broadcast_episode';
+import { parseBroadcastRawBody } from './broadcast_aired';
 
 export interface TopicExcludeRule {
   /** 거부 사유 코드(rejected_articles.reject_reason) */
@@ -100,6 +102,65 @@ export async function sweepTopicExcluded(
       const res = await query(
         `UPDATE articles SET tier = 'archive', updated_at = now()
           WHERE id = $1 AND COALESCE(tier, 'publish') = 'publish' AND (source_type IS NULL OR source_type <> 'broadcast') RETURNING id`,
+        [id],
+      );
+      if (returnedRows(res).length) out.archived.push({ id, rule: hit, title: title.slice(0, 120) });
+    }
+  } catch {
+    out.error = true;
+  }
+  return out;
+}
+
+/**
+ * NEWS-Q19 ■4: 이미 저장된 방송(막힘 아님) 가운데 규칙에 걸리는 실림 편 → 보관층(updated_at = 옮긴 때 · 지움 0).
+ * 글 = 제목 + raw_body 의 설명 앞 chars 자(관문 앞 거름과 같은 글 → 몇 번 돌아도 같음 · 쓸기 마감 없음) ·
+ * raw_body 가 없는 행(열이 없는 DB 포함)은 건너뜀. keep_ids 가운데 걸리는 보관 편은 실림으로 되돌림(keep 에는 이 규칙으로 잘못 보관된 id 만).
+ */
+export async function sweepTopicExcludedBroadcasts(
+  query: QueryFn,
+  rules: TopicExcludeRule[] = [],
+  cols: { deletedAt: boolean; rawBody: boolean },
+  chars = 600,
+): Promise<TopicExcludeSweep> {
+  const out: TopicExcludeSweep = { checked: 0, archived: [], restored: [] };
+  const live = rules.filter((r) => r?.id && r.must?.length);
+  if (!live.length) return out;
+  const likes = [...new Set(live.flatMap((r) => r.must))].map((w) => `%${w.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+  const keep = new Set(live.flatMap((r) => r.keep_ids || []).filter((n) => Number.isInteger(n) && n > 0));
+  try {
+    const rows = (await query(
+      `SELECT id, title, ${cols.rawBody ? 'raw_body' : 'NULL AS raw_body'}, COALESCE(tier, 'publish') AS tier FROM articles
+        WHERE source_type = 'broadcast' AND NOT blocked${cols.deletedAt ? ' AND deleted_at IS NULL' : ''}
+          AND (title LIKE ANY($1::text[])${cols.rawBody ? ' OR raw_body LIKE ANY($1::text[])' : ''})
+        ORDER BY id`,
+      [likes],
+    )) as Array<{ id?: unknown; title?: unknown; raw_body?: unknown; tier?: unknown }>;
+    for (const r of rows || []) {
+      out.checked++;
+      const id = Number(r.id);
+      if (!Number.isInteger(id)) continue;
+      const title = typeof r.title === 'string' ? r.title : '';
+      // 리뷰(Q19): raw_body 가 없으면 관문 앞 거름이 본 설명을 모름 → 건드리지 않음(제목만으로 보관하지 않게 · 애매하면 통과)
+      const raw = typeof r.raw_body === 'string' ? r.raw_body : '';
+      if (!raw) continue;
+      const desc = parseBroadcastRawBody(raw).description;
+      const hit = topicExcludeHit(title, desc.slice(0, chars), live);
+      if (!hit) continue;
+      if (keep.has(id)) {
+        if (r.tier === 'archive') {
+          const res = await query(
+            `UPDATE articles SET tier = 'publish', updated_at = now() WHERE id = $1 AND tier = 'archive' AND source_type = 'broadcast' RETURNING id`,
+            [id],
+          );
+          if (returnedRows(res).length) out.restored.push(id);
+        }
+        continue;
+      }
+      if (r.tier !== 'publish') continue;
+      const res = await query(
+        `UPDATE articles SET tier = 'archive', updated_at = now()
+          WHERE id = $1 AND COALESCE(tier, 'publish') = 'publish' AND source_type = 'broadcast' RETURNING id`,
         [id],
       );
       if (returnedRows(res).length) out.archived.push({ id, rule: hit, title: title.slice(0, 120) });

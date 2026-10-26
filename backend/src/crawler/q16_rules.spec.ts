@@ -151,7 +151,8 @@ describe('NEWS-Q16 ■1 — 재업로드 방송은 원 방송일로(규칙 · LL
 describe('NEWS-Q16 ■2 — 관문 no 예시 넷 · 4 편 한 번 다시 판정', () => {
   it('관문 질문에 no 예시 넷(독극물 사건 · 검찰 개혁 일반 · 파출소 일반 · 응급구조 일반)', () => {
     const s = broadcastGateSystem()!;
-    expect(s).toMatch(/no 예시 넷/);
+    // NEWS-Q19 ■4: ⑤(음주운전 단속·사고 특집)가 더해져 다섯 — Q16 의 넷은 그대로
+    expect(s).toMatch(/no 예시 다섯/);
     expect(s).toMatch(/독극물 사건/);
     expect(s).toMatch(/검찰 개혁 일반/);
     expect(s).toMatch(/파출소·지구대 일반/);

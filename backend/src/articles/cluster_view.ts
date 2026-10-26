@@ -117,7 +117,8 @@ export function rankTop(
 /**
  * NEWS-Q18 ■3(오너 결정 10-26): TOP 무게 규칙 — 상수는 분야 설정 top_rank(코드 변경 없이 조정).
  * 묶음 점수 = 전국 매체(묶음 안 한 곳이라도) + 기관 발표(묶음 안 제목 핵심어 · 출처 등급 institution/academic) + 지역 캠페인·홍보(보이는 제목) +
- *   같은 소식 건수(per_report × (묶음 수 − 1) · 상한 report_cap). 동점 = 묶음 큰 것 → 최신. 창 72시간 · 묶음이 take 보다 적으면 7일.
+ *   같은 소식 건수(per_report × (묶음 수 − 1) · 상한 report_cap) + 제목 분야 핵심어 없음(off_topic_penalty · NEWS-Q19 ■3).
+ *   동점 = 묶음 큰 것 → 최신. 창 72시간 · 묶음이 take 보다 적으면 7일.
  */
 export interface TopRule {
   national_sources: string[];
@@ -130,12 +131,17 @@ export interface TopRule {
   local_penalty: number;
   per_report: number;
   report_cap: number;
+  /** NEWS-Q19 ■3: 묶음 제목(「 - 매체」 꼬리 뺌) 어디에도 topic_words 가 없으면 더함(예: -1) · 없거나 0 · topic_words 가 비면 끔 */
+  off_topic_penalty?: number;
+  /** 분야 핵심어(소문자 · field_profile topicTitleWords) — 설정 파일이 아니라 부르는 쪽이 채움 */
+  topic_words?: string[];
 }
 
 export interface TopScore {
   national: boolean;
   institution: boolean;
   local: boolean;
+  offTopic: boolean;
   reports: number;
   score: number;
 }
@@ -184,9 +190,22 @@ export function scoreTopGroup(rows: LightRow[], shown: LightRow, size: number, r
   const local =
     !institution && (anyWord(shownTitle, rule.local_words) || patterns.some((re) => !!re && re.test(shownTitle)));
   const reports = Math.min(rule.report_cap, rule.per_report * Math.max(0, size - 1));
+  // NEWS-Q19 ■3: 묶음 제목 어디에도 분야 핵심어가 없으면 감점(느슨한 전국 기사가 +1 만으로 올라오지 않게)
+  // 리뷰(Q19): 제목 끝 「 - 매체」 꼬리는 빼고 봄(「…인터넷신문」이 핵심어로 맞지 않게) · 보이는 제목 하나가 아니라 묶음 전부
+  const words = rule.topic_words || [];
+  const onTopic = (t: string) => {
+    const tail = titleOutlet(t);
+    const body = (tail ? t.slice(0, t.length - tail.length - 3) : t).toLowerCase();
+    return words.some((w) => w && body.includes(w));
+  };
+  const offTopic = !!rule.off_topic_penalty && words.length > 0 && ![shown, ...rows].some((r) => onTopic(r.title || ''));
   const score =
-    (national ? rule.national_bonus : 0) + (institution ? rule.institution_bonus : 0) + (local ? rule.local_penalty : 0) + reports;
-  return { national, institution, local, reports, score: Math.round(score * 100) / 100 };
+    (national ? rule.national_bonus : 0) +
+    (institution ? rule.institution_bonus : 0) +
+    (local ? rule.local_penalty : 0) +
+    (offTopic ? rule.off_topic_penalty || 0 : 0) +
+    reports;
+  return { national, institution, local, offTopic, reports, score: Math.round(score * 100) / 100 };
 }
 
 export function rankTopWeighted(

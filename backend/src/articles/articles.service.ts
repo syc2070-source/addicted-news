@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, In, IsNull, LessThan, Like, Not, Or, Repository } from 'typeorm';
 import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
-import { fieldProfile } from '../crawler/field_profile';
+import { fieldProfile, topicTitleWords } from '../crawler/field_profile';
 import { ClusterInfo, clusterDocs, clusterRules, docTs, leadOf, paraOf, pickRepresentative } from '../crawler/event_cluster';
 import { GroupMode, LightRow, groupIds, membersOf, rankTop, rankTopWeighted, shownId, visibleSql } from './cluster_view';
 
@@ -361,8 +361,11 @@ export class ArticlesService implements OnModuleInit {
       take: 3,
     }))).filter((a) => a.isFresh);
     // NEWS-Q18 ■3: 분야 설정 top_rank 가 있으면 무게 규칙(전국 매체 · 기관 발표 · 지역 캠페인 · 같은 소식 건수) · 없으면 옛 규칙(묶음 크기)
+    // NEWS-Q19 ■3: 제목 분야 핵심어는 설정의 기존 목록에서(topicTitleWords)
     const rule = fieldProfile().top_rank;
-    const picks = rule ? rankTopWeighted(st.light, st.index, Date.now(), rule, 3) : rankTop(st.light, st.index, Date.now(), 3);
+    const picks = rule
+      ? rankTopWeighted(st.light, st.index, Date.now(), { ...rule, topic_words: topicTitleWords() }, 3)
+      : rankTop(st.light, st.index, Date.now(), 3);
     const ids = picks.map((p) => p.id).filter((id) => !manual.some((m) => m.id === id));
     const rows = ids.length ? await this.articleRepo.findBy({ id: In(ids) }) : [];
     const byId = new Map(rows.map((r) => [r.id, r]));
