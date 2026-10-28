@@ -226,6 +226,8 @@ export interface FieldProfile {
     national_sources: string[];
     national_bonus: number;
     institution_words: string[];
+    /** NEWS-Q20 ■2 반박 리뷰: 이름 뒤에 붙어 쓰이는 기관 낱말(부분 맞춤 · 낱말 경계 없이) */
+    institution_suffix_words?: string[];
     institution_bonus: number;
     local_words: string[];
     local_patterns?: string[];

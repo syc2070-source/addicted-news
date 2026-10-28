@@ -124,6 +124,8 @@ export interface TopRule {
   national_sources: string[];
   national_bonus: number;
   institution_words: string[];
+  /** NEWS-Q20 ■2: 이름 뒤에 붙어 쓰이는 기관 낱말(「…의학회」 · 「…연구팀」) — 낱말 경계 없이 부분 맞춤 */
+  institution_suffix_words?: string[];
   institution_bonus: number;
   local_words: string[];
   /** 제목에 맞으면 지역(정규식 · 예: 머리 「OO군,」) */
@@ -149,6 +151,8 @@ export interface TopScore {
 export interface WeightedPick extends TopPick {
   score: TopScore;
   newest: number;
+  /** NEWS-Q20 ■2: 사건 열쇠(eventKey) — TOP 에 같은 열쇠는 한 자리 */
+  event: string;
 }
 
 const OPINION = /^\s*\[(사설|칼럼|기고|시론|오피니언)\]/;
@@ -168,15 +172,43 @@ export function isNationalRow(r: Pick<LightRow, 'source' | 'title'>, names: Read
   return names.has(squashName(r.source)) || names.has(squashName(titleOutlet(r.title)));
 }
 
+const WORD_CHAR = /[가-힣A-Za-z0-9]/;
+
+/**
+ * NEWS-Q20 ■2(Q19 판정 ⑤): 낱말 경계 맞춤 — 바로 앞 글자가 한글 · 영문 · 숫자가 아니어야(「예방교육부터」의 「교육부」 ✗ · 「보건복지부」의 「복지부」 ✗).
+ * 뒤는 조사가 붙으므로 열어 둠 · 다만 영문 낱말은 뒤도 영문이 아니어야(「WHOLE」의 「WHO」 ✗) · 「…부」 바로 뒤 「터」는 조사 「부터」라 ✗.
+ */
+export function hasWordAt(text: string, word: string): boolean {
+  if (!word) return false;
+  const t = String(text || '');
+  for (let i = t.indexOf(word); i >= 0; i = t.indexOf(word, i + 1)) {
+    if (i > 0 && WORD_CHAR.test(t[i - 1])) continue;
+    const next = t[i + word.length] || '';
+    if (/[A-Za-z]$/.test(word) && /[A-Za-z]/.test(next)) continue;
+    if (word.endsWith('부') && next === '터') continue;
+    return true;
+  }
+  return false;
+}
+
+/** NEWS-Q20 ■2: 한 사건 한 자리 — 사건 열쇠 = 묶음 id(2건 이상 묶음) · 아니면 기사 id */
+export function eventKey(id: number, index: Map<number, ClusterInfo>): string {
+  const info = index.get(id);
+  return info && info.size > 1 ? `c${info.clusterId}` : `a${id}`;
+}
+
 export function scoreTopGroup(rows: LightRow[], shown: LightRow, size: number, rule: TopRule): TopScore {
   const names = new Set(rule.national_sources.map(squashName));
   const anyWord = (t: string, words: string[]) => words.some((w) => w && t.includes(w));
   const national = rows.some((r) => isNationalRow(r, names));
-  // 리뷰(Q18): 사설 · 칼럼 · 기고는 기관 발표로 치지 않음
+  // 리뷰(Q18): 사설 · 칼럼 · 기고는 기관 발표로 치지 않음 · NEWS-Q20 ■2: 기관 낱말은 낱말 경계로(hasWordAt)
   const institution = rows.some(
     (r) =>
       !OPINION.test(r.title || '') &&
-      (anyWord(r.title || '', rule.institution_words) || r.sourceGrade === 'institution' || r.sourceGrade === 'academic'),
+      (rule.institution_words.some((w) => hasWordAt(r.title || '', w)) ||
+        anyWord(r.title || '', rule.institution_suffix_words || []) ||
+        r.sourceGrade === 'institution' ||
+        r.sourceGrade === 'academic'),
   );
   const patterns = (rule.local_patterns || []).map((p) => {
     try {
@@ -223,14 +255,14 @@ export function rankTopWeighted(
     const byKey = new Map<string, { info: ClusterInfo | null; rows: LightRow[]; newest: number }>();
     for (const r of inWin) {
       const info = index.get(r.id);
-      const key = info && info.size > 1 ? `c${info.clusterId}` : `a${r.id}`;
+      const key = eventKey(r.id, index);
       const g = byKey.get(key);
       if (g) {
         g.rows.push(r);
         g.newest = Math.max(g.newest, r.ts);
       } else byKey.set(key, { info: info && info.size > 1 ? info : null, rows: [r], newest: r.ts });
     }
-    const picks = [...byKey.values()].map((g) => {
+    const picks = [...byKey].map(([event, g]) => {
       // 묶음 기사 전부(창 밖 것 포함 · light 에 있는 만큼)로 무게를 봄
       const all = g.info ? g.info.memberIds.map((id) => light.get(id)).filter((x): x is LightRow => !!x) : g.rows;
       const rep = g.info ? light.get(g.info.representativeId) || g.rows[0] : g.rows[0];
@@ -240,7 +272,7 @@ export function rankTopWeighted(
         : [...all].filter((r) => isNationalRow(r, names)).sort((a, b) => b.ts - a.ts)[0];
       const shown = nat || rep;
       const size = g.info?.size || 1;
-      return { id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest } as WeightedPick;
+      return { id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest, event } as WeightedPick;
     });
     // 리뷰(Q18): 동점 = 묶음 큰 것 → 최신
     last = picks.sort((a, b) => b.score.score - a.score.score || b.size - a.size || b.newest - a.newest).slice(0, take);

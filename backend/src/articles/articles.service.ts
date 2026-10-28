@@ -6,7 +6,7 @@ import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile, topicTitleWords } from '../crawler/field_profile';
 import { ClusterInfo, clusterDocs, clusterRules, docTs, leadOf, paraOf, pickRepresentative } from '../crawler/event_cluster';
-import { GroupMode, LightRow, groupIds, membersOf, rankTop, rankTopWeighted, shownId, visibleSql } from './cluster_view';
+import { GroupMode, LightRow, eventKey, groupIds, membersOf, rankTop, rankTopWeighted, shownId, visibleSql } from './cluster_view';
 
 /** 카테고리 slug → 이름(분야 설정 categories.slugs · NEWS-Q2 ■1). */
 export function categoryKeyFor(slug: string): string {
@@ -366,12 +366,20 @@ export class ArticlesService implements OnModuleInit {
     const picks = rule
       ? rankTopWeighted(st.light, st.index, Date.now(), { ...rule, topic_words: topicTitleWords() }, 3)
       : rankTop(st.light, st.index, Date.now(), 3);
-    const ids = picks.map((p) => p.id).filter((id) => !manual.some((m) => m.id === id));
+    // NEWS-Q20 ■2: 한 사건 한 자리 — 손으로 고른 TOP 과 같은 묶음(eventKey)인 자동 고름은 뺌 · 손으로 고른 것끼리도 같은 묶음이면 앞 것만
+    const taken = new Set<string>();
+    const manualOne = manual.filter((m) => {
+      const k = eventKey(m.id, st.index);
+      if (taken.has(k)) return false;
+      taken.add(k);
+      return true;
+    });
+    const ids = picks.map((p) => p.id).filter((id) => !taken.has(eventKey(id, st.index)));
     const rows = ids.length ? await this.articleRepo.findBy({ id: In(ids) }) : [];
     const byId = new Map(rows.map((r) => [r.id, r]));
     const auto = await this.decorate(ids.map((id) => byId.get(id)).filter((a): a is Article => !!a));
     const window = picks[0]?.window || '72h';
-    const out = this.withClusterFields([...manual, ...auto].slice(0, 3), st);
+    const out = this.withClusterFields([...manualOne, ...auto].slice(0, 3), st);
     for (const a of out) {
       const info = st.index.get(a.id) || null;
       a.clusterMembers = membersOf(info && info.size > 1 ? info : null, a.id, st.light);

@@ -848,6 +848,9 @@ a {
 }
 .footer-ecosystem a:hover { text-decoration: underline; }
 .footer-ecosystem .footer-sep { color: #666; margin: 0 6px; }
+/* NEWS-Q20 ■1: 판 표시(배포 확인용 · 작은 글씨) */
+.footer-build { margin: 6px 0 0; font-size: 10px; color: #777; }
+.footer-build:empty { display: none; }
 
 /* 기사 하단 안내(본문과 구분되는 작은 톤) */
 .article-observatory-note {

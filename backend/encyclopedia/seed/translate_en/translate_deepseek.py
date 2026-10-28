@@ -21,7 +21,8 @@ PROGRESS = "translate_progress.json"   # 중간 저장(재개용)
 # 모델 단일 소스: 환경변수 DEEPSEEK_MODEL(하드코딩 제거). 구 deepseek-chat 폐기됨.
 MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 API_BASE = "https://api.deepseek.com"
-MAX_RETRY = 3
+# NEWS-Q20 ■5: 같은 오류 재시도 ≤1 — 시도 2(재시도 1) · SDK 자체 재시도 0(아래 OpenAI(max_retries=0))
+MAX_RETRY = 2
 
 SYSTEM = (
     "You are a professional translator specializing in addiction science, psychiatry, "
@@ -101,7 +102,7 @@ def main():
         from openai import OpenAI
     except ImportError:
         print("pip install openai 필요", file=sys.stderr); sys.exit(1)
-    client = OpenAI(api_key=key, base_url=API_BASE)
+    client = OpenAI(api_key=key, base_url=API_BASE, max_retries=0)
 
     data = json.load(open(INPUT, encoding="utf-8"))
     by_id = {e["id"]: e for e in data}

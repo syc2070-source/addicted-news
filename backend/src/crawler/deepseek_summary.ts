@@ -20,9 +20,13 @@ export const deepseekAvailable = !!DEEPSEEK_KEY;
 
 // NEWS-Q6 ⓑ′: SDK 기본값(요청당 10분 · 재시도 2)은 DeepSeek 가 응답 없이 멈추면 호출 하나가 30분을 잡는다
 // (10-15 방송 후보 2건 · 호출 4번에 62분 → 기사 소스 0). 요청당 60초 · 재시도 1.
+// NEWS-Q20 ■5: SDK 재시도 0 — 재시도는 아래 함수마다의 2회 고리(attempt 1·2) 한 곳만. SDK 1 + 고리 1 이면
+// 같은 연결·5xx 오류가 최대 4번(재시도 3)이었다 → 이제 같은 오류 재시도 1 · 다른 오류(빈 응답 · JSON 아님 · 절단)도 각 1.
+// 웹 검색 · 가져오기 도구 칸은 어느 호출에도 보내지 않는다(DeepSeek 11-01 과금 대상 0 · q20_rules.spec 이 지킴).
+export const DEEPSEEK_SDK_MAX_RETRIES = 0;
 export const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS || 60_000);
 const deepseek = deepseekAvailable
-  ? new OpenAI({ apiKey: DEEPSEEK_KEY, baseURL: 'https://api.deepseek.com', timeout: DEEPSEEK_TIMEOUT_MS, maxRetries: 1 })
+  ? new OpenAI({ apiKey: DEEPSEEK_KEY, baseURL: 'https://api.deepseek.com', timeout: DEEPSEEK_TIMEOUT_MS, maxRetries: DEEPSEEK_SDK_MAX_RETRIES })
   : null;
 
 // 연결 실패(시간 초과·끊김 = status 없음)나 5xx 가 연달아 이만큼이면 이번 실행은 DeepSeek 를 더 부르지 않는다.
