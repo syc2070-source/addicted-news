@@ -120,7 +120,7 @@ export function rankTop(
  * NEWS-Q18 ■3(오너 결정 10-26): TOP 무게 규칙 — 상수는 분야 설정 top_rank(코드 변경 없이 조정).
  * 묶음 점수 = 전국 매체(묶음 안 한 곳이라도) + 기관 발표(묶음 안 제목 핵심어 · 출처 등급 institution/academic) + 지역 캠페인·홍보(보이는 제목) +
  *   같은 소식 건수(per_report × (묶음 수 − 1) · 상한 report_cap) + 제목 분야 핵심어 없음(off_topic_penalty · NEWS-Q19 ■3).
- *   동점 = 묶음 큰 것 → 최신. 창 72시간 · 묶음이 take 보다 적으면 7일.
+ *   동점 = 기관 수 → 최신 → 묶음 큰 것(NEWS-Q22 ■2) · 같은 사건 다른 묶음은 한 자리(NEWS-Q22 ■1 sameEvent). 창 72시간 · 묶음이 take 보다 적으면 7일.
  */
 export interface TopRule {
   national_sources: string[];
@@ -128,6 +128,8 @@ export interface TopRule {
   institution_words: string[];
   /** NEWS-Q20 ■2: 이름 뒤에 붙어 쓰이는 기관 낱말(「…의학회」 · 「…연구팀」) — 낱말 경계 없이 부분 맞춤 */
   institution_suffix_words?: string[];
+  /** NEWS-Q22 ■1: 산하기관 · 줄임말 → 모기관(열쇠도 기관 낱말로 맞춤 · 짝 · 기관 수는 모기관 이름으로) */
+  institution_parents?: Record<string, string>;
   institution_bonus: number;
   local_words: string[];
   /** 제목에 맞으면 지역(정규식 · 예: 머리 「OO군,」) */
@@ -155,6 +157,10 @@ export interface WeightedPick extends TopPick {
   newest: number;
   /** NEWS-Q20 ■2: 사건 열쇠(eventKey) — TOP 에 같은 열쇠는 한 자리 */
   event: string;
+  /** NEWS-Q22 ■1·■2: 묶음 제목의 기관(모기관 이름) — 같은 사건 짝 · 동점 깨기(기관 수) */
+  institutions: string[];
+  /** NEWS-Q22 ■1: 같은 사건이라 이 자리에 빠진 다른 묶음의 보일 기사 id */
+  sameEventIds: number[];
 }
 
 const OPINION = /^\s*\[(사설|칼럼|기고|시론|오피니언)\]/;
@@ -199,11 +205,80 @@ export function eventKey(id: number, index: Map<number, ClusterInfo>): string {
   return info && info.size > 1 ? `c${info.clusterId}` : `a${id}`;
 }
 
+/** NEWS-Q22 ■1: 기관 사전 = institution_words + 모기관 연결의 열쇠(산하기관 · 줄임말) */
+export function institutionNames(rule: Pick<TopRule, 'institution_words' | 'institution_parents'>): string[] {
+  return [...new Set([...rule.institution_words, ...Object.keys(rule.institution_parents || {})])];
+}
+
+/** NEWS-Q22 ■1: 묶음 제목들에 나온 기관(모기관 이름 · 낱말 경계 · 사설·칼럼 제외 · 학회·연구팀 같은 suffix 는 이름이 아니라 뺌) */
+export function institutionsOf(rows: Pick<LightRow, 'title'>[], rule: Pick<TopRule, 'institution_words' | 'institution_parents'>): string[] {
+  const parents = rule.institution_parents || {};
+  const out = new Set<string>();
+  for (const r of rows) {
+    const t = r.title || '';
+    if (OPINION.test(t)) continue;
+    for (const w of institutionNames(rule)) if (hasWordAt(t, w)) out.add(parents[w] || w);
+  }
+  return [...out].sort();
+}
+
+const TITLE_TAG = /^\s*(\[[^\]]{1,12}\]|【[^】]{1,12}】|<[^>]{1,12}>)\s*/;
+const TITLE_STOP = new Set(['단독', '속보', '종합', '기자', '뉴스', '사진', '포토', '영상', '인터뷰']);
+// 낱말 끝 조사(긴 것 먼저) — 떼고 두 글자 이상 남을 때만
+const PARTICLES = ['에서는', '으로는', '에게서', '까지', '부터', '에서', '에게', '으로', '에는', '과의', '와의', '은', '는', '이', '가', '을', '를', '의', '에', '와', '과', '도', '로', '만'];
+
+/** NEWS-Q22 ■1: 제목 명사(대강) — 「 - 매체」 꼬리 · 머리 [태그] 뺌 · 한글/영문/숫자 덩어리 · 끝 조사 뗌 · 두 글자 이상 · 숫자로 시작 ✗ · 기관 낱말이 든 덩어리 ✗ */
+export function titleNouns(title: string, rule: Pick<TopRule, 'institution_words' | 'institution_parents'>): string[] {
+  const tail = titleOutlet(title);
+  let t = tail ? title.slice(0, title.length - tail.length - 3) : String(title || '');
+  while (TITLE_TAG.test(t)) t = t.replace(TITLE_TAG, '');
+  const inst = institutionNames(rule);
+  const out = new Set<string>();
+  for (const raw of t.split(/[^가-힣A-Za-z0-9]+/)) {
+    let w = raw.toLowerCase();
+    if (/^[가-힣]+$/.test(w)) {
+      const p = PARTICLES.find((x) => w.endsWith(x) && w.length - x.length >= 2);
+      if (p) w = w.slice(0, w.length - p.length);
+    }
+    if (w.length < 2 || /^[0-9]/.test(w) || TITLE_STOP.has(w)) continue;
+    if (inst.some((x) => w.includes(x.toLowerCase()))) continue;
+    out.add(w);
+  }
+  return [...out];
+}
+
+const KST_DAY = (ts: number) => Math.floor((ts + 9 * 3600 * 1000) / (24 * 3600 * 1000));
+
+export interface EventSig {
+  institutions: string[];
+  nouns: string[];
+  newest: number;
+}
+
+/**
+ * NEWS-Q22 ■1(CTO 결정): 두 묶음이 같은 사건 = 기관 하나 이상 같음(모기관 이름) + 가장 새 보도 KST 날짜 ±1 + 보이는 제목 명사(기관 낱말 제외) 겹침 2 이상.
+ * 기관 하나로만 보면 같은 부처의 다른 사건까지 묶이므로 제목 명사를 함께 봄.
+ */
+export function sameEvent(a: EventSig, b: EventSig): boolean {
+  if (!a.institutions.some((w) => b.institutions.includes(w))) return false;
+  if (Math.abs(KST_DAY(a.newest) - KST_DAY(b.newest)) > 1) return false;
+  return a.nouns.filter((w) => b.nouns.includes(w)).length >= 2;
+}
+
+/** NEWS-Q22 ■2(CTO 결정): 동점 깨기 = 점수 → 기관 수 많은 것(B) → 최신(C) → 묶음 큰 것(A · 옛 순서) */
+export function compareTopPicks(
+  a: { score: TopScore; institutions: string[]; newest: number; size: number },
+  b: { score: TopScore; institutions: string[]; newest: number; size: number },
+): number {
+  return b.score.score - a.score.score || b.institutions.length - a.institutions.length || b.newest - a.newest || b.size - a.size;
+}
+
 export function scoreTopGroup(rows: LightRow[], shown: LightRow, size: number, rule: TopRule): TopScore {
   const names = new Set(rule.national_sources.map(squashName));
   const anyWord = (t: string, words: string[]) => words.some((w) => w && t.includes(w));
   const national = rows.some((r) => isNationalRow(r, names));
   // 리뷰(Q18): 사설 · 칼럼 · 기고는 기관 발표로 치지 않음 · NEWS-Q20 ■2: 기관 낱말은 낱말 경계로(hasWordAt)
+  // NEWS-Q22 ■1: 모기관 연결 열쇠(산하기관)는 가산에 안 씀 — 재생 10-15~28 에서 「마약퇴치운동본부 ○○지부 캠페인」 4편이 −2 → +2 로 TOP 에 듦
   const institution = rows.some(
     (r) =>
       !OPINION.test(r.title || '') &&
@@ -278,10 +353,21 @@ export function rankTopWeighted(
       const shown = nat || (ok(rep) ? rep : [...all].filter(ok).sort((a, b) => b.ts - a.ts)[0]);
       if (!shown) return [];
       const size = g.info?.size || 1;
-      return [{ id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest, event } as WeightedPick];
+      const institutions = institutionsOf(all, rule);
+      const pick: WeightedPick = { id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest, event, institutions, sameEventIds: [] };
+      return [{ pick, sig: { institutions, nouns: titleNouns(shown.title || '', rule), newest: g.newest } }];
     });
-    // 리뷰(Q18): 동점 = 묶음 큰 것 → 최신
-    last = picks.sort((a, b) => b.score.score - a.score.score || b.size - a.size || b.newest - a.newest).slice(0, take);
+    // NEWS-Q22 ■2: 동점 = 기관 수 → 최신 → 묶음 큰 것(Q18 리뷰의 옛 순서는 맨 끝)
+    picks.sort((a, b) => compareTopPicks(a.pick, b.pick));
+    // NEWS-Q22 ■1: 같은 사건 다른 묶음은 앞 자리 하나만(뒤 것은 빼고 앞 것의 sameEventIds 에 적음)
+    const chosen: typeof picks = [];
+    for (const p of picks) {
+      if (chosen.length >= take) break;
+      const twin = chosen.find((c) => sameEvent(c.sig, p.sig));
+      if (twin) twin.pick.sameEventIds.push(p.pick.id);
+      else chosen.push(p);
+    }
+    last = chosen.map((c) => c.pick);
     if (last.length >= take) return last;
   }
   return last;

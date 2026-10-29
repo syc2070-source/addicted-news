@@ -15,8 +15,9 @@ export class Article {
   @Column({ type: 'text', nullable: true })
   teaser: string | null;
 
-  @Column({ type: 'text', nullable: true })
-  summary: string | null;
+  // NEWS-Q22 ■3: 운영 DB 에 맞춤(NOT NULL) — 요약 없음은 빈 글 '' · 표기만(synchronize false · migration 0)
+  @Column({ type: 'text', default: '' })
+  summary: string;
 
   // Excluded from ordinary API/duplicate-check SELECTs until the owner applies v5.5.
   // The desktop exporter reads the complete row explicitly.

@@ -1,7 +1,7 @@
 // ============================================================
 // feed_fetch.ts (NEWS-Q2 ■4) — 피드 읽기(헤더·403 재시도·깨진 XML 관용·HTML 공지 목록).
 //  · 처음부터 브라우저 UA·Accept 를 보낸다(옛: 기본 rss-parser UA → 403/406 뒤에만 UA 재시도).
-//  · 403/406/429 는 잠시 쉬고 다른 UA 로 1회 더(무한 재시도 금지).
+//  · 403/406/429 는 잠시 쉬고 다른 UA 로 1회 더(무한 재시도 금지) · 406 이면 그때 Accept */*(NEWS-Q22 ■4).
 //  · XML 파싱이 실패하면 맨 &·제어문자·BOM 을 고친 사본으로 1회 더(us-drugfree 꼴).
 //  · format='html' 소스는 list_pattern(이름 묶음 link·title·date)으로 공지 목록을 항목으로 바꾼다.
 //  · format='json' 소스는 json_map(목록·제목·링크·날짜 칸 이름)으로 기관 뉴스 API 를 항목으로 바꾼다(WHO).
@@ -49,7 +49,9 @@ export async function fetchFeedText(
   if (RETRY_STATUSES.has(res.status)) {
     retried = true;
     await new Promise((r) => setTimeout(r, opts.waitMs ?? 1500));
-    res = await get(url, { ...base, headers: { ...FEED_HEADERS, 'User-Agent': ALT_UA } });
+    // NEWS-Q22 ■4: 406(Not Acceptable)은 Accept 협상 실패 — 다시 할 때 Accept 를 */* 로(Euronews · Render 에서만 406)
+    const accept = res.status === 406 ? { Accept: '*/*' } : {};
+    res = await get(url, { ...base, headers: { ...FEED_HEADERS, 'User-Agent': ALT_UA, ...accept } });
   }
   if (res.status !== 200) throw new Error(`Request failed with status code ${res.status}`);
   return { text: String(res.data ?? ''), status: res.status, retried };

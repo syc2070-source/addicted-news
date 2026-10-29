@@ -610,7 +610,9 @@
       "outlet_id": "bangkokpost",
       "name_en": "Bangkok Post",
       "homepage_url": "https://www.bangkokpost.com",
-      "rss_url": "https://www.bangkokpost.com/rss/data/breakingnews.xml",
+      "rss_url": "https://www.bangkokpost.com/rss/data/most-recent.xml",
+      "timeout_ms": 30000,
+      "_q22_comment": "NEWS-Q22 ■4: Render 에서 15초 시간 초과(10-29) · 이 PC 시험 1회 = 옛 주소 breakingnews.xml → most-recent.xml 로 넘겨져 200 · 5.0초 · 10 항목 → 넘겨진 주소로 바꾸고 이 피드만 한도 30초(다음 회차에서 확인).",
       "lang_primary": "en",
       "verified_by_fetch": true,
       "notes_ko": "작업 U 골격: 사이클 17 시드 또는 18 어댑터 본체에서 fetch 검증 예정."

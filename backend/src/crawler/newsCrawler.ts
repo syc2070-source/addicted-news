@@ -1279,7 +1279,7 @@ async function readSource(conf: SourceConfig, ctx: ReadCtx<ReadSource>): Promise
     fetched = await fetchFeed(
       { url: normalizeRssFeedUrl(conf.url), format: conf.format, listPattern: conf.listPattern, jsonMap: conf.jsonMap },
       parser,
-      { timeoutMs: RSS_TIMEOUT },
+      { timeoutMs: conf.timeoutMs ?? RSS_TIMEOUT },
     );
   } catch (e) {
     feedBreaker.record(conf.url, httpStatusOf(e));

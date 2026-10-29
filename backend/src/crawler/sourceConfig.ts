@@ -50,6 +50,14 @@ export interface SourceConfig {
   substituteFor?: string;
   /** 이보다 오래된 항목은 건너뜀(대체 검색 피드용) */
   maxAgeDays?: number;
+  /** NEWS-Q22 ■4: 이 피드만 읽기 시간 한도(ms · 피드 파일 timeout_ms · 없으면 RSS_TIMEOUT) */
+  timeoutMs?: number;
+}
+
+/** NEWS-Q22 ■4: 피드 항목의 timeout_ms(1~60초만 · 꼴이 틀리면 무시) */
+export function timeoutOf(f: Record<string, unknown>): { timeoutMs?: number } {
+  const n = Number(f.timeout_ms);
+  return Number.isFinite(n) && n >= 1000 && n <= 60000 ? { timeoutMs: n } : {};
 }
 
 /** 피드 항목의 blocked 칸(꼴이 틀리면 무시). */
@@ -127,6 +135,7 @@ function loadWorldPress(p: FieldProfile): SourceConfig[] {
       priority: 20,
       grade: 'press',
       blocked: blockedOf(f),
+      ...timeoutOf(f),
       ...activeOf(f),
     });
   });

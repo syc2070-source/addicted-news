@@ -228,6 +228,8 @@ export interface FieldProfile {
     institution_words: string[];
     /** NEWS-Q20 ■2 반박 리뷰: 이름 뒤에 붙어 쓰이는 기관 낱말(부분 맞춤 · 낱말 경계 없이) */
     institution_suffix_words?: string[];
+    /** NEWS-Q22 ■1: 산하기관 · 줄임말 → 모기관(기관 사전 모기관 연결) */
+    institution_parents?: Record<string, string>;
     institution_bonus: number;
     local_words: string[];
     local_patterns?: string[];
