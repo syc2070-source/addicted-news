@@ -299,6 +299,8 @@ export interface RunProgress {
   topicExcluded?: { rejected: Record<string, number>; sweep?: TopicExcludeSweep; broadcastSweep?: TopicExcludeSweep };
   /** NEWS-Q18 ■4: 같은 호스트 503 이 잇달아 나서 이번 실행에서 건너뛴 피드 수(호스트별) */
   hostBreaker503?: { tripped: string[]; skipped: Record<string, number> };
+  /** NEWS-Q21 ■1: 실행 시작 위젯 요약 쓸기(읽은 행 · 고친 id) · 이번 실행 저장 직전 고친 수 */
+  widgetSummary?: { checked: number; fixedIds: number[]; emptied: number[]; error?: boolean; savedFixed?: number };
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

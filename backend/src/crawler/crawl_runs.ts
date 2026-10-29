@@ -79,6 +79,8 @@ export interface RunProgressLike {
   /** NEWS-Q18 ■2 · ■4: 주제 거름 · 503 호스트 단락기 */
   topicExcluded?: object;
   hostBreaker503?: object;
+  /** NEWS-Q21 ■1: 위젯 요약 쓸기 */
+  widgetSummary?: object;
 }
 
 export const RUN_PROGRESS_KEY = '__run';

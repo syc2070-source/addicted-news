@@ -53,6 +53,7 @@ import { attemptsFromRuns, planPromotion, standbyLast } from './blocked_promote'
 import { archiveSpamArticles, spamPublisherOf } from './spam_publisher';
 import { alignAiredDates } from './broadcast_aired';
 import { TopicExcludeRule, sweepTopicExcluded, sweepTopicExcludedBroadcasts, topicExcludeHit } from './topic_exclude';
+import { fixWidgetSummary, sweepWidgetSummaries } from './summary_widget';
 import { columnExists } from './schema_probe';
 import { rejudgeBroadcasts, rejudgeStateFromRuns } from './broadcast_rejudge';
 import { breakerSummaryOf } from './breaker_summary';
@@ -170,6 +171,7 @@ let crawlStats = {
   quarantined: 0,       // v5.4: rejected_articles 격리 저장
   crossMediaDupSkip: 0, // v5.4.1 3-2: 크로스매체 동일 사건 중복 스킵
   sameArticleSkip: 0, // NEWS-Q6 ■2: 같은 기사(정규화 URL · 같은 매체 24h) 스킵
+  widgetSummaryFixed: 0, // NEWS-Q21 ■1: 저장 직전 위젯 요약 → 본문 첫 두 문장(또는 비움)
   deepseekDownLogged: false, // NEWS-Q6 ⓑ′: DeepSeek 연결 실패 연속 → 이번 실행 판정 멈춤 로그 1회
   dateParseFail: 0,     // v5.4.1 3-3: published_at 파싱 실패(now 대체)
   dupSkipKeyword: 0,    // v5.2 #4: 핵심어 기반 중복 스킵
@@ -2049,6 +2051,17 @@ async function saveCandidates(list: Candidate[]) {
     if (c.summary) c.summary = decodeEntities(c.summary);
     if (c.teaser) c.teaser = decodeEntities(c.teaser);
     if (c.originalTitle) c.originalTitle = decodeEntities(c.originalTitle);
+    // NEWS-Q21 ■1: 요약 · 티저가 매체 화면 글(글자크기 · 입력 시각 · 저작권 줄 …)이면 본문 첫 두 문장 · 없으면 비움(TOP 자격 0)
+    if (c.sourceType !== BROADCAST_SOURCE_TYPE) {
+      const wf = fixWidgetSummary(c.summary, c.teaser, c.rawBody, c.title);
+      if (wf.changed) {
+        crawlStats.widgetSummaryFixed++;
+        if (RUN.progress?.widgetSummary) RUN.progress.widgetSummary.savedFixed = crawlStats.widgetSummaryFixed;
+        console.log(`  │   🧹 위젯 요약 → ${wf.summary ? '본문 첫 두 문장' : '비움'}: ${c.title.slice(0, 30)}...`);
+        c.summary = wf.summary ?? '';
+        c.teaser = wf.teaser;
+      }
+    }
 
     // NEWS-Q6 ■2: 정규화 URL(utm·m.·amp·끝 / 무시) ∪ 같은 매체 + 24시간 + 닮은 제목 — 이번 실행에 저장한 것까지
     const isBroadcast = c.sourceType === BROADCAST_SOURCE_TYPE;
@@ -2311,6 +2324,17 @@ async function main() {
     const bw = await sweepTopicExcludedBroadcasts(RUN.query, TOPIC_EXCLUDE, { deletedAt: RUN.flags.deletedAt, rawBody: RUN.rawBodyCol }, TOPIC_EXCLUDE_CHARS);
     progress.topicExcluded = { ...(progress.topicExcluded || { rejected: {} }), broadcastSweep: bw };
     console.log(`🚫 주제 거름 이미 실린 방송: 읽음 ${bw.checked} · 보관으로 ${bw.archived.length} · 되돌림 ${bw.restored.length}${bw.error ? ' · 오류' : ''}`);
+  }
+  // NEWS-Q21 ■1: 이미 저장된 기사의 위젯 요약(글자크기 · 입력 시각 …) → 본문 첫 두 문장 · 없으면 비움(지움 0 · 몇 번 돌아도 같음)
+  if (RUN.query) {
+    const ws = await sweepWidgetSummaries(RUN.query, { deletedAt: RUN.flags.deletedAt, rawBody: RUN.rawBodyCol, tier: RUN.flags.tier });
+    progress.widgetSummary = {
+      checked: ws.checked,
+      fixedIds: ws.fixed.filter((f) => f.after).map((f) => f.id),
+      emptied: ws.fixed.filter((f) => !f.after).map((f) => f.id),
+      ...(ws.error ? { error: true } : {}),
+    };
+    console.log(`🧹 위젯 요약 쓸기: 읽음 ${ws.checked} · 본문 문장으로 ${progress.widgetSummary.fixedIds.length} · 비움 ${progress.widgetSummary.emptied.length}${ws.error ? ' · 오류' : ''}`);
   }
   const airedDays = PROFILE.sources.broadcast.aired_date_min_days;
   if (Number(airedDays) > 0 && RUN.query) {

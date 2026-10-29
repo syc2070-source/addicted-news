@@ -23,6 +23,8 @@ export interface LightRow {
   sourceGrade: string | null;
   category?: string | null;
   ts: number;
+  /** NEWS-Q21 ■1: 요약이 있고 위젯 글이 아님(isTopSummaryOk) · false 면 TOP 에 보일 기사가 못 됨 · 모르면 undefined(옛 꼴) */
+  summaryOk?: boolean;
 }
 
 export interface Group {
@@ -262,17 +264,21 @@ export function rankTopWeighted(
         g.newest = Math.max(g.newest, r.ts);
       } else byKey.set(key, { info: info && info.size > 1 ? info : null, rows: [r], newest: r.ts });
     }
-    const picks = [...byKey].map(([event, g]) => {
+    const picks = [...byKey].flatMap(([event, g]) => {
       // 묶음 기사 전부(창 밖 것 포함 · light 에 있는 만큼)로 무게를 봄
       const all = g.info ? g.info.memberIds.map((id) => light.get(id)).filter((x): x is LightRow => !!x) : g.rows;
       const rep = g.info ? light.get(g.info.representativeId) || g.rows[0] : g.rows[0];
+      // NEWS-Q21 ■1: 보일 기사는 요약이 기사 글인 것만(위젯 요약 · 빈 요약 ✗) — 묶음 안에 하나도 없으면 TOP 자격 0
+      const ok = (r: LightRow) => r.summaryOk !== false;
       // 대표가 전국 매체가 아니면 묶음 안 전국 매체 기사를 보임(가장 새 것)
-      const nat = isNationalRow(rep, names)
-        ? rep
-        : [...all].filter((r) => isNationalRow(r, names)).sort((a, b) => b.ts - a.ts)[0];
-      const shown = nat || rep;
+      const nat =
+        isNationalRow(rep, names) && ok(rep)
+          ? rep
+          : [...all].filter((r) => isNationalRow(r, names) && ok(r)).sort((a, b) => b.ts - a.ts)[0];
+      const shown = nat || (ok(rep) ? rep : [...all].filter(ok).sort((a, b) => b.ts - a.ts)[0]);
+      if (!shown) return [];
       const size = g.info?.size || 1;
-      return { id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest, event } as WeightedPick;
+      return [{ id: shown.id, size, window, score: scoreTopGroup(all, shown, size, rule), newest: g.newest, event } as WeightedPick];
     });
     // 리뷰(Q18): 동점 = 묶음 큰 것 → 최신
     last = picks.sort((a, b) => b.score.score - a.score.score || b.size - a.size || b.newest - a.newest).slice(0, take);

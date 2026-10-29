@@ -7,6 +7,7 @@ import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile, topicTitleWords } from '../crawler/field_profile';
 import { ClusterInfo, clusterDocs, clusterRules, docTs, leadOf, paraOf, pickRepresentative } from '../crawler/event_cluster';
 import { GroupMode, LightRow, eventKey, groupIds, membersOf, rankTop, rankTopWeighted, shownId, visibleSql } from './cluster_view';
+import { isTopSummaryOk } from '../crawler/summary_widget';
 
 /** 카테고리 slug → 이름(분야 설정 categories.slugs · NEWS-Q2 ■1). */
 export function categoryKeyFor(slug: string): string {
@@ -150,6 +151,8 @@ export class ArticlesService implements OnModuleInit {
       sourceGrade: r.source_grade ?? null,
       category: r.category ?? null,
       ts: docTs(publishedTs, publishedAt),
+      // NEWS-Q21 ■1: TOP 자격(요약 칸을 읽은 행만 · 안 읽었으면 모름)
+      summaryOk: 'summary' in r ? isTopSummaryOk(r.summary) : undefined,
     };
   }
 
@@ -181,7 +184,7 @@ export class ArticlesService implements OnModuleInit {
       // 저장된 묶음(수집기가 최근 30일을 채움). 아직 비어 있으면 계산 길로.
       const f = this.flags;
       const stored: any[] = await this.q(
-        `SELECT id, title, source, source_url, published_at, category, cluster_id, cluster_size,
+        `SELECT id, title, summary, source, source_url, published_at, category, cluster_id, cluster_size,
                 ${f.publishedTs ? 'published_ts' : 'NULL AS published_ts'}, ${f.sourceGrade ? 'source_grade' : 'NULL AS source_grade'}
            FROM articles WHERE ${visibleSql(f)} AND cluster_id IS NOT NULL AND cluster_size > 1
           ORDER BY id DESC LIMIT 5000`,
