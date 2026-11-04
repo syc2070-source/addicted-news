@@ -1,7 +1,17 @@
 // backend/src/articles/articles.service.ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, In, IsNull, LessThan, Like, Not, Or, Repository } from 'typeorm';
+import {
+  Between,
+  FindOptionsWhere,
+  In,
+  IsNull,
+  LessThan,
+  Like,
+  Not,
+  Or,
+  Repository,
+} from 'typeorm';
 import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile, topicTitleWords } from '../crawler/field_profile';
@@ -403,16 +413,37 @@ export class ArticlesService implements OnModuleInit {
    * 기사 = 국내 기사 · 세계 = isForeign 기사 · 방송 = 그날 들어온 방송 · broadcastsTotal = 실린 방송 모두.
    */
   async getTodayCounts() {
-    const newest = (kind: ArticleKind) => this.articleRepo.findOne({ where: this.where({}, kind), order: { createdAt: 'DESC' }, select: { id: true, createdAt: true } });
+    const newest = (kind: ArticleKind) =>
+      this.articleRepo.findOne({
+        where: this.where({}, kind),
+        order: { createdAt: 'DESC' },
+        select: { id: true, createdAt: true },
+      });
     const [a, b] = await Promise.all([newest('article'), newest('broadcast')]);
-    const latest = Math.max(a?.createdAt?.getTime() ?? 0, b?.createdAt?.getTime() ?? 0);
-    const broadcastsTotal = await this.articleRepo.count({ where: this.where({}, 'broadcast') });
-    if (!latest) return { day: null, articles: 0, broadcasts: 0, world: 0, broadcastsTotal };
+    const latest = Math.max(
+      a?.createdAt?.getTime() ?? 0,
+      b?.createdAt?.getTime() ?? 0,
+    );
+    const broadcastsTotal = await this.articleRepo.count({
+      where: this.where({}, 'broadcast'),
+    });
+    if (!latest)
+      return {
+        day: null,
+        articles: 0,
+        broadcasts: 0,
+        world: 0,
+        broadcastsTotal,
+      };
     const { day, from, to } = kstDayRange(latest);
     const createdAt = Between(from, to);
     const [articles, world, broadcasts] = await Promise.all([
-      this.articleRepo.count({ where: this.where({ createdAt, isForeign: false }) }),
-      this.articleRepo.count({ where: this.where({ createdAt, isForeign: true }) }),
+      this.articleRepo.count({
+        where: this.where({ createdAt, isForeign: false }),
+      }),
+      this.articleRepo.count({
+        where: this.where({ createdAt, isForeign: true }),
+      }),
       this.articleRepo.count({ where: this.where({ createdAt }, 'broadcast') }),
     ]);
     return { day, articles, broadcasts, world, broadcastsTotal };

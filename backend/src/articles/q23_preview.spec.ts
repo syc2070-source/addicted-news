@@ -53,10 +53,70 @@ describe('NEWS-Q23 · Q24 대문', () => {
     }
   });
 
-  it('구간 순서 = TOP → 오늘 → 중독이슈 → 방송 → 세계 → 연대기 → 바닥', () => {
+  it('구간 순서 = TOP → 오늘 → 중독이슈 → 방송 → 세계 → 오늘의 중독백과 → 연대기 → 바닥', () => {
     const order =
-      /topSection\(top\) \+ todaySection\(counts\) \+ issueSection\(issue, top\) \+\s+broadcastSection\(casts\) \+ worldSection\(grouped\) \+ chronicleSection\(casts\) \+\s+'<\/main>' \+ bottomHtml\(version\)/;
+      /topSection\(top\) \+ todaySection\(counts\) \+ issueSection\(issue, top\) \+\s+broadcastSection\(casts\) \+ worldSection\(grouped\) \+ \(M\.enc \? '<div id="encSlot"><\/div>' : ''\) \+ chronicleSection\(casts\) \+\s+'<\/main>' \+ bottomHtml\(version\)/;
     expect(js).toMatch(order);
+  });
+
+  it('판 2 · 운영 머리 고리 = 라파뉴스 · 기획기사 · 중독백과(글은 messages · 미리보기 글 그대로)', () => {
+    const nav = liveText.nav as Record<string, string>;
+    expect(nav.rapha).toBe('라파뉴스');
+    expect(nav.feature).toBe('기획기사');
+    expect(nav.encyclopedia).toBe('중독백과');
+    expect(js).toContain('<a href="/rapha.html">');
+    expect(js).toContain('<a href="/feature.html">');
+    expect(js).toContain('<a href="/encyclopedia.html">');
+    expect((previewText.nav as Record<string, string>).rapha).toBeUndefined();
+    expect(previewText.enc).toBeUndefined();
+  });
+
+  it('판 2 · 오늘의 중독백과 = 옛 대문과 같은 길 · 다른 구간을 기다리게 하지 않음', () => {
+    expect((liveText.enc as Record<string, string>).title).toBe(
+      '오늘의 중독백과',
+    );
+    expect(js).toContain("api('/encyclopedia')");
+    expect(read('_legacy/assets/js/main.js')).toContain(
+      "API_BASE + '/encyclopedia')",
+    );
+    expect(js).not.toMatch(/Promise\.all\(\[[^\]]*\/encyclopedia/);
+  });
+
+  it('판 2 · 안쪽 쪽 다섯 = B 머리띠 · 글꼴 · 고리 셋 · 옛 머리와 날짜 칸 없음', () => {
+    for (const p of [
+      'category.html',
+      'feature.html',
+      'rapha.html',
+      'reports.html',
+      'about.html',
+    ]) {
+      const html = read(p);
+      expect(html).toContain('/assets/home/head.css');
+      expect(html).toContain('/assets/fonts/noto-serif-kr/font.css');
+      expect(html).toContain('class="head"');
+      for (const href of [
+        '/rapha.html',
+        '/feature.html',
+        '/encyclopedia.html',
+      ]) {
+        expect(html).toContain(`href="${href}"`);
+      }
+      expect(html).not.toContain('current-date');
+      expect(html).not.toContain('nav-main');
+    }
+  });
+
+  it('판 2 · 머리띠 토큰 값 = home.css 값(따로 둔 값이 어긋나지 않음)', () => {
+    const headCss = read('assets/home/head.css');
+    const block = headCss.slice(
+      headCss.indexOf(':root {'),
+      headCss.indexOf('}', headCss.indexOf(':root {')),
+    );
+    const tokens = [...block.matchAll(/(--[a-z0-9-]+: [^;]+;)/g)].map(
+      (m) => m[1],
+    );
+    expect(tokens.length).toBeGreaterThan(5);
+    for (const token of tokens) expect(css).toContain(token);
   });
 
   it('큰 수 = 전용 수 API(목록 행으로 세지 않음)', () => {
@@ -89,7 +149,7 @@ describe('NEWS-Q23 · Q24 대문', () => {
     expect(js).not.toContain('/api/health');
   });
 
-  it('js 가 부르는 글 열쇠는 글 파일에 모두 있음(band 는 미리보기만 · about 은 운영만)', () => {
+  it('js 가 부르는 글 열쇠는 글 파일에 모두 있음(band 는 미리보기만 · about · enc 는 운영만)', () => {
     const keys = [...js.matchAll(/\bM\.([a-z]+)\.([a-zA-Z0-9]+)/g)].map((m) => [
       m[1],
       m[2],
@@ -99,7 +159,7 @@ describe('NEWS-Q23 · Q24 대문', () => {
       typeof (t[group] as Record<string, string>)?.[key] === 'string';
     for (const [group, key] of keys) {
       if (group !== 'band') expect(has(liveText, group, key)).toBe(true);
-      expect(has(previewText, group, key)).toBe(true);
+      if (group !== 'enc') expect(has(previewText, group, key)).toBe(true);
     }
     expect(has(liveText, 'nav', 'about')).toBe(true);
     for (const t of [

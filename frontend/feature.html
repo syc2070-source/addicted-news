@@ -5,33 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>기획기사 - 중독뉴스</title>
   <link rel="stylesheet" href="_legacy/assets/css/style.css">
+  <link rel="stylesheet" href="/assets/fonts/noto-serif-kr/font.css">
+  <link rel="stylesheet" href="/assets/home/head.css?v=q24b">
 </head>
-<body>
-  <!-- 헤더 -->
-  <header class="header">
-    <div class="header-top">
-      <span class="date" id="current-date"></span>
-      <div class="header-links">
-        <a href="about.html">소개</a>
-        <a href="admin.html">관리자</a>
-      </div>
-    </div>
-    <div class="header-logo">
-      <a href="index.html">
-        <img src="assets/images/logo.png" alt="중독뉴스" class="logo">
-      </a>
-    </div>
-    <nav class="nav-main">
-      <a href="index.html">종합</a>
-      <a href="category.html?cat=중독정책">중독정책</a>
-      <a href="category.html?cat=알코올·약물중독">알코올·약물중독</a>
-      <a href="category.html?cat=도박중독">도박중독</a>
-      <a href="category.html?cat=게임·디지털중독">게임·디지털중독</a>
-      <a href="category.html?cat=중독사회와 회복">중독사회와 회복</a>
-      <a href="encyclopedia.html">중독백과</a>
-      <a href="reports.html">리포트</a>
+<body class="innerB">
+  <!-- 헤더: B 머리띠(NEWS-Q24 판 2) · 몸은 옛 판 그대로 -->
+  <header class="head"><div class="headInner">
+    <a class="brand" href="/"><span class="brandKo">중독뉴스</span><span class="brandEn">addiction news</span></a>
+    <nav class="nav">
+      <a href="/">종합</a>
+      <a href="/category.html?cat=중독정책">중독정책</a>
+      <a href="/category.html?cat=알코올·약물중독">알코올·약물중독</a>
+      <a href="/category.html?cat=도박중독">도박중독</a>
+      <a href="/category.html?cat=게임·디지털중독">게임·디지털중독</a>
+      <a href="/category.html?cat=중독사회와 회복">중독사회와 회복</a>
+      <a href="/rapha.html">라파뉴스</a>
+      <a href="/feature.html" aria-current="page">기획기사</a>
+      <a href="/encyclopedia.html">중독백과</a>
+      <a href="/reports.html">리포트</a>
+      <a href="/about.html">소개</a>
+      <a class="out" href="https://www.addictionsociety.net" target="_blank" rel="noopener noreferrer">중독사회 ↗</a>
     </nav>
-  </header>
+  </div></header>
 
   <!-- 메인 콘텐츠 -->
   <main class="main-content">
@@ -60,9 +55,5 @@
   <script src="assets/js/config.js"></script>
   <script src="_legacy/assets/js/main.js"></script>
   <script src="assets/js/footer.js"></script>
-  <script>
-    document.getElementById('current-date').textContent = 
-      new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-  </script>
 </body>
 </html>

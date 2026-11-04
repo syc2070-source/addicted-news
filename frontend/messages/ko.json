@@ -10,6 +10,8 @@
     "gambling": "도박중독",
     "game": "게임·디지털중독",
     "issue": "중독사회와 회복",
+    "rapha": "라파뉴스",
+    "feature": "기획기사",
     "encyclopedia": "중독백과",
     "reports": "리포트",
     "about": "소개",
@@ -52,6 +54,11 @@
     "kicker": "세계",
     "title": "세계의 중독 소식",
     "desc": "해외 매체 보도를 한국어로 옮겨 실었습니다."
+  },
+  "enc": {
+    "kicker": "중독백과",
+    "title": "오늘의 중독백과",
+    "more": "중독백과에서 더 보기 →"
   },
   "chronicle": {
     "kicker": "연대기",

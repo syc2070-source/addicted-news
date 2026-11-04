@@ -485,12 +485,15 @@ export async function lastFailedBroadcastOutlets(query: QueryFn, field: string):
  * NEWS-Q24 ■1: 지난 실행의 RSS 막힘(API 대체) 줄(「broadcast:<id> [404]」 꼴). 실패 피드에서 빠졌어도
  * 다음 실행의 「RSS 는 한 번만 물어봄」 · 「실패 채널 먼저」는 옛 그대로 이어지게 함께 읽는다. 없거나 실패면 [].
  */
-export async function lastRssBlocked(query: QueryFn, field: string): Promise<string[]> {
+export async function lastRssBlocked(
+  query: QueryFn,
+  field: string,
+): Promise<string[]> {
   try {
-    const rows = await query(
+    const rows = (await query(
       `SELECT per_source->'__run'->'broadcastRssBlocked' AS b FROM crawl_runs WHERE read_only = false AND field = $1 ORDER BY started_at DESC LIMIT 1`,
       [field],
-    );
+    )) as Array<{ b?: unknown }> | null | undefined;
     const cell: unknown = rows?.[0]?.b;
     const list: unknown = typeof cell === 'string' ? JSON.parse(cell) : cell;
     return Array.isArray(list) ? list.map((s: unknown) => String(s)) : [];

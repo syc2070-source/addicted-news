@@ -311,7 +311,10 @@ export interface RunProgress {
 }
 
 /** NEWS-Q24 ■1: 소스 목록에 있지만 오늘 일부러 안 도는 소스 수(막힌 피드 건너뜀 + 쉬는 소스). 「닿음 n/m」의 m 에서 뺀다. */
-export function notRunToday(p: { blockedSkipped?: string[]; resting?: string[] }): number {
+export function notRunToday(p: {
+  blockedSkipped?: string[];
+  resting?: string[];
+}): number {
   return (p.blockedSkipped?.length || 0) + (p.resting?.length || 0);
 }
 

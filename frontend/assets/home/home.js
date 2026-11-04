@@ -1,6 +1,6 @@
 // NEWS-Q23 ■2 · Q24 ■3 · 대문 한 벌: 운영 / (body data-home="live" = B · 글 /messages/ko.json · 바닥글은 index.html) ·
 // 미리보기 /preview/home(A = 기본 · B = ?v=b · 글 /messages/preview/ko.json). 자료 = 공개 API(읽기만).
-// 구간 순서: TOP → 오늘 들어온 소식 → 중독이슈 → 방송(실림만) → 세계 → 연대기 → 바닥.
+// 구간 순서: TOP → 오늘 들어온 소식 → 중독이슈 → 방송(실림만) → 세계 → 오늘의 중독백과(운영만) → 연대기 → 바닥.
 // 운영 수·로그(수집 소스 수 · 차단 · 수동 확인)는 읽지도 싣지도 않는다.
 (function () {
   'use strict';
@@ -182,6 +182,24 @@
     return section('', M.world.kicker, M.world.title, M.world.desc, body);
   }
 
+  // 오늘의 중독백과(Q24 판 2): 옛 대문과 같은 길 · 같은 후보(최근 조류 우선, 없으면 전체). 「오늘의」이므로 새로 열어도 하루 한 항목(KST 날 번호로 고름).
+  function encPick(items) {
+    var pool = items.filter(function (x) { return x.trend; });
+    var list = pool.length ? pool : items;
+    var dayNo = Math.floor(Date.parse(kstDay(new Date().toISOString())) / 86400000);
+    return list[dayNo % list.length];
+  }
+
+  function encyclopediaSection(items) {
+    var t = items && items.length ? encPick(items) : null;
+    var body = t
+      ? '<article class="encCard"><h3 class="encTerm"><a href="/encyclopedia.html?id=' + encodeURIComponent(t.id) + '">' + esc(t.termKo) + '</a></h3>' +
+        '<p class="encEn">' + esc(t.termEn) + '</p><p class="summary3">' + esc(t.definition) + '</p></article>' +
+        '<p class="more"><a class="link" href="/encyclopedia.html?id=' + encodeURIComponent(t.id) + '">' + esc(M.enc.more) + '</a></p>'
+      : '<p class="empty">' + esc(items ? M.empty : M.failed) + '</p>';
+    return section('toneDown', M.enc.kicker, M.enc.title, '', body);
+  }
+
   // 연대기: 방송 구간에 보인 6 편 뒤를 원 방송일 차례로(겹침 0)
   function chronicleSection(broadcasts) {
     var list = byAired(broadcasts).slice(6, 14);
@@ -210,6 +228,8 @@
         '<nav class="nav"><a href="/" aria-current="page">' + esc(n.home) + '</a>' +
           cat('중독정책', n.policy) + cat('알코올·약물중독', n.alcohol) + cat('도박중독', n.gambling) +
           cat('게임·디지털중독', n.game) + cat('중독사회와 회복', n.issue) +
+          (n.rapha ? '<a href="/rapha.html">' + esc(n.rapha) + '</a>' : '') +
+          (n.feature ? '<a href="/feature.html">' + esc(n.feature) + '</a>' : '') +
           '<a href="/encyclopedia.html">' + esc(n.encyclopedia) + '</a><a href="/reports.html">' + esc(n.reports) + '</a>' +
           (n.about ? '<a href="/about.html">' + esc(n.about) + '</a>' : '') +
           '<a class="out" href="' + SOCIETY + '" target="_blank" rel="noopener noreferrer">' + esc(n.society) + '</a></nav>' +
@@ -232,11 +252,14 @@
       '</div></footer>';
   }
 
+  var encLoad = null;
   json(LIVE ? '/messages/ko.json' : '/messages/preview/ko.json').then(function (messages) {
     M = messages;
     document.title = M.pageTitle;
     if (planB) app.classList.add('planB');
     app.innerHTML = headHtml();
+    // 백과 응답은 큼(900KB 남짓 · 옛 대문과 같은 길) — 다른 구간을 기다리게 하지 않고 따로 채운다. 글이 없는 미리보기는 부르지 않음.
+    encLoad = M.enc ? api('/encyclopedia') : null;
     return Promise.all([
       api('/articles/top'),
       api('/articles/today-counts'),
@@ -249,9 +272,14 @@
     var top = r[0], counts = r[1], casts = r[2], issue = r[3], grouped = r[4], version = r[5];
     app.innerHTML = headHtml() + '<main>' +
       topSection(top) + todaySection(counts) + issueSection(issue, top) +
-      broadcastSection(casts) + worldSection(grouped) + chronicleSection(casts) +
+      broadcastSection(casts) + worldSection(grouped) + (M.enc ? '<div id="encSlot"></div>' : '') + chronicleSection(casts) +
       '</main>' + bottomHtml(version);
     app.setAttribute('data-ready', '1');
+    if (encLoad) {
+      encLoad.then(function (items) {
+        document.getElementById('encSlot').outerHTML = encyclopediaSection(items);
+      });
+    }
     // 그림이 깨지면 빈 파랑 칸으로(외부 그림 · 대체 글 없음)
     var imgs = app.querySelectorAll('img');
     for (var i = 0; i < imgs.length; i++) {

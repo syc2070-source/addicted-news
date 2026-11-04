@@ -110,23 +110,7 @@ a { color: inherit; }
 .band a { font-weight: 500; }
 .band a[aria-current='true'] { font-weight: 700; text-decoration: none; }
 
-/* ── 머리 ── */
-.head { background: var(--blue-deep); color: var(--blue-text); border-bottom: 1px solid var(--blue-line); }
-.headInner {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 12px var(--space-3);
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-.brand { text-decoration: none; line-height: 1.2; flex: none; }
-.brandKo { display: block; font-family: var(--serif); font-size: 1.25rem; font-weight: 500; }
-.brandEn { display: block; font-size: 0.6875rem; color: var(--blue-muted); }
-.nav { display: flex; gap: 2px var(--space-2); flex-wrap: wrap; font-size: var(--fs-sm); flex: 1; min-width: 0; }
-.nav a { text-decoration: none; color: var(--blue-muted); white-space: nowrap; }
-.nav a:hover, .nav a[aria-current='page'] { color: var(--blue-text); }
-.nav .out { margin-left: auto; color: var(--blue-link); }
+/* ── 머리 = head.css(안쪽 쪽과 한 벌) ── */
 
 /* ── 구간 ── */
 .section { padding: var(--space-6) var(--space-3); border-top: 1px solid var(--line); background: var(--bg); }
@@ -222,6 +206,14 @@ a { color: inherit; }
 .cardTitle:hover { text-decoration: underline; }
 .card .meta { margin-top: 6px; }
 
+/* ── 오늘의 중독백과 ── */
+.encCard { background: var(--card); border-radius: var(--radius-lg); padding: var(--space-3); }
+.encTerm { font-family: var(--serif); font-size: var(--fs-title); font-weight: 500; line-height: 1.35; }
+.encTerm a { text-decoration: none; }
+.encTerm a:hover { text-decoration: underline; }
+.encEn { margin-top: 4px; font-size: var(--fs-sm); color: var(--muted); }
+.encCard .summary3 { margin-top: var(--space-1); }
+
 /* ── 연대기 ── */
 .event { display: grid; grid-template-columns: 92px 12px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .eventDate { color: var(--muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
@@ -248,9 +240,6 @@ a { color: inherit; }
   .topText { padding: var(--space-3); }
   .rows { grid-template-columns: minmax(0, 1fr); }
   .cards { grid-template-columns: minmax(0, 1fr); }
-  .headInner { flex-direction: column; align-items: flex-start; gap: var(--space-1); }
-  .nav { flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 4px; }
-  .nav .out { margin-left: 0; }
 }
 
 @media (max-width: 599px) {

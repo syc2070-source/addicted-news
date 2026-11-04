@@ -1,0 +1,44 @@
+/*
+ * NEWS-Q24 판 2: B 머리띠 한 벌(대문 · 미리보기 · 소개 · 안쪽 쪽이 같은 파일). 안쪽 쪽은 home.css 를 못 부른다(전역 규칙이 옛 몸을 건드림) — 그래서 머리띠에 쓰는 토큰만 여기 따로 둔다.
+ * 토큰 값은 home.css 와 같아야 한다(q23_preview.spec 이 잰다). 글꼴 칸(body.innerB)은 안쪽 쪽의 글꼴만 대문에 맞추고 몸의 나머지는 건드리지 않는다.
+ */
+:root {
+  --blue-deep: #1f3850;
+  --blue-line: #3b5872;
+  --blue-text: #f3f0e8;
+  --blue-muted: #c3cfdb;
+  --blue-link: #bfe6ff;
+  --fs-sm: 0.875rem;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --serif: 'Noto Serif KR', serif;
+}
+
+.head { background: var(--blue-deep); color: var(--blue-text); border-bottom: 1px solid var(--blue-line); }
+.headInner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 12px var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.brand { text-decoration: none; line-height: 1.2; flex: none; color: inherit; }
+.brandKo { display: block; font-family: var(--serif); font-size: 1.25rem; font-weight: 500; }
+.brandEn { display: block; font-size: 0.6875rem; color: var(--blue-muted); }
+.nav { display: flex; gap: 2px var(--space-2); flex-wrap: wrap; font-size: var(--fs-sm); line-height: 1.7; flex: 1; min-width: 0; }
+.nav a { text-decoration: none; color: var(--blue-muted); white-space: nowrap; }
+.nav a:hover, .nav a[aria-current='page'] { color: var(--blue-text); }
+.nav .out { margin-left: auto; color: var(--blue-link); }
+
+@media (max-width: 899px) {
+  .headInner { flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+  .nav { width: 100%; padding-bottom: 4px; } /* 줄바꿈 — 옆으로 숨은 고리 없이 다 보이게 */
+  .nav .out { margin-left: 0; }
+}
+
+/* 안쪽 쪽: 글꼴만 대문과 같게 */
+body.innerB { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+.innerB .special-page-title { font-family: var(--serif); font-weight: 500; }

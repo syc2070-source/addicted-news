@@ -64,22 +64,37 @@ export interface RejectNote {
 }
 
 /** 거부 기록으로 남길 사유: 방송 topic_fit_false · 기사 category_fit_false(묶음 상속 포함). */
-const FIT_REJECT = /^(broadcast:topic_fit_false|(cluster_inherit:)?category_fit_false)$/;
+const FIT_REJECT =
+  /^(broadcast:topic_fit_false|(cluster_inherit:)?category_fit_false)$/;
 
 /** NEWS-Q24 ■1: 이번 실행 거부 목록 → 방송 · 기사로 나눈 제목·까닭(상한 없음 · 다른 거부 사유는 뺌). */
 export function rejectNotesOf(
-  rejected: Array<{ title: string; source: string; rejectReason: string; summary: string | null }>,
+  rejected: Array<{
+    title: string;
+    source: string;
+    rejectReason: string;
+    summary: string | null;
+  }>,
 ): { broadcast: RejectNote[]; article: RejectNote[] } {
-  const out: { broadcast: RejectNote[]; article: RejectNote[] } = { broadcast: [], article: [] };
+  const out: { broadcast: RejectNote[]; article: RejectNote[] } = {
+    broadcast: [],
+    article: [],
+  };
   for (const r of rejected) {
     if (!FIT_REJECT.test(r.rejectReason)) continue;
     const note: RejectNote = {
       title: r.title.slice(0, 200),
       source: r.source,
       reason: r.rejectReason,
-      summary: (r.summary || '').replace(/\s+/g, ' ').trim().slice(0, PARTIAL_REASON_CHARS),
+      summary: (r.summary || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, PARTIAL_REASON_CHARS),
     };
-    (r.rejectReason.startsWith('broadcast:') ? out.broadcast : out.article).push(note);
+    (r.rejectReason.startsWith('broadcast:')
+      ? out.broadcast
+      : out.article
+    ).push(note);
   }
   return out;
 }

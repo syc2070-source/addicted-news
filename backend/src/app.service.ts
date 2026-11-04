@@ -203,7 +203,10 @@ export class AppService {
     let api: Record<string, unknown> | null = null;
     let feeds: BroadcastFeedStatus[] | null = null;
     let gate: Record<string, unknown> | null = null;
-    let sourceHealth: Pick<HealthFeeds, 'rssBlockedApi' | 'resting' | 'restingIds'> = {};
+    let sourceHealth: Pick<
+      HealthFeeds,
+      'rssBlockedApi' | 'resting' | 'restingIds'
+    > = {};
     try {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
@@ -219,7 +222,11 @@ export class AppService {
           const p = runs[0]?.progress;
           if (p) {
             const restingIds = p.resting ?? [];
-            sourceHealth = { rssBlockedApi: p.broadcastRssBlocked?.length ?? 0, resting: restingIds.length, restingIds };
+            sourceHealth = {
+              rssBlockedApi: p.broadcastRssBlocked?.length ?? 0,
+              resting: restingIds.length,
+              restingIds,
+            };
           }
         }
       }
@@ -259,8 +266,13 @@ export class AppService {
     const alerts = await this.alerts();
     const configFeeds = blockedFeeds();
     return {
-      ...this.getHealth(env), lastRun, schema: await this.schema(),
-      feeds: configFeeds && { ...configFeeds, ...this.alertsCache?.sourceHealth },
+      ...this.getHealth(env),
+      lastRun,
+      schema: await this.schema(),
+      feeds: configFeeds && {
+        ...configFeeds,
+        ...this.alertsCache?.sourceHealth,
+      },
       alerts,
       broadcast: await this.broadcast(env),
       lastCleanup: (await this.recentCleanups(1))[0] ?? null,
