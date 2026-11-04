@@ -41,6 +41,18 @@ function viaOf(rss: string, api: BroadcastFeedStatus['api']): BroadcastFeedStatu
   return 'none';
 }
 
+/**
+ * NEWS-Q24 ■1: 방송 RSS 실패 하나를 어디에 셀까. API 가 그 채널을 받았으면(오류 0 · 영상 있음) 손님 손실 0 →
+ * 「RSS 막힘(API 대체)」으로 따로 · 그 밖은 실패 피드 그대로. 숨김 0(막힘 목록은 회차 기록 · health 에 남음).
+ */
+export function rssFailureBucket(o: {
+  apiTried: boolean;
+  apiError?: { status: number | null; reason: string } | null;
+  items: number;
+}): 'rss_blocked' | 'failed' {
+  return o.apiTried && !o.apiError && o.items > 0 ? 'rss_blocked' : 'failed';
+}
+
 /** 수집기에서 채널 하나를 읽은 뒤 한 줄(newsCrawler.crawlBroadcastSources). */
 export function feedStatusOf(o: {
   id: string;

@@ -41,6 +41,11 @@ export interface RunProgressLike {
   blockedFromHost: number;
   broadcastMs: number | null;
   broadcastFirst?: boolean;
+  /** NEWS-Q24 ■1: RSS 막힘(API 대체) · 쉬는 소스 · 재시도 결과 · 기사 관문 거부 제목 */
+  broadcastRssBlocked?: string[];
+  resting?: string[];
+  restRetried?: Array<{ id: string; ok: boolean; status?: string }>;
+  articleRejected?: object[];
   /** NEWS-Q5 ■1: 구글 링크 해석 실패 수(대개 429) · 실행 끝 경보(run_alerts) */
   urlResolveFail?: number;
   /** NEWS-Q10 ■2: 스팸 낱말 하나 ∧ 제목 핵심어 → 관문으로 보낸 후보 수 */
@@ -474,6 +479,24 @@ export async function lastFailedBroadcastOutlets(query: QueryFn, field: string):
   return (await lastFailedFeeds(query, field))
     .filter((s: string) => s.startsWith('broadcast:'))
     .map((s: string) => s.slice('broadcast:'.length).split(' ')[0]);
+}
+
+/**
+ * NEWS-Q24 ■1: 지난 실행의 RSS 막힘(API 대체) 줄(「broadcast:<id> [404]」 꼴). 실패 피드에서 빠졌어도
+ * 다음 실행의 「RSS 는 한 번만 물어봄」 · 「실패 채널 먼저」는 옛 그대로 이어지게 함께 읽는다. 없거나 실패면 [].
+ */
+export async function lastRssBlocked(query: QueryFn, field: string): Promise<string[]> {
+  try {
+    const rows = await query(
+      `SELECT per_source->'__run'->'broadcastRssBlocked' AS b FROM crawl_runs WHERE read_only = false AND field = $1 ORDER BY started_at DESC LIMIT 1`,
+      [field],
+    );
+    const cell: unknown = rows?.[0]?.b;
+    const list: unknown = typeof cell === 'string' ? JSON.parse(cell) : cell;
+    return Array.isArray(list) ? list.map((s: unknown) => String(s)) : [];
+  } catch {
+    return [];
+  }
 }
 
 /** 지난 실행(읽기 전용 제외)의 실패 피드 목록 그대로(NEWS-Q6 ■4: 방송 RSS 404 판별). 없거나 실패면 []. */

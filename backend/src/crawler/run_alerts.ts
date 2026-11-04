@@ -59,7 +59,7 @@ export function alertFactsOf(r: RunPublic): AlertFacts {
     startedAt: r.startedAt,
     durationSec: r.durationSec,
     timedOut: r.timedOut,
-    reachedOf: p ? `${p.reached}/${p.total - (p.blockedSkipped?.length || 0)}` : null,
+    reachedOf: p ? `${p.reached}/${p.total - (p.blockedSkipped?.length || 0) - (p.resting?.length || 0)}` : null,
     broadcastExpected: p?.broadcastFirst !== false,
     broadcastChannelsRead: r.sources.broadcastChannelsRead,
     worldSaved: r.sources.worldSaved,

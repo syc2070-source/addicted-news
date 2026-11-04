@@ -1,7 +1,7 @@
 // backend/src/articles/articles.service.ts
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, In, IsNull, LessThan, Like, Not, Or, Repository } from 'typeorm';
+import { Between, FindOptionsWhere, In, IsNull, LessThan, Like, Not, Or, Repository } from 'typeorm';
 import { Article } from './article.entity';
 import { columnExists } from '../crawler/schema_probe';
 import { fieldProfile, topicTitleWords } from '../crawler/field_profile';
@@ -12,6 +12,13 @@ import { isTopSummaryOk } from '../crawler/summary_widget';
 /** 카테고리 slug → 이름(분야 설정 categories.slugs · NEWS-Q2 ■1). */
 export function categoryKeyFor(slug: string): string {
   return fieldProfile().categories.slugs[slug] || slug;
+}
+
+/** NEWS-Q24 ■3: 시각(ms) → 그 KST 날짜와 그날의 처음 · 끝(둘 다 포함). */
+export function kstDayRange(ms: number): { day: string; from: Date; to: Date } {
+  const day = new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const from = new Date(`${day}T00:00:00.000+09:00`);
+  return { day, from, to: new Date(from.getTime() + 24 * 3600 * 1000 - 1) };
 }
 
 /** 공개 목록 종류: 기본은 기사만, 방송은 ?kind=broadcast 로만(NEWS-Q1 ■4ⓓ). */
@@ -389,6 +396,26 @@ export class ArticlesService implements OnModuleInit {
       a.topWindow = manual.includes(a) ? '72h' : window;
     }
     return out;
+  }
+
+  /**
+   * NEWS-Q24 ■3: 대문 「오늘 들어온 소식」 큰 수(공개 · 실림만 · 목록 행 한계 없음). 날 = 기사 · 방송 가운데 가장 늦은 수집 날(KST).
+   * 기사 = 국내 기사 · 세계 = isForeign 기사 · 방송 = 그날 들어온 방송 · broadcastsTotal = 실린 방송 모두.
+   */
+  async getTodayCounts() {
+    const newest = (kind: ArticleKind) => this.articleRepo.findOne({ where: this.where({}, kind), order: { createdAt: 'DESC' }, select: { id: true, createdAt: true } });
+    const [a, b] = await Promise.all([newest('article'), newest('broadcast')]);
+    const latest = Math.max(a?.createdAt?.getTime() ?? 0, b?.createdAt?.getTime() ?? 0);
+    const broadcastsTotal = await this.articleRepo.count({ where: this.where({}, 'broadcast') });
+    if (!latest) return { day: null, articles: 0, broadcasts: 0, world: 0, broadcastsTotal };
+    const { day, from, to } = kstDayRange(latest);
+    const createdAt = Between(from, to);
+    const [articles, world, broadcasts] = await Promise.all([
+      this.articleRepo.count({ where: this.where({ createdAt, isForeign: false }) }),
+      this.articleRepo.count({ where: this.where({ createdAt, isForeign: true }) }),
+      this.articleRepo.count({ where: this.where({ createdAt }, 'broadcast') }),
+    ]);
+    return { day, articles, broadcasts, world, broadcastsTotal };
   }
 
   // 기획기사

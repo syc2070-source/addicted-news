@@ -15,7 +15,15 @@ const LAST_RUN_TTL_MS = 60_000;
 export type Health = { ok: true; commit: string; startedAt: string };
 /** NEWS-Q4 ■4: 묶음 열(묶음 SQL 3) 인식 · 피드 건강(설정 기준 막힌 피드 수) */
 export type HealthSchema = { cluster_columns: boolean | null };
-export type HealthFeeds = { blocked_from_host: number; blocked: number; substitutes: number };
+export type HealthFeeds = {
+  blocked_from_host: number;
+  blocked: number;
+  substitutes: number;
+  /** NEWS-Q24 ■1: 마지막 실행의 RSS 막힘(API 대체) 수 · 쉬는 소스 수와 이름(실행 기록이 없으면 칸 없음) */
+  rssBlockedApi?: number;
+  resting?: number;
+  restingIds?: string[];
+};
 /** NEWS-Q5 ■1: alerts = 마지막 실행의 경보(코드·값 · 없으면 [] · DB 못 닿으면 null) */
 export type HealthWithRun = Health & {
   lastRun: LastRunPublic | null;
@@ -182,6 +190,7 @@ export class AppService {
   private alertsCache: {
     at: number; value: RunAlert[] | null; api: Record<string, unknown> | null; feeds: BroadcastFeedStatus[] | null;
     gate: Record<string, unknown> | null;
+    sourceHealth: Pick<HealthFeeds, 'rssBlockedApi' | 'resting' | 'restingIds'>;
   } | null = null;
 
   /**
@@ -194,6 +203,7 @@ export class AppService {
     let api: Record<string, unknown> | null = null;
     let feeds: BroadcastFeedStatus[] | null = null;
     let gate: Record<string, unknown> | null = null;
+    let sourceHealth: Pick<HealthFeeds, 'rssBlockedApi' | 'resting' | 'restingIds'> = {};
     try {
       if (this.dataSource?.isInitialized) {
         const q = (sql: string, params?: unknown[]) => this.dataSource!.query(sql, params);
@@ -206,12 +216,17 @@ export class AppService {
           feeds = runs[0]?.broadcast?.feeds ?? null;
           const g = runs[0]?.progress?.broadcastGate;
           gate = g && typeof g === 'object' ? (g as Record<string, unknown>) : null;
+          const p = runs[0]?.progress;
+          if (p) {
+            const restingIds = p.resting ?? [];
+            sourceHealth = { rssBlockedApi: p.broadcastRssBlocked?.length ?? 0, resting: restingIds.length, restingIds };
+          }
         }
       }
     } catch {
       value = null;
     }
-    this.alertsCache = { at: now, value, api, feeds, gate };
+    this.alertsCache = { at: now, value, api, feeds, gate, sourceHealth };
     return value;
   }
 
@@ -241,8 +256,12 @@ export class AppService {
     } catch {
       lastRun = null;
     }
+    const alerts = await this.alerts();
+    const configFeeds = blockedFeeds();
     return {
-      ...this.getHealth(env), lastRun, schema: await this.schema(), feeds: blockedFeeds(), alerts: await this.alerts(),
+      ...this.getHealth(env), lastRun, schema: await this.schema(),
+      feeds: configFeeds && { ...configFeeds, ...this.alertsCache?.sourceHealth },
+      alerts,
       broadcast: await this.broadcast(env),
       lastCleanup: (await this.recentCleanups(1))[0] ?? null,
     };

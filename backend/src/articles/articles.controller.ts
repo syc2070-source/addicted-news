@@ -18,6 +18,12 @@ export class ArticlesController {
     return this.articlesService.getLatest(Number(limit) || 50, parseKind(kind), parseTier(tier), parseGroup(group));
   }
 
+  // 대문 큰 수 — 가장 늦은 수집 날(KST)의 기사 · 방송 · 세계 수(NEWS-Q24 ■3 · 숫자만)
+  @Get('today-counts')
+  getTodayCounts() {
+    return this.articlesService.getTodayCounts();
+  }
+
   // TOP 뉴스 — 72시간 안 가장 많은 매체가 다룬 묶음(NEWS-Q3 ■2) · 없으면 7일(topWindow)
   @Get('top')
   getTopNews() {

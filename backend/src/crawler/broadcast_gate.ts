@@ -49,6 +49,39 @@ export interface BroadcastGateStats {
   partials?: BroadcastPartialNote[];
   /** NEWS-Q16 ■1: 저장(실림·보관)한 편 가운데 재업로드라 원 방송일로 놓은 수 */
   reupload?: number;
+  /** NEWS-Q24 ■1: topic_fit_false 거부 편 하나마다 제목 · 까닭(partials 와 같은 자리 · 상한 없음) */
+  rejected?: RejectNote[];
+}
+
+/** NEWS-Q24 ■1: 관문이 「주제 아님」으로 거부한 한 편(회차 기록 · 공개). */
+export interface RejectNote {
+  title: string;
+  source: string;
+  /** rejected_articles.reject_reason 그대로 */
+  reason: string;
+  /** 판정 요약 앞 160자(없으면 빈 글) */
+  summary: string;
+}
+
+/** 거부 기록으로 남길 사유: 방송 topic_fit_false · 기사 category_fit_false(묶음 상속 포함). */
+const FIT_REJECT = /^(broadcast:topic_fit_false|(cluster_inherit:)?category_fit_false)$/;
+
+/** NEWS-Q24 ■1: 이번 실행 거부 목록 → 방송 · 기사로 나눈 제목·까닭(상한 없음 · 다른 거부 사유는 뺌). */
+export function rejectNotesOf(
+  rejected: Array<{ title: string; source: string; rejectReason: string; summary: string | null }>,
+): { broadcast: RejectNote[]; article: RejectNote[] } {
+  const out: { broadcast: RejectNote[]; article: RejectNote[] } = { broadcast: [], article: [] };
+  for (const r of rejected) {
+    if (!FIT_REJECT.test(r.rejectReason)) continue;
+    const note: RejectNote = {
+      title: r.title.slice(0, 200),
+      source: r.source,
+      reason: r.rejectReason,
+      summary: (r.summary || '').replace(/\s+/g, ' ').trim().slice(0, PARTIAL_REASON_CHARS),
+    };
+    (r.rejectReason.startsWith('broadcast:') ? out.broadcast : out.article).push(note);
+  }
+  return out;
 }
 
 export interface BroadcastPartialNote {

@@ -10,7 +10,7 @@
 // ============================================================
 import type { BackfillRecord, BroadcastApiRecord } from './youtube_api';
 import type { BroadcastFeedStatus } from './broadcast_feeds';
-import type { BroadcastGateStats } from './broadcast_gate';
+import type { BroadcastGateStats, RejectNote } from './broadcast_gate';
 import type { GroupCounts } from './keyword_groups';
 import type { AiredFixResult } from './broadcast_aired';
 import type { RejudgeRecord } from './broadcast_rejudge';
@@ -301,6 +301,18 @@ export interface RunProgress {
   hostBreaker503?: { tripped: string[]; skipped: Record<string, number> };
   /** NEWS-Q21 ■1: 실행 시작 위젯 요약 쓸기(읽은 행 · 고친 id) · 이번 실행 저장 직전 고친 수 */
   widgetSummary?: { checked: number; fixedIds: number[]; emptied: number[]; error?: boolean; savedFixed?: number };
+  /** NEWS-Q24 ■1: RSS 는 실패했지만 API 가 받은 방송 채널(「broadcast:<id> [404]」 꼴 · 실패 수에서 뺌 · 다음 실행 RSS 판별에도 씀) */
+  broadcastRssBlocked?: string[];
+  /** NEWS-Q24 ■1: 쉬는 소스 — 오늘 건너뜀 · 오늘 다시 해 본 결과(주 1회) */
+  resting?: string[];
+  restRetried?: Array<{ id: string; ok: boolean; status?: string }>;
+  /** NEWS-Q24 ■1: 기사 관문 「주제 아님」 거부 제목 · 까닭(방송은 broadcastGate.rejected) */
+  articleRejected?: RejectNote[];
+}
+
+/** NEWS-Q24 ■1: 소스 목록에 있지만 오늘 일부러 안 도는 소스 수(막힌 피드 건너뜀 + 쉬는 소스). 「닿음 n/m」의 m 에서 뺀다. */
+export function notRunToday(p: { blockedSkipped?: string[]; resting?: string[] }): number {
+  return (p.blockedSkipped?.length || 0) + (p.resting?.length || 0);
 }
 
 export function emptyProgress(total: number, deadlineMs: number): RunProgress {

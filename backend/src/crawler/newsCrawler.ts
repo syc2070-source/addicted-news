@@ -29,8 +29,9 @@ import {
 } from './broadcast';
 import {
   BroadcastGateStats, BroadcastPartialNote, broadcastGateSystem, buildBroadcastGateUser, decideBroadcastGate, emptyBroadcastGateStats,
-  parseBroadcastVerdict, partialNoteOf,
+  parseBroadcastVerdict, partialNoteOf, rejectNotesOf,
 } from './broadcast_gate';
+import { planRest, restAttemptOf, restLogFromRuns } from './source_rest';
 import {
   DEFAULT_CLIP_MARKERS, DEFAULT_EPISODE_DAYS, DEFAULT_MAIN_EVIDENCE, DEFAULT_RELATED_DAYS, EpisodeItem, LengthRule, archiveListedBroadcasts,
   existingEpisodeMains, foldEpisodes, hasMainEvidence, isClipTitle, listedArchiveIds, longByLength, restoreKeptBroadcasts, shiftYmd, shortClip,
@@ -41,7 +42,7 @@ import {
   YOUTUBE_API_ENV, apiTodayFromRuns, backfillSearch, backfillStateFromRuns, durationBudgetLeft, emptyApiRecord, fetchDurations, lastLookbackFromRuns, lookbackUploads,
   planChannel, rss404Outlets, youtubeApiKey,
 } from './youtube_api';
-import { feedStatusOf } from './broadcast_feeds';
+import { feedStatusOf, rssFailureBucket } from './broadcast_feeds';
 import { probeSchema, SchemaFlags } from './schema_probe';
 import { fieldProfile, SourceGrade } from './field_profile';
 import { fetchFeed } from './feed_fetch';
@@ -58,7 +59,7 @@ import { columnExists } from './schema_probe';
 import { rejudgeBroadcasts, rejudgeStateFromRuns } from './broadcast_rejudge';
 import { breakerSummaryOf } from './breaker_summary';
 import {
-  CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, recentCrawlRuns, recordCrawlRun,
+  CrawlRunSummary, SourceRunStat, digestPerSource, emptySourceStat, feedHealthLines, lastFailedFeeds, lastRssBlocked, recentCrawlRuns, recordCrawlRun,
 } from './crawl_runs';
 import { alertFactsOf, alertLine, evaluateRunAlerts } from './run_alerts';
 import { backfillGoogleUrls, hostOf, isGoogleNewsLink, UrlResolveState } from './url_resolve';
@@ -68,7 +69,7 @@ import { ClusterPool, leadOf, paraOf } from './event_cluster';
 import {
   BROADCAST_SHARE_MS, ReadCtx, ReadOutcome, RunProgress, SOURCE_CAP_MS, SOURCE_CONCURRENCY, crawlTimeoutMs,
   GOOGLE_SEARCH_CAP_MS, sourceCapMs,
-  emptyProgress, lastRunLastSourceId, planSources, runSources,
+  emptyProgress, lastRunLastSourceId, notRunToday, planSources, runSources,
 } from './crawl_schedule';
 import { PoolData, backfillClusters, loadClusterPool, savedPct } from './event_cluster_store';
 import { missedDaySources, planMissedDay, recentRunBriefs } from './missed_day';
@@ -759,7 +760,8 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
   // NEWS-Q2 ■8: 지난 실행에서 실패한 채널을 맨 앞으로(crawl_runs 있을 때)
   let failedRaw: string[] = [];
   if (RUN.flags.crawlRuns && RUN.query) {
-    failedRaw = await lastFailedFeeds(RUN.query, PROFILE.field);
+    // NEWS-Q24 ■1: RSS 막힘(API 대체)은 실패 피드에서 빠졌지만 다음 실행의 판별은 옛 그대로(실패 + 막힘)
+    failedRaw = [...await lastFailedFeeds(RUN.query, PROFILE.field), ...await lastRssBlocked(RUN.query, PROFILE.field)];
     const failed = failedRaw.filter((s) => s.startsWith('broadcast:')).map((s) => s.slice('broadcast:'.length).split(' ')[0]);
     if (failed.length) {
       sources = orderFailedFirst(sources, failed);
@@ -826,6 +828,7 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
     });
     let items: BroadcastItem[] = [];
     let rssFailed: string | null = null;
+    let rssFailLine: string | null = null;
     let apiError: { status: number | null; reason: string } | null = null;
     const rssTried = plan.rss || plan.reason === 'api_only_rss404';
     if (rssTried) {
@@ -836,8 +839,8 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
       } catch (e) {
         const status = httpStatusOf(e);
         rssFailed = String(status ?? 'ERR');
+        rssFailLine = `broadcast:${source.outletId}${status ? ` [${status}]` : ''}`;
         console.warn(`  ├─ [${source.program}] ❌ RSS 실패${plan.api ? '(API 로 되짚기)' : '(스킵)'}${status ? ` [${status}]` : ''}: ${(e as Error).message}`);
-        crawlStats.failedFeeds.push(`broadcast:${source.outletId}${status ? ` [${status}]` : ''}`);
       }
     }
     if (plan.api && apiKey) {
@@ -888,6 +891,15 @@ async function crawlBroadcastSources(deadline: number = crawlDeadline): Promise<
           pages: sb.pages, items: sb.items.length, units: sb.units, ...(sb.error ? { error: `${sb.error.status ?? ''}:${sb.error.reason}` } : {}),
         };
         console.log(`  ├─ [${source.program}] 100일 메우기 search ${sb.pages}쪽 · ${sb.items.length}편(새 ${added}) · ${sb.units}단위${sb.error ? ` · 실패 ${sb.error.reason}` : ''}`);
+      }
+    }
+    // NEWS-Q24 ■1: RSS 실패 — API 가 이 채널을 받았으면 「RSS 막힘(API 대체)」(읽은 소스로 셈 · 실패 수에서 뺌) · 아니면 실패 피드 그대로
+    if (rssFailLine) {
+      if (rssFailureBucket({ apiTried: plan.api && !!apiKey, apiError, items: items.length }) === 'rss_blocked') {
+        crawlStats.feedsOk++;
+        if (RUN.progress) (RUN.progress.broadcastRssBlocked ||= []).push(rssFailLine);
+      } else {
+        crawlStats.failedFeeds.push(rssFailLine);
       }
     }
     // NEWS-Q8 ■2: 채널별 마지막 읽기 결과(health broadcast.feeds[])
@@ -1303,6 +1315,12 @@ async function readSource(conf: SourceConfig, ctx: ReadCtx<ReadSource>): Promise
   return res;
 }
 
+/** NEWS-Q24 ■1: 쉬는 소스의 주 1회 재시도 실패 — 예상된 것이라 실패 피드 · 경고에 넣지 않고 시도 기록(rest:…)만. */
+function recordRestRetryFailure(conf: SourceConfig, status: string): void {
+  sourceStat(conf.id).failed = `rest:${status}`;
+  console.log(`  └─ [${conf.id}] 쉬는 소스 재시도 실패(${status}) — 다음 주에 다시`);
+}
+
 function recordFeedFailure(conf: SourceConfig, e: any): void {
   const stat = sourceStat(conf.id);
   const status = httpStatusOf(e);
@@ -1316,7 +1334,7 @@ function recordFeedFailure(conf: SourceConfig, e: any): void {
 async function judgeSource(
   conf: SourceConfig,
   outcome: ReadOutcome<ReadSource>,
-  opts: { blockedRetry?: boolean } = {},
+  opts: { blockedRetry?: boolean; restRetry?: boolean } = {},
 ): Promise<Candidate[]> {
   const stat = sourceStat(conf.id);
   stat.readMs = outcome.ms;
@@ -1332,6 +1350,10 @@ async function judgeSource(
       console.log(`  └─ [${conf.id}] 막힌 피드 재시도 실패${status ? ` [${status}]` : ''} — 대체 피드(${conf.blocked?.substitute ?? '-'})가 읽음`);
       return [];
     }
+    if (opts.restRetry) {
+      recordRestRetryFailure(conf, String(httpStatusOf(outcome.error) ?? 'ERR'));
+      return [];
+    }
     recordFeedFailure(conf, outcome.error);
     return [];
   }
@@ -1343,6 +1365,7 @@ async function judgeSource(
     if (!maybe) {
       stat.failed = opts.blockedRetry ? 'blocked:timeout' : 'timeout';
       if (opts.blockedRetry) { stat.blocked = true; return []; }
+      if (opts.restRetry) { recordRestRetryFailure(conf, 'timeout'); return []; }
       crawlStats.failedFeeds.push(`${conf.id} (${conf.sourceName}) [timeout]: 소스 상한 ${sourceCapMs(conf) / 1000}초`);
       return [];
     }
@@ -2385,7 +2408,10 @@ async function main() {
   progress.blockedSkipped = plan.skipped.map((s) => s.id);
   progress.blockedFromHost = crawlSources.filter((s) => s.blocked?.kind === 'blocked_from_host').length;
   const retryIds = new Set(plan.retrying.map((s) => s.id));
-  let order = standbyLast(plan.order, promotion.standby);
+  // NEWS-Q24 ■1: 쉬는 소스(잇단 7회차 실패) — 오늘 건너뜀(실패 수에 안 듦) · 주 1회 재시도 · 잇단 2번 성공이면 기록을 밟아 저절로 복귀
+  const rest = planRest(crawlSources, RUN.flags.crawlRuns && !narrowed ? await restLogFromRuns(q, PROFILE.field) : {});
+  if (rest.skipped.size) progress.resting = [...rest.skipped];
+  let order = standbyLast(plan.order, promotion.standby).filter((s) => !rest.skipped.has(s.id));
   // NEWS-Q7 ■3: 놓친 날 되짚기 1회 — 기사 단계를 못 돈 실행이 있으면 국내지 site: 날짜 검색을 맨 앞에(LLM 0 · 중복 검사·관문 그대로)
   const missedCfg = PROFILE.sources.missed_day;
   if (missedCfg?.query && RUN.flags.crawlRuns && !narrowed) {
@@ -2404,6 +2430,8 @@ async function main() {
   );
   if (plan.skipped.length) console.log(`   막힌 피드 오늘 건너뜀(대체 피드가 읽음): ${progress.blockedSkipped.join(', ')}`);
   if (plan.retrying.length) console.log(`   막힌 피드 오늘 다시 해 봄(주·월 1회): ${[...retryIds].join(', ')}`);
+  if (rest.skipped.size) console.log(`   쉬는 소스 오늘 건너뜀: ${[...rest.skipped].join(', ')}`);
+  if (rest.retrying.size) console.log(`   쉬는 소스 오늘 다시 해 봄(주 1회): ${[...rest.retrying].join(', ')}`);
   console.log('');
 
   await runSources<SourceConfig, ReadSource>(order, {
@@ -2425,8 +2453,13 @@ async function main() {
         return Date.now() <= crawlDeadline;
       }
       const retry = retryIds.has(conf.id);
-      const got = await judgeSource(conf, outcome, { blockedRetry: retry });
+      const restRetry = rest.retrying.has(conf.id);
+      const got = await judgeSource(conf, outcome, { blockedRetry: retry, restRetry });
       all.push(...got);
+      if (restRetry && !(outcome.status === 'ok' && outcome.value?.breakerSkipped)) {
+        const stat = sourceStat(conf.id);
+        (progress.restRetried ||= []).push({ id: conf.id, ok: restAttemptOf(stat) === true, ...(stat.failed ? { status: String(stat.failed) } : {}) });
+      }
       progress.reached = i + 1;
       progress.lastId = conf.id;
       // NEWS-Q18 ■4: 503 단락기로 읽지 않은 피드는 시도한 것이 아님 — 재시도 · 주 피드 기록에 넣지 않음(승격 · 강등 셈 그대로) ·
@@ -2652,6 +2685,10 @@ async function main() {
   for (const line of feedHealthLines(summary)) console.log(`   ${line}`);
   // NEWS-Q5 ■1: 실행 끝 경보(LLM 0) — per_source.__run.alerts 로 저장 + Discord 한 줄(웹훅 없으면 로그)
   if (RUN.progress) {
+    // NEWS-Q24 ■1: 관문 「주제 아님」 거부 제목 · 까닭(방송 = partials 옆 · 기사 = 따로 · 상한 없음) — Q16 판단 재료
+    const rejectNotes = rejectNotesOf(rejectedAll);
+    if (rejectNotes.broadcast.length) RUN.broadcastGate.rejected = rejectNotes.broadcast;
+    if (rejectNotes.article.length) RUN.progress.articleRejected = rejectNotes.article;
     RUN.progress.urlResolveFail = crawlStats.urlResolveFail;
     RUN.progress.spamToGate = crawlStats.spamToGate;
     // NEWS-Q11 ■3: 핵심어 묶음별 후보·저장·보관·거부
@@ -2666,7 +2703,7 @@ async function main() {
           startedAt: summary.startedAt.toISOString(),
           durationSec: elapsed,
           timedOut,
-          reachedOf: `${RUN.progress.reached}/${RUN.progress.total - RUN.progress.blockedSkipped.length}`,
+          reachedOf: `${RUN.progress.reached}/${RUN.progress.total - notRunToday(RUN.progress)}`,
           broadcastExpected: RUN.progress.broadcastFirst,
           broadcastChannelsRead: digest.broadcastChannelsRead,
           worldSaved: digest.worldSaved,
@@ -2692,7 +2729,7 @@ async function main() {
   if (RUN.progress) {
     const p = RUN.progress;
     console.log(
-      `   순서·상한: 시작 ${p.startId ?? '-'} → 마지막 ${p.lastId ?? '-'} · 닿음 ${p.reached}/${p.total - p.blockedSkipped.length}` +
+      `   순서·상한: 시작 ${p.startId ?? '-'} → 마지막 ${p.lastId ?? '-'} · 닿음 ${p.reached}/${p.total - notRunToday(p)}` +
       ` · 소스 상한 걸림 ${p.timeouts.length} · 막힌 피드 건너뜀 ${p.blockedSkipped.length} · 방송 ${p.broadcastMs != null ? `${Math.round(p.broadcastMs / 1000)}초` : '안 돎'}` +
       `${p.timedOut ? ` · 전체 상한(${p.deadlineMin}분) 걸림(${p.stoppedAt})` : ''}`,
     );
