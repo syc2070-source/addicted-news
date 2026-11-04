@@ -1,5 +1,5 @@
 /*
- * NEWS-Q23 ■2 · 대문 미리보기 두 안. 토큰 값은 중독사회 v4(frontend-next/src/app/globals.css · v4.module.css) 그대로 — 두 사이트가 한 벌로 보이게.
+ * NEWS-Q23 ■2 · Q24 ■3 · 대문 한 벌(운영 / = B · 미리보기 A · B). 토큰 값은 중독사회 v4(frontend-next/src/app/globals.css · v4.module.css) 그대로 — 두 사이트가 한 벌로 보이게.
  *   구간 문법: 꼬리말 13 → 세리프 제목 28 → 한 줄 설명 16 → 내용 · 위아래 64 · 안쪽 폭 1240 · 큰 수 56.
  *   A(기본) = 전체 파랑 · B(?v=b) = 흰 바탕 + 파랑 머리·구간 띠(유형 색은 중독사회 밝은 바탕 값).
  */
@@ -70,13 +70,14 @@
   --muted: #566370;
   --accent: #8a5a00;
   --link: #1d5c8f;
+  /* 유형 점(NEWS-Q24 ■3 CTO 6): 흰 바탕 · 카드 #f4f7fa 둘 다 3:1 넘게 — 중독사회 밝은 판 값에서 도박 · 마약 · 게임 · 일반만 어둡게(바탕이 다르다). 대비표는 보고서. */
   --type-alcohol: #2a78d6;
-  --type-gambling: #eb6834;
-  --type-drug: #1baf7a;
+  --type-gambling: #d9571f;
+  --type-drug: #128a60;
   --type-smartphone: #6250d6;
-  --type-game: #e87ba4;
+  --type-game: #d4557f;
   --type-tobacco: #008300;
-  --type-none: #9a958a;
+  --type-none: #847f74;
 }
 
 * { box-sizing: border-box; }
@@ -235,6 +236,10 @@ a { color: inherit; }
 .bottomInner { max-width: 1240px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--space-3); }
 .bottom a { color: var(--blue-link); }
 .bottomSmall { font-size: 0.75rem; }
+
+/* ── 소개 쪽(about.html) ── */
+.about p { max-width: 48em; }
+.about p + p { margin-top: var(--space-2); }
 
 /* ── 390 폭 ── */
 @media (max-width: 899px) {

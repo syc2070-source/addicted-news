@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>중독뉴스 - 중독 관련 뉴스 큐레이션</title>
+  <!-- NEWS-Q24 ■3: 옛 대문 보관(지움 0 · 되돌릴 때 쓰는 자리) · 색인 금지 · 글 안 상대 주소는 base 로 그대로 -->
+  <meta name="robots" content="noindex, nofollow">
+  <base href="/">
+  <link rel="stylesheet" href="_legacy/assets/css/style.css">
+</head>
+<body>
+  <!-- 헤더 -->
+  <header class="header">
+    <div class="header-top">
+      <span class="date" id="current-date"></span>
+      <div class="header-links" style="font-size: 16px; font-weight: 500;">
+        <a href="about.html">소개</a>
+        <a href="admin.html" target="_blank">관리자</a>
+      </div>
+    </div>
+    <div class="header-logo">
+      <a href="index.html">
+        <img src="assets/images/logo.png" alt="중독뉴스" class="logo">
+      </a>
+      <div class="header-sub-links">
+        <a href="https://addictionsociety.net" target="_blank" rel="noopener noreferrer">중독사회</a>
+        <span class="divider">|</span>
+        <a href="https://www.raphacom.net" target="_blank" rel="noopener noreferrer">라파공동체</a>
+      </div>
+    </div>
+    <nav class="nav-main">
+      <a href="index.html" class="active">종합</a>
+      <a href="category.html?cat=중독정책">중독정책</a>
+      <a href="category.html?cat=알코올·약물중독">알코올·약물중독</a>
+      <a href="category.html?cat=도박중독">도박중독</a>
+      <a href="category.html?cat=게임·디지털중독">게임·디지털중독</a>
+      <a href="category.html?cat=중독사회와 회복">중독사회와 회복</a>
+      <a href="encyclopedia.html">중독백과</a>
+      <a href="reports.html">리포트</a>
+    </nav>
+  </header>
+
+  <!-- 메인 콘텐츠: 1:2:1 비율 -->
+  <main class="main-content">
+    <div class="content-wrapper layout-1-2-1">
+      <!-- 왼쪽 (1): 라파뉴스 + 기획기사 -->
+      <aside class="column-left">
+        <!-- 라파뉴스 -->
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">라파뉴스</h3>
+            <a href="rapha.html" class="sidebar-more">더보기</a>
+          </div>
+          <div id="rapha-news" class="sidebar-box-content">
+          </div>
+        </div>
+        
+        <!-- 기획기사 -->
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">기획기사</h3>
+            <a href="feature.html" class="sidebar-more">더보기</a>
+          </div>
+          <div id="feature-news" class="sidebar-box-content">
+          </div>
+        </div>
+      </aside>
+
+      <!-- 중앙 (2): 메인 뉴스 -->
+      <div class="column-center">
+        <!-- TOP 뉴스 -->
+        <section class="section top-news-section">
+          <h2 class="section-title">TOP NEWS <span id="top-window" class="top-window-note"></span></h2>
+          <div id="top-news" class="top-news-container">
+          </div>
+        </section>
+
+        <!-- 중독정책 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">중독정책</h2>
+            <a href="category.html?cat=중독정책" class="more-link">더보기</a>
+          </div>
+          <div id="cat-policy" class="articles-grid"></div>
+        </section>
+
+        <!-- 알코올·약물중독 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">알코올·약물중독</h2>
+            <a href="category.html?cat=알코올·약물중독" class="more-link">더보기</a>
+          </div>
+          <div id="cat-alcohol" class="articles-grid"></div>
+        </section>
+
+        <!-- 도박중독 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">도박중독</h2>
+            <a href="category.html?cat=도박중독" class="more-link">더보기</a>
+          </div>
+          <div id="cat-gambling" class="articles-grid"></div>
+        </section>
+
+        <!-- 게임·디지털중독 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">게임·디지털중독</h2>
+            <a href="category.html?cat=게임·디지털중독" class="more-link">더보기</a>
+          </div>
+          <div id="cat-digital" class="articles-grid"></div>
+        </section>
+
+        <!-- 중독사회와 회복 -->
+        <section class="section category-section">
+          <div class="section-header">
+            <h2 class="section-title">중독사회와 회복</h2>
+            <a href="category.html?cat=중독사회와 회복" class="more-link">더보기</a>
+          </div>
+          <div id="cat-issue" class="articles-grid"></div>
+        </section>
+      </div>
+
+      <!-- 오른쪽 (1): 오늘의 중독백과 + 중독이슈 -->
+      <aside class="column-right">
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">오늘의 중독백과</h3>
+          </div>
+          <div class="sidebar-box-content">
+            <div id="enc-widget">불러오는 중…</div>
+          </div>
+        </div>
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">
+            <h3 class="sidebar-box-title">중독이슈</h3>
+          </div>
+          <div id="sidebar-news" class="sidebar-box-content">
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- 푸터 -->
+  <footer class="footer">
+    <p class="footer-publisher"><span class="footer-publisher-name">발행: Statory · 라파중독연구소</span> | 충북 옥천군 안남면 지수2길 13-7</p>
+    <div class="footer-ecosystem">
+      <span class="footer-ecosystem-label">함께 보기</span>
+      <a href="https://addictionsociety.net" target="_blank" rel="noopener noreferrer">중독사회 관측소</a>
+      <span class="footer-sep">·</span>
+      <a href="https://statory.org" target="_blank" rel="noopener noreferrer">statory</a>
+    </div>
+    <p>&copy; 2026 중독뉴스. All rights reserved.</p>
+    <p class="footer-build" id="footer-build"></p>
+  </footer>
+
+  <script src="assets/js/config.js"></script>
+  <script src="_legacy/assets/js/main.js"></script>
+  <script src="assets/js/footer.js"></script>
+  <script>
+    document.getElementById('current-date').textContent = 
+      new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  </script>
+</body>
+</html>

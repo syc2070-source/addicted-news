@@ -1,11 +1,13 @@
-// NEWS-Q23 ■2 · 대문 미리보기(/preview/home · A = 기본 · B = ?v=b). 글 = /messages/preview/ko.json · 자료 = 운영과 같은 공개 API(읽기만).
-// 운영 main.js 를 싣지 않는다(운영 대문과 나눈 것 0). 구간 순서: TOP → 오늘 들어온 소식 → 중독이슈 → 방송(실림만) → 세계 → 연대기 → 바닥.
+// NEWS-Q23 ■2 · Q24 ■3 · 대문 한 벌: 운영 / (body data-home="live" = B · 글 /messages/ko.json · 바닥글은 index.html) ·
+// 미리보기 /preview/home(A = 기본 · B = ?v=b · 글 /messages/preview/ko.json). 자료 = 공개 API(읽기만).
+// 구간 순서: TOP → 오늘 들어온 소식 → 중독이슈 → 방송(실림만) → 세계 → 연대기 → 바닥.
 // 운영 수·로그(수집 소스 수 · 차단 · 수동 확인)는 읽지도 싣지도 않는다.
 (function () {
   'use strict';
   var API = window.API_BASE;
   var SOCIETY = 'https://www.addictionsociety.net';
-  var planB = new URLSearchParams(window.location.search).get('v') === 'b';
+  var LIVE = document.body.getAttribute('data-home') === 'live';
+  var planB = LIVE || new URLSearchParams(window.location.search).get('v') === 'b';
   var app = document.getElementById('app');
   var M = {};
 
@@ -16,7 +18,7 @@
     ['tobacco', /담배|흡연|금연|니코틴|베이프|노담|tobacco|nicotine|vap(e|ing)|smok/gi],
     ['alcohol', /알코올|음주|절주|단주|주류|alcohol|drink/gi],
     ['game', /게임|gaming/gi],
-    ['smartphone', /스마트폰|디지털|도파민|스크롤|숏폼|과의존|과몰입|(^|[\s'"])폰(?=[은는이가을를과에의\s])|SNS|smartphone|social media/gi],
+    ['smartphone', /스마트폰|디지털|인터넷\s?중독|도파민|스크롤|숏폼|과의존|과몰입|(^|[\s'"])폰(?=[은는이가을를과에의\s])|SNS|smartphone|social media/gi],
   ];
 
   function typeOf(a) {
@@ -69,7 +71,7 @@
   }
   function api(path) {
     return json(API + path).catch(function (e) {
-      console.warn('미리보기 자료 실패', path, e);
+      console.warn('대문 자료 실패', path, e);
       return null;
     });
   }
@@ -124,19 +126,11 @@
     return section('', M.top.kicker + ' · ' + win, M.top.title, '', card + '<div class="topMinis">' + minis + '</div>');
   }
 
-  function todaySection(plain, broadcasts) {
-    var rows = (plain && plain.items) || [];
-    var casts = (broadcasts && broadcasts.items) || [];
-    if (!rows.length) return section('toneUp', M.today.titleToday, M.today.titleToday, '', '<p class="empty">' + esc(M.failed) + '</p>');
-    // 가장 늦은 수집 날(KST) 하나를 센다 — 정오 앞이면 어제 수집 수이고 날짜가 그대로 보인다
-    var day = rows.map(function (a) { return kstDay(a.createdAt); }).sort().pop();
-    var sameDay = function (a) { return kstDay(a.createdAt) === day; };
-    var world = rows.filter(function (a) { return sameDay(a) && a.isForeign; }).length;
-    var korean = rows.filter(function (a) { return sameDay(a) && !a.isForeign; }).length;
-    var cast = casts.filter(sameDay).length;
+  // 큰 수 = 전용 수 API(NEWS-Q24 ■3 · 목록 앞 100행 한계 없음). 날 = 가장 늦은 수집 날(KST) — 정오 앞이면 어제 수이고 날짜가 그대로 보인다.
+  function todaySection(counts) {
+    if (!counts || !counts.day) return section('toneUp', M.today.titleToday, M.today.titleToday, '', '<p class="empty">' + esc(counts ? M.empty : M.failed) + '</p>');
+    var day = counts.day;
     var isToday = day === kstDay(new Date().toISOString());
-    // 방송 목록을 못 읽었으면 0 이 아니라 모른다고 보임
-    if (!broadcasts) cast = '–';
     var tile = function (label, n, note) {
       return '<div class="tile"><p class="tileLabel">' + esc(label) + '</p>' +
         '<p class="tileNumber">' + n + '<span class="tileUnit">' + esc(M.today.unit) + '</span></p>' +
@@ -145,9 +139,9 @@
     return section('toneUp', fill(M.today.kicker, { date: monthDay(day) }),
       isToday ? M.today.titleToday : fill(M.today.title, { date: monthDay(day) }), M.today.desc,
       '<div class="tiles">' +
-        tile(M.today.articles, korean, M.today.articlesNote) +
-        tile(M.today.broadcasts, cast, broadcasts ? fill(M.today.broadcastsNote, { n: broadcasts.total }) : M.failed) +
-        tile(M.today.world, world, M.today.worldNote) +
+        tile(M.today.articles, Number(counts.articles) || 0, M.today.articlesNote) +
+        tile(M.today.broadcasts, Number(counts.broadcasts) || 0, fill(M.today.broadcastsNote, { n: Number(counts.broadcastsTotal) || 0 })) +
+        tile(M.today.world, Number(counts.world) || 0, M.today.worldNote) +
       '</div>');
   }
 
@@ -206,20 +200,24 @@
     var cat = function (name, label) {
       return '<a href="/category.html?cat=' + encodeURIComponent(name) + '">' + esc(label) + '</a>';
     };
-    return '<div class="band"><span>' + esc(M.band.label) + '</span>' +
+    var band = LIVE ? '' : '<div class="band"><span>' + esc(M.band.label) + '</span>' +
         '<a href="/preview/home"' + (planB ? '' : ' aria-current="true"') + '>' + esc(M.band.a) + '</a>' +
-        '<a href="/preview/home?v=b"' + (planB ? ' aria-current="true"' : '') + '>' + esc(M.band.b) + '</a></div>' +
+        '<a href="/preview/home?v=b"' + (planB ? ' aria-current="true"' : '') + '>' + esc(M.band.b) + '</a></div>';
+    var brandHref = LIVE ? '/' : '/preview/home' + (planB ? '?v=b' : '');
+    return band +
       '<header class="head"><div class="headInner">' +
-        '<a class="brand" href="/preview/home' + (planB ? '?v=b' : '') + '"><span class="brandKo">' + esc(M.brand) + '</span><span class="brandEn">' + esc(M.brandEn) + '</span></a>' +
-        '<nav class="nav"><a href="/index.html" aria-current="page">' + esc(n.home) + '</a>' +
+        '<a class="brand" href="' + brandHref + '"><span class="brandKo">' + esc(M.brand) + '</span><span class="brandEn">' + esc(M.brandEn) + '</span></a>' +
+        '<nav class="nav"><a href="/" aria-current="page">' + esc(n.home) + '</a>' +
           cat('중독정책', n.policy) + cat('알코올·약물중독', n.alcohol) + cat('도박중독', n.gambling) +
           cat('게임·디지털중독', n.game) + cat('중독사회와 회복', n.issue) +
           '<a href="/encyclopedia.html">' + esc(n.encyclopedia) + '</a><a href="/reports.html">' + esc(n.reports) + '</a>' +
+          (n.about ? '<a href="/about.html">' + esc(n.about) + '</a>' : '') +
           '<a class="out" href="' + SOCIETY + '" target="_blank" rel="noopener noreferrer">' + esc(n.society) + '</a></nav>' +
       '</div></header>';
   }
 
   function bottomHtml(version) {
+    if (LIVE) return ''; // 운영 바닥글은 index.html + footer.js
     var b = M.bottom;
     var publisher = (window.SITE_PUBLISHER && window.SITE_PUBLISHER.ko) || '';
     var commit = version && /^[0-9a-f]{7,40}$/.test(String(version.commit || '')) ? String(version.commit).slice(0, 7) : '';
@@ -234,23 +232,23 @@
       '</div></footer>';
   }
 
-  json('/messages/preview/ko.json').then(function (messages) {
+  json(LIVE ? '/messages/ko.json' : '/messages/preview/ko.json').then(function (messages) {
     M = messages;
     document.title = M.pageTitle;
     if (planB) app.classList.add('planB');
     app.innerHTML = headHtml();
     return Promise.all([
       api('/articles/top'),
-      api('/articles/latest-paged?limit=100&page=1&group=none'),
+      api('/articles/today-counts'),
       api('/articles/latest-paged?kind=broadcast&limit=100&page=1&group=none'),
       api('/articles/issue?limit=12'),
       api('/articles/latest-paged?limit=60&page=1'),
-      json('/version.json').catch(function () { return null; }),
+      LIVE ? null : json('/version.json').catch(function () { return null; }),
     ]);
   }).then(function (r) {
-    var top = r[0], plain = r[1], casts = r[2], issue = r[3], grouped = r[4], version = r[5];
+    var top = r[0], counts = r[1], casts = r[2], issue = r[3], grouped = r[4], version = r[5];
     app.innerHTML = headHtml() + '<main>' +
-      topSection(top) + todaySection(plain, casts) + issueSection(issue, top) +
+      topSection(top) + todaySection(counts) + issueSection(issue, top) +
       broadcastSection(casts) + worldSection(grouped) + chronicleSection(casts) +
       '</main>' + bottomHtml(version);
     app.setAttribute('data-ready', '1');
@@ -261,7 +259,7 @@
     }
   }).catch(function (e) {
     // 글 파일을 못 읽었거나 그리다 깨짐 — 빈 화면 대신 한 줄(글 파일이 없으면 영어 한 줄)
-    console.error('미리보기 실패', e);
+    console.error('대문 실패', e);
     app.insertAdjacentHTML('beforeend', '<p class="empty" style="padding:24px">' + esc(M.failed || 'Failed to load.') + '</p>');
   });
 })();

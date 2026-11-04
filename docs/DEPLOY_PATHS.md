@@ -8,8 +8,8 @@
 | 호스팅 | Render 웹 서비스 `addicted-news-backend.onrender.com` | Vercel 정적 호스팅 `www.addictionnews.net` (`addictionnews.net` → 308 → `www`) |
 | 만드는 법 | NestJS 빌드 · 기동 | 빌드 없음 — `frontend/vercel.json`(`buildCommand: null` · `outputDirectory: "."`)대로 폴더를 그대로 냄 |
 | 언제 나감 | `main` push 마다 자동 · 커밋 제목에 `[skip render]` 가 있으면 건너뜀 | `main` push 뒤 Vercel 이 냄(Vercel 프로젝트 설정 · 연결 방식은 이 저장소에서 읽을 수 없음 — 미측) |
-| 섰는지 보는 법 | `GET /api/health` 의 `commit` · `startedAt` | 실화면의 `assets/js/main.js` · `assets/css/style.css` 를 받아 저장소 커밋 파일과 대조 |
-| 손님 쪽 기억 | — | `assets/*` 는 `Cache-Control: public, max-age=86400`(vercel.json) · `index.html` 은 `max-age=0` |
+| 섰는지 보는 법 | `GET /api/health` 의 `commit` · `startedAt` | 실화면의 `index.html` · `assets/home/home.js` · `assets/home/home.css` 를 받아 저장소 커밋 파일과 대조(NEWS-Q24 대문 교체 뒤) |
+| 손님 쪽 기억 | — | `assets/*` 는 `Cache-Control: public, max-age=86400`(vercel.json) · `index.html` 은 `max-age=0` · `_legacy/*` 는 기본(`max-age=0`) |
 
 - 백엔드가 프런트를 정적으로 내지 않는다(`backend/src` 에 정적 제공 코드 0).
 - 프런트가 부르는 API 주소는 `frontend/assets/js/config.js` 의 `window.API_BASE`(Render 주소) 하나다.
@@ -17,7 +17,7 @@
 
 ## 주의 — 하루 기억
 
-`index.html` 이 `assets/js/main.js` · `assets/css/style.css` 를 판 표식 없이 부르므로, 한 번 들른 손님 브라우저는 새 배포 뒤에도 **최대 하루** 옛 JS · CSS 를 쓸 수 있다(새 HTML + 옛 JS 섞임 가능). 처음 오는 손님 · 시크릿 창은 바로 새 판.
+NEWS-Q24 뒤 대문은 `assets/home/home.js?v=q24` · `home.css?v=q24` 를 판 표식과 함께 부른다 — **이 두 파일을 바꾸면 쪽마다(`index.html` · `about.html` · `preview/home/index.html`) `?v=` 값도 함께 올린다**(안 올리면 손님은 최대 하루 옛 판). 안쪽 쪽(category · feature · rapha · reports)이 부르는 `_legacy/assets/*` 는 하루 기억 밖이다. `config.js` · `footer.js` 는 여전히 `assets/js/` 라 하루 기억에 걸린다.
 
 ## 판 꼬리표 (NEWS-Q20 ■1)
 
@@ -29,7 +29,7 @@
 | 바닥글 작은 글씨 | 쪽마다 `#footer-build` ← `assets/js/footer.js` 가 `version.json` 을 `no-store` 로 읽어 「판 b96f29a · 2026-10-26 16:22」 | `footer.js` 자체는 `assets/` 라 하루 기억 — 옛 JS 를 쓰는 손님에겐 판 표시가 비어 보임(그 자체가 「옛 JS」 표시) |
 
 - **고치는 때**: 프런트를 바꾼 코드 커밋(ⓑ)을 push 한 뒤, 보고서 커밋(ⓒ)에서 `version.json` 의 `commit` · `built` 를 그 ⓑ 커밋으로 고친다(자기 해시는 커밋 전에 알 수 없음). 프런트를 안 바꾼 판은 그대로 둔다.
-- **섰는지 보는 법(프런트)**: `GET https://www.addictionnews.net/version.json` 의 `commit` 이 그 ⓑ 와 같으면 A. 그다음 `main.js` · `style.css` 바이트 대조(위 표)로 자산까지 확인.
+- **섰는지 보는 법(프런트)**: `GET https://www.addictionnews.net/version.json` 의 `commit` 이 그 ⓑ 와 같으면 A. 그다음 `index.html` · `assets/home/home.js` · `home.css` 바이트 대조(위 표)로 자산까지 확인.
 - 백엔드 판은 그대로 `GET /api/health` 의 `commit`(Render 가 기동한 커밋 · 따로 만들지 않음).
 
 ## 10-28 실측 (NEWS-Q19 가 섰는지 · NEWS-Q20 ■0)
