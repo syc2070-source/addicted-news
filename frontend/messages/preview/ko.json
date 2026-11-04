@@ -1,0 +1,87 @@
+{
+  "_comment": "NEWS-Q23 ■2: /preview/home 글 전부(손님에게 보이는 글은 이 파일에서만). 운영 대문은 이 파일을 읽지 않는다.",
+  "pageTitle": "중독뉴스 대문 미리보기",
+  "brand": "중독뉴스",
+  "brandEn": "addiction news",
+  "band": {
+    "label": "미리보기 — 운영 대문이 아닙니다",
+    "a": "A안 · 전체 파랑",
+    "b": "B안 · 흰 바탕 + 파랑 띠"
+  },
+  "nav": {
+    "home": "종합",
+    "policy": "중독정책",
+    "alcohol": "알코올·약물중독",
+    "gambling": "도박중독",
+    "game": "게임·디지털중독",
+    "issue": "중독사회와 회복",
+    "encyclopedia": "중독백과",
+    "reports": "리포트",
+    "society": "중독사회 ↗"
+  },
+  "top": {
+    "kicker": "TOP NEWS",
+    "title": "지금 가장 무게 있는 소식",
+    "window72h": "최근 72시간",
+    "window7d": "최근 7일",
+    "cluster": "같은 소식 {n}건",
+    "read": "원문 보기 ↗"
+  },
+  "today": {
+    "kicker": "{date} 기준",
+    "titleToday": "오늘 들어온 소식",
+    "title": "{date} 들어온 소식",
+    "desc": "날마다 정오 수집이 끝나면 새 수로 바뀝니다.",
+    "articles": "기사",
+    "broadcasts": "방송",
+    "world": "세계",
+    "unit": "편",
+    "articlesNote": "국내 보도",
+    "broadcastsNote": "실린 방송 모두 {n}편",
+    "worldNote": "해외 보도"
+  },
+  "issue": {
+    "kicker": "중독이슈",
+    "title": "중독이슈 최신",
+    "desc": "새로 나온 보도를 사건 묶음으로 모았습니다.",
+    "more": "분야별 기사 전체 보기 →"
+  },
+  "broadcast": {
+    "kicker": "방송",
+    "title": "중독을 다룬 방송",
+    "desc": "탐사·시사·다큐 가운데 중독이 주제인 편입니다. 날짜는 원래 방송된 날입니다.",
+    "watch": "영상 보기 ↗"
+  },
+  "world": {
+    "kicker": "세계",
+    "title": "세계의 중독 소식",
+    "desc": "해외 매체 보도를 한국어로 옮겨 실었습니다."
+  },
+  "chronicle": {
+    "kicker": "연대기",
+    "title": "방송으로 거슬러 보기",
+    "desc": "실린 방송을 원래 방송된 날짜 차례로 놓았습니다.",
+    "more": "중독사회 전체 연대기 보기 ↗"
+  },
+  "bottom": {
+    "together": "함께 보기",
+    "society": "중독사회 관측소",
+    "statory": "statory",
+    "rapha": "라파공동체",
+    "address": "충북 옥천군 안남면 지수2길 13-7",
+    "copyright": "© 2026 중독뉴스. All rights reserved.",
+    "admin": "관리자",
+    "build": "판 {commit}"
+  },
+  "types": {
+    "alcohol": "알코올",
+    "gambling": "도박",
+    "drug": "마약·약물",
+    "smartphone": "스마트폰·디지털",
+    "game": "게임",
+    "tobacco": "담배",
+    "none": "중독 일반"
+  },
+  "empty": "지금은 보여 드릴 소식이 없습니다.",
+  "failed": "소식을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요."
+}
