@@ -5,6 +5,8 @@
  * 390: 한 단.
  * NEWS-Q27: 제호 = 남색 로고체 칸(중독사회 머리와 같은 모양) · 라파뉴스 구간 없음 · 위 띠 링크 진하게 ·
  *   구간 바탕 흰색 → 연한 파랑(오늘 들어온 기사) → 흰색 → 연한 미색(해외) → 흰색 · 1440 에서 중독백과 칸 = 주요 뉴스 단 높이.
+ * NEWS-Q28: 제호 = 휴먼옛체 윤곽 그림(masthead.svg) + 남색 칸 · 신문의 범위 = 기사 폭 하나(띠 · 줄 · 바닥글 바탕이 그 폭에서 끝남 · 600 아래는 화면 폭 = 신문 폭) ·
+ *   구간 색 띠(Q27) 걷고 기사 칸마다 연한 바탕(구간마다 색 다름) · 중독백과 칸 글자 한 단계 키움 · 칸은 늘이지 않음.
  */
 :root {
   --blue-0: #2b4763;
@@ -20,9 +22,17 @@
      이 바탕 위 명암비는 q26 시험이 잰다(글자 · 흐린 글자 · 링크 모두 4.5 이상). */
   --emph-bg: #f4f7fa;
   --emph-edge: #1f3850;
-  /* 구간 바탕(NEWS-Q27 결정 4): 구간마다(기사마다 아님) 흰색과 번갈아. 색은 둘만 —
-     강조 칸 색(--emph-bg · 연한 파랑) = 오늘 들어온 기사 · 연한 미색(--warm-bg) = 해외. 명암비는 q27 시험이 잰다(4.5 이상). */
+  /* 연한 미색(NEWS-Q27 에서 이름 붙임) */
   --warm-bg: #fbf7f0;
+  /* 기사 칸 바탕(NEWS-Q28 결정 3): 구간 전체가 아니라 기사 칸 하나하나에 · 구간마다 칸 색이 다름 · 칸 사이는 흰색.
+     주요 뉴스 = 연한 파랑(강조 칸 색) · 오늘 들어온 기사 = 연한 미색 · 분야별 새 기사 = 아주 연한 회색 · 해외 = 아주 연한 녹색.
+     글자 · 흐린 글자 · 링크 · 나라 글자 명암비는 q28 시험이 잰다(4.5 이상). */
+  --cell-lead: var(--emph-bg);
+  --cell-today: var(--warm-bg);
+  --cell-gray: #f3f3f2;
+  --cell-green: #eff6f0;
+  /* 신문 폭(NEWS-Q28 결정 2): 본문(.paper) 안쪽 폭 = 1240 - 좌우 여백 24 × 2 */
+  --news-w: min(1192px, calc(100% - 48px));
   /* 제호 로고체(NEWS-Q27 결정 1): 남색 = 중독사회 머리 바탕(rgb 31 56 80 · 실측) = --blue-deep */
   --logo-bg: #1f3850;
   --logo-ink: #ffffff;
@@ -88,29 +98,35 @@ a { color: inherit; }
 .outsMenu { position: absolute; right: var(--space-2); top: 100%; z-index: 5; min-width: 200px; max-width: calc(100vw - 32px); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); padding: 6px 0; display: flex; flex-direction: column; }
 .outsMenu .outLink { padding: 8px var(--space-2); }
 
-/* 제호(NEWS-Q27 결정 1): 중독사회 머리의 로고체 — 남색 칸 · 흰 굵은 고딕 · 넓은 글자 사이 · 아래 작은 영문 한 줄.
-   그림(옛 221×72 · 중독사회 logo-dark-ink.png)을 늘리지 않고 글자와 칸으로 그림 · 글꼴 = 이미 쓰는 고딕(body 글꼴 줄) · 새 글꼴 파일 0.
-   값의 기준(■0 ① 실측 · 한글 잉크 높이 H 에 대한 비): 글자 사이 중독사회 0.30~0.37 · 옛 그림 0.26~0.31 → 0.2em(≈0.32H) ·
-   획 굵기 중독사회 0.15H · 옛 그림 0.21H → 800(맑은 고딕에서는 Bold) · 영문 잉크 높이 옛 그림 0.44H → 21px · 남색 = 중독사회 머리 바탕.
-   크기: 칸 높이 1440 ≈ 96px · 390 ≈ 60px. */
+/* 제호(NEWS-Q28 결정 1): 오너가 준 한글 파일의 원본 — 「중 독 뉴 스」(글자마다 한 칸) / 「addiction news」 · 휴먼옛체 · 40 : 23 · 가운데.
+   이 PC 의 한글 2020 글꼴(HMKMOLD.TTF · 휴먼옛체)에서 글자 윤곽을 떠 그림 한 장(assets/paper/masthead.svg · 흰 글자 · 글꼴 파일은 싣지 않음).
+   윗줄 글자 사이 · 두 줄 사이 = 같은 파일의 「중 독 사 회」 그림(중독사회 머리)에서 잰 값. 남색 칸 · 칸 높이 = NEWS-Q27 그대로(1440 96px · 390 60px). */
 .mast { border-bottom: 3px double var(--line-strong); background: var(--bg); }
 .mastInner { max-width: 1240px; margin: 0 auto; padding: var(--space-3) var(--space-3) var(--space-3); display: flex; justify-content: center; }
 .mast .mastTitle { margin: 0; font-weight: inherit; line-height: 0; }
-.mast .logoBox { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; height: 96px; padding: 0 30px; background: var(--logo-bg); color: var(--logo-ink); text-decoration: none; text-align: center; }
+.mast .logoBox { display: inline-flex; align-items: center; justify-content: center; height: 96px; padding: 0 30px; background: var(--logo-bg); color: var(--logo-ink); text-decoration: none; }
 .mast .logoBox:hover { text-decoration: none; }
-.mast .brandKo { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: 0.2em; margin-right: -0.2em; color: var(--logo-ink); }
-.mast .brandEn { margin-top: 9px; font-size: 21px; font-weight: 500; line-height: 1; letter-spacing: 0.06em; margin-right: -0.06em; color: var(--logo-ink); }
+.mast .logoImg { display: block; height: 68px; width: auto; }
+/* 고대비 모드(Windows forced-colors): 칸 바탕이 시스템 색(흰색)으로 바뀌면 흰 윤곽 그림이 사라짐 → 이 칸만 남색 그대로(리뷰 1-2) */
+@media (forced-colors: active) { .mast .logoBox { forced-color-adjust: none; } }
 .mastKo { font-family: var(--serif); font-size: 2.25rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1.2; }
 .mastEn { justify-self: end; font-size: var(--fs-sm); color: var(--muted); letter-spacing: 0.08em; }
 
 /* 강조 칸(결정 7) */
 .emph { background: var(--emph-bg); border-radius: var(--radius); }
 
-/* 구간 바탕 띠(NEWS-Q27 결정 4): 구간 상자는 본문 폭(1240) 그대로 두고, 바탕만 화면 가로 끝까지 칠함(box-shadow 펼침 + clip-path 로 위아래는 자름 ·
-   가로 스크롤을 만들지 않음) · 안쪽 위아래 여백. */
-.paper > .tint { position: relative; padding-top: var(--space-4); padding-bottom: var(--space-4); box-shadow: 0 0 0 100vmax var(--tint); -webkit-clip-path: inset(0 -100vmax); clip-path: inset(0 -100vmax); background: var(--tint); }
-.paper > .tint.today { --tint: var(--emph-bg); }
-.paper > .tint.abroad { --tint: var(--warm-bg); }
+/* 신문의 범위(NEWS-Q28 결정 2): 가로로 깔리는 것(위 띠 아래 줄 · 제호 아래 줄 · 남색 메뉴 띠 · 바닥글 바탕)은 신문 폭(--news-w) 안에서 시작하고 끝남 ·
+   폭 바깥은 흰색. 노란 미리보기 띠는 미리보기에만 있는 것이라 그대로. 600 아래는 화면 폭 = 신문 폭(앞 판 그대로).
+   머리띠 head.css 는 운영 대문과 한 벌이라 건드리지 않고 여기서(.page 안에서만) 덮어씀. */
+@media (min-width: 600px) {
+  .topBar { border-bottom: 0; }
+  .topInner { width: var(--news-w); max-width: none; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .mast { border-bottom: 0; }
+  .mastInner { width: var(--news-w); max-width: none; padding: var(--space-3) 0; border-bottom: 3px double var(--line-strong); }
+  .page .head { background: transparent; border-bottom: 0; }
+  .page .headInner { width: var(--news-w); max-width: none; padding: 12px var(--space-2); background: var(--blue-deep); border-bottom: 1px solid var(--blue-line); }
+  /* 바닥글은 아래 「바닥」 뒤에서 */
+}
 
 /* 본문 */
 .paper { max-width: 1240px; margin: 0 auto; padding: var(--space-3) var(--space-3) var(--space-5); }
@@ -141,7 +157,8 @@ a:hover { text-decoration: underline; }
 .frontSide { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 
 /* 머리기사 */
-.leadStory { margin-top: var(--space-2); display: grid; gap: var(--space-3); }
+/* 기사 칸(NEWS-Q28 결정 3): 칸마다 연한 바탕 · 안쪽 여백 · 칸 사이 흰색 */
+.leadStory { margin-top: var(--space-2); display: grid; gap: var(--space-3); background: var(--cell-lead); border-radius: var(--radius); padding: var(--space-2); }
 .leadStory.hasPic { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); }
 .leadStory.noPic { grid-template-columns: minmax(0, 1fr); }
 .leadPic { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: var(--radius); background: var(--card); }
@@ -157,37 +174,39 @@ a:hover { text-decoration: underline; }
 .sameLink { color: var(--text); text-decoration: none; }
 
 /* 버금 넷 */
-.subs { margin-top: var(--space-3); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); border-top: 1px solid var(--line); }
-.sub { padding: var(--space-2) 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.subs { margin-top: var(--space-2); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.sub { padding: 14px var(--space-2); background: var(--cell-lead); border-radius: var(--radius); min-width: 0; }
 .subTitle { font-family: var(--serif); font-size: 1.125rem; font-weight: 600; line-height: 1.45; }
 .subTitle a { text-decoration: none; }
 .subLine { margin-top: 4px; font-size: var(--fs-sm); color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
 .sub .meta { margin-top: 6px; }
 
 /* 오늘 들어온 기사(NEWS-Q26 결정 1): 주요 뉴스 아래 가로 · 네 칸 × 두 줄 */
-.todayGrid { margin-top: 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 var(--space-3); }
-.todayCell { padding: 10px 0 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.todayGrid { margin-top: 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.todayCell { padding: 10px 14px 12px; background: var(--cell-today); border-radius: var(--radius); min-width: 0; }
 .todayTitle { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 2px; text-decoration: none; font-weight: 500; line-height: 1.45; font-size: 0.9375rem; }
 .todaySrc { margin-top: 2px; font-size: 0.8125rem; color: var(--muted); }
 .time { font-variant-numeric: tabular-nums; color: var(--text); }
 .todayMore summary { margin-top: 10px; cursor: pointer; color: var(--link); font-size: var(--fs-sm); }
 
 /* 오늘의 중독백과 — 오른쪽 단 맨 위 강조 칸(NEWS-Q26 결정 2) · 자리를 미리 잡아 아래가 밀리지 않게
-   NEWS-Q27 결정 5: 두 단일 때 칸이 주요 뉴스 단 아래 끝까지 늘어남(flex) · 풀이 줄 수는 paper.js fitEnc 가 늘림 */
-.enc.emph { margin-top: var(--space-2); border-top: 4px solid var(--emph-edge); padding: var(--space-3); flex: 1 0 auto; }
+   NEWS-Q28 결정 4: 칸을 늘이지 않음(Q27 의 늘림 거둠) · 표제어 30 → 36px · 풀이 16 → 18px · 줄 간격 1.7 → 1.9 ·
+   풀이 줄 수는 paper.js fitEnc 가 주요 뉴스 단 아래 끝까지 늘림 · 다 보여도 남으면 칸 = 내용 높이(색만 깔린 빈 곳 0) */
+.enc.emph { margin-top: var(--space-2); border-top: 4px solid var(--emph-edge); padding: var(--space-3); }
 .encKicker { font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.04em; color: var(--emph-edge); }
 .encSlot { min-height: 300px; margin-top: 12px; }
-.encTerm { font-family: var(--serif); font-size: 1.875rem; font-weight: 600; line-height: 1.3; }
+.encTerm { font-family: var(--serif); font-size: 2.25rem; font-weight: 600; line-height: 1.3; }
 .encTerm a { text-decoration: none; }
 .encEn { margin-top: 4px; font-size: var(--fs-sm); color: var(--muted); }
-.encDef { margin-top: 12px; font-size: 1rem; line-height: 1.7; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.encDef { margin-top: 14px; font-size: 1.125rem; line-height: 1.9; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .enc .more { margin-top: var(--space-2); }
 
 /* 분야 단 넷 */
 .colGrid { margin-top: var(--space-2); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
 .col { min-width: 0; }
 .colTitle { font-size: 1rem; font-weight: 700; padding-bottom: 6px; border-bottom: 1px solid var(--line-strong); }
-.col li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.col ul { margin-top: var(--space-1); display: flex; flex-direction: column; gap: var(--space-1); }
+.col li { padding: 10px 12px; background: var(--cell-gray); border-radius: var(--radius); }
 .colLink { display: block; text-decoration: none; font-size: 0.9375rem; line-height: 1.45; font-weight: 500; }
 .col .meta { margin-top: 2px; }
 
@@ -203,8 +222,8 @@ a:hover { text-decoration: underline; }
 .issueMore summary { margin-top: 6px; cursor: pointer; color: var(--link); font-size: var(--fs-sm); }
 
 /* 해외 */
-.abroadGrid { margin-top: var(--space-2); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
-.abroadRow { padding: 12px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.abroadGrid { margin-top: var(--space-2); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px var(--space-2); }
+.abroadRow { padding: 12px var(--space-2); background: var(--cell-green); border-radius: var(--radius); min-width: 0; }
 .country { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); }
 .abroadTitle { display: block; margin-top: 2px; text-decoration: none; font-weight: 600; line-height: 1.45; }
 .abroadRow .subLine { margin-top: 2px; }
@@ -250,6 +269,12 @@ a:hover { text-decoration: underline; }
 .bottomInner { max-width: 1240px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--space-3); }
 .bottom a { color: var(--blue-link); }
 .bottomSmall { font-size: 0.75rem; margin-top: 6px; }
+/* 신문의 범위(NEWS-Q28 결정 2): 바닥글 바탕도 신문 폭 안에서 끝남 · 600 아래는 앞 판 그대로 */
+@media (min-width: 600px) {
+  .bottom { background: transparent; padding: 0; }
+  .bottomInner { width: var(--news-w); max-width: none; background: var(--blue-deep); padding: var(--space-3) var(--space-3) 0; }
+  .bottomInner.bottomSmall { margin-top: 0; padding: 6px var(--space-3) var(--space-3); }
+}
 
 /* 좁은 폭 */
 @media (max-width: 1099px) {
@@ -257,7 +282,6 @@ a:hover { text-decoration: underline; }
   .frontSide { border-left: 0; padding-left: 0; }
   .colGrid, .todayGrid, .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .encSlot { min-height: 240px; }
-  .enc.emph { flex: none; }
 }
 @media (max-width: 899px) {
   .outs { display: none; }
@@ -273,10 +297,10 @@ a:hover { text-decoration: underline; }
   .band { padding: 6px var(--space-2); }
   .colGrid, .castGrid, .todayGrid { grid-template-columns: minmax(0, 1fr); }
   .enc.emph { padding: var(--space-2); }
-  .paper > .tint { padding-top: var(--space-3); padding-bottom: var(--space-3); }
   .mast .logoBox { height: 60px; padding: 0 18px; }
-  .mast .brandKo { font-size: 25px; }
-  .mast .brandEn { margin-top: 5px; font-size: 13px; }
+  .mast .logoImg { height: 42px; }
+  .leadStory, .sub { padding: 12px; }
+  .encTerm { font-size: 1.875rem; }
   .pastBody { padding: 12px var(--space-2); }
   .issue { padding: 12px var(--space-2); }
   .year li { grid-template-columns: minmax(0, 1fr); }

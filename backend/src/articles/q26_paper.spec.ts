@@ -112,9 +112,9 @@ describe('NEWS-Q26 배치 · 방송 · 제호 · 바깥 링크(결정 1 · 2 · 
     expect(text.broadcast.older).toBe('지난 방송 보기 ({n}편)');
   });
 
-  it('제호 = 글자(brandKo · brandEn) · 옛 그림(logo.png)을 늘려 쓰지 않음 · 쪽의 h1 (모양은 NEWS-Q27 로고체 — q27 시험)', () => {
+  it('제호 = 쪽의 h1 · 옛 그림(logo.png)을 늘려 쓰지 않음 (모양은 NEWS-Q28 휴먼옛체 윤곽 그림 — q28 시험)', () => {
     expect(js).toContain(
-      '<h1 class="mastTitle"><a class="brand mastBrand logoBox" href="/preview/paper/"><span class="brandKo">',
+      '<h1 class="mastTitle"><a class="brand mastBrand logoBox" href="/preview/paper/"><img class="logoImg" src="/assets/paper/masthead.svg',
     );
     expect(js).not.toContain('logo.png');
     expect(read('assets/home/home.js')).toContain('<a class="brand" href="');

@@ -4,6 +4,8 @@
 //   중독이슈 구간은 부르지 않는다(함수와 이름 규칙은 남김 · 지우기 0).
 // NEWS-Q27(오너 11-12 다시 봄): 제호 = 중독사회 머리와 같은 남색 로고체(글자와 칸) · 라파뉴스 구간 없앰(라파공동체는 위 띠 링크 둘만) ·
 //   위 띠 링크 진하게 · 구간 바탕 흰색/연한 색 번갈아 · 1440 에서 중독백과 칸을 주요 뉴스 단 높이에 맞춤.
+// NEWS-Q28(오너 11-12 세 번째): 제호 = 오너가 준 원본 글자 모양(휴먼옛체)을 윤곽으로 뜬 그림 + 남색 칸 · 띠와 줄은 신문 폭 안에서 끝남(CSS) ·
+//   구간 색 띠 걷고 기사 칸마다 연한 바탕(CSS) · 중독백과 칸은 늘이지 않고 글자를 키워 채움.
 // 자료 = 공개 API GET 만 · 규칙 = paper_rules.js · 글 = messages/preview/paper.ko.json · LLM 0.
 (function () {
   'use strict';
@@ -115,9 +117,10 @@
         '<nav class="outs" aria-label="' + esc(M.outs.label) + '"><span class="outsLabel">' + esc(M.outs.label) + '</span>' + outLinks('outLink') + '</nav>' +
         '<details class="outsFold"><summary>' + esc(M.outs.label) + '</summary><div class="outsMenu">' + outLinks('outLink') + '</div></details>' +
       '</div></div>' +
-      // 제호(NEWS-Q27 결정 1): 중독사회 머리의 로고체 — 남색 칸 · 흰 굵은 고딕 · 넓은 글자 사이 · 아래 작은 영문. 그림을 늘리지 않고 글자와 칸으로 그림(값은 paper.css .logoBox)
+      // 제호(NEWS-Q28 결정 1): 오너가 준 원본의 글자 모양(휴먼옛체)을 윤곽으로 뜬 그림(흰 글자 · masthead.svg) + 남색 칸(paper.css .logoBox).
+      // 글꼴 파일은 싣지 않음 — 방문자 기기에 없는 글꼴이라 그림으로 떠야 어디서나 같은 모양. 읽는 이용 글 = alt.
       '<div class="mast"><div class="mastInner">' +
-        '<h1 class="mastTitle"><a class="brand mastBrand logoBox" href="/preview/paper/"><span class="brandKo">' + esc(M.brand) + '</span><span class="brandEn">' + esc(M.brandEn) + '</span></a></h1>' +
+        '<h1 class="mastTitle"><a class="brand mastBrand logoBox" href="/preview/paper/"><img class="logoImg" src="/assets/paper/masthead.svg?v=q28" alt="' + esc(M.brand + ' ' + M.brandEn) + '" width="363" height="134"></a></h1>' +
       '</div></div>' +
       '<header class="head"><div class="headInner"><nav class="nav">' +
         '<a href="/preview/paper/" aria-current="page">' + esc(n.home) + '</a>' +
@@ -155,9 +158,9 @@
   // ── 오늘 들어온 기사: 주요 뉴스 바로 아래 가로 · 두 줄(넓은 화면 네 칸 × 두 줄 = 여덟) · 나머지는 「더 보기」(NEWS-Q26 결정 1) ──
   var TODAY_FIRST = 8;
   function todayBlock(plain) {
-    if (!plain) return '<section class="today strip tint">' + sectionHead(M.today.title) + emptyLine(null) + '</section>';
+    if (!plain) return '<section class="today strip">' + sectionHead(M.today.title) + emptyLine(null) + '</section>';
     var t = R.todayArticles(plain.items || []);
-    if (!t.items.length) return '<section class="today strip tint">' + sectionHead(M.today.title) + emptyLine(plain) + '</section>';
+    if (!t.items.length) return '<section class="today strip">' + sectionHead(M.today.title) + emptyLine(plain) + '</section>';
     var isToday = t.day === R.kstDay(new Date().toISOString());
     var cell = function (a) {
       var cat = M.categories[a.category] || '';
@@ -166,7 +169,7 @@
         '<p class="todaySrc">' + esc(a.source || '') + '</p></li>';
     };
     var first = t.items.slice(0, TODAY_FIRST), rest = t.items.slice(TODAY_FIRST);
-    return '<section class="today strip tint">' +
+    return '<section class="today strip">' +
       sectionHead(isToday ? M.today.title : fill(M.today.titleDay, { date: monthDay(t.day) }), fill(M.today.count, { n: t.items.length })) +
       '<ul class="todayGrid">' + first.map(cell).join('') + '</ul>' +
       (rest.length ? '<details class="todayMore"><summary>' + esc(fill(M.today.more, { n: rest.length })) + '</summary><ul class="todayGrid">' + rest.map(cell).join('') + '</ul></details>' : '') +
@@ -244,9 +247,9 @@
 
   // ── 해외(결정 10) ──
   function abroadBlock(grouped, skip) {
-    if (!grouped) return '<section class="abroad tint">' + sectionHead(M.abroad.title) + emptyLine(null) + '</section>';
+    if (!grouped) return '<section class="abroad">' + sectionHead(M.abroad.title) + emptyLine(null) + '</section>';
     var list = (grouped.items || []).filter(function (a) { return a.isForeign && !skip[a.id]; }).slice(0, 8);
-    return '<section class="abroad tint">' + sectionHead(M.abroad.title, '', M.abroad.desc) +
+    return '<section class="abroad">' + sectionHead(M.abroad.title, '', M.abroad.desc) +
       (list.length ? '<div class="abroadGrid">' + list.map(function (a) {
         return '<article class="abroadRow"><p class="country">' + esc(R.countryOf(a) || M.abroad.unknown) + '</p>' + link(a, 'abroadTitle') +
           '<p class="subLine">' + esc(oneLine(a)) + '</p>' + meta(a) + '</article>';
@@ -328,23 +331,20 @@
     for (var i = 0; i < imgs.length; i++) imgs[i].addEventListener('error', function () { this.remove(); });
   }
 
-  // 오른쪽 단 맞춤(NEWS-Q27 결정 5): 넓은 화면(두 단)에서 중독백과 칸은 CSS 로 주요 뉴스 단 높이까지 늘고(.enc flex),
-  // 늘어난 높이만큼 풀이 줄 수를 늘린다(기본 4줄 → 칸에 들어가는 만큼 · 풀이 전체 줄 수까지). 새 내용 0.
+  // 오른쪽 단 맞춤(NEWS-Q28 결정 4): 칸은 늘이지 않는다(Q27 의 주요 뉴스 높이까지 늘림은 거둠) — 표제어 · 풀이 글자를 한 단계 키우고(CSS),
+  // 주요 뉴스 단 아래 끝까지 남는 높이만큼 풀이 줄 수를 늘린다(기본 4줄 → 풀이 전체 줄 수까지). 다 보여도 남으면 칸 = 내용 높이(색만 깔린 빈 곳 0). 새 내용 0.
   var ENC_LINES = 4;
   function fitEnc() {
     var enc = app.querySelector('.enc'), def = app.querySelector('.encDef'), main = app.querySelector('.frontMain');
     if (!enc || !def || !main) return;
     def.style.webkitLineClamp = '';
     if (!window.matchMedia('(min-width: 1100px)').matches) return;
-    // 늘이기 전 제 높이(칸 flex · 자리 잡기 min-height 를 잠깐 끄고 잼 — 빈 자리까지 남는 높이로 셈 · 리뷰 1-2)
+    // 자리 잡기 min-height 는 불러오는 동안만 쓸모 — 내용이 들어온 뒤에는 끈다(내용보다 높은 칸 = 빈 곳이 생기지 않게 · 리뷰 1-2)
     var slot = document.getElementById('encSlot');
-    enc.style.flex = 'none';
     if (slot) slot.style.minHeight = '0';
-    var lh = parseFloat(getComputedStyle(def).lineHeight) || 27;
+    var lh = parseFloat(getComputedStyle(def).lineHeight) || 34;
     var slack = main.getBoundingClientRect().bottom - enc.getBoundingClientRect().bottom;
     var all = Math.round(def.scrollHeight / lh);
-    enc.style.flex = '';
-    if (slot) slot.style.minHeight = '';
     var n = Math.min(all, ENC_LINES + Math.max(0, Math.floor(slack / lh)));
     if (n > ENC_LINES) def.style.webkitLineClamp = String(n);
   }
@@ -369,7 +369,8 @@
     render(r);
     encLoad.then(function (items) {
       var slot = document.getElementById('encSlot');
-      if (slot) slot.innerHTML = encBody(items);
+      // 내용이 들어오면 자리 잡기 높이를 끔(모든 폭 · 빈 목록도) — 내용보다 높은 칸 = 색만 깔린 빈 곳 0(리뷰 2-8)
+      if (slot) { slot.innerHTML = encBody(items); slot.style.minHeight = '0'; }
       fitEnc();
       // 글꼴(Noto Serif KR)이 늦게 서면 주요 뉴스 단 높이가 바뀜 → 다시 맞춤
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitEnc);

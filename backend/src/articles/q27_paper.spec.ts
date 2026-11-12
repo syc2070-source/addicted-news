@@ -33,18 +33,10 @@ describe('NEWS-Q27 결정 1 — 제호 = 중독사회 머리의 남색 로고체
       12,
     );
   });
-  it('글자와 칸으로 그림 — 그림 파일 · 새 글꼴 파일 0 · 고딕(명조 아님) · 굵게 · 넓은 글자 사이', () => {
-    expect(js).toContain(
-      '<a class="brand mastBrand logoBox" href="/preview/paper/"><span class="brandKo">',
-    );
-    expect(js).not.toMatch(/logo\.png|logo-dark-ink|<img[^>]*mast/);
-    const ko = /\.mast \.brandKo \{([^}]*)\}/.exec(css)?.[1] || '';
-    expect(ko).toMatch(/font-family: system-ui[^;]*'Malgun Gothic', sans-serif;/);
-    expect(ko).not.toContain('var(--serif)');
-    expect(ko).toMatch(/font-weight: 800;/);
-    expect(ko).toMatch(/letter-spacing: 0\.2em;/);
-    expect(ko).toMatch(/color: var\(--logo-ink\)/);
-    // 글꼴 줄은 앞 판 그대로(새 글꼴 파일 0)
+  // 글자 모양(고딕 글자)은 NEWS-Q28 결정 1 로 바뀜 — 휴먼옛체 윤곽 그림(q28 시험). 남색 칸 · 크기 · 새 글꼴 파일 0 은 그대로.
+  it('옛 그림(logo.png · 중독사회 그림)을 늘려 쓰지 않음 · 새 글꼴 파일 0', () => {
+    expect(js).toContain('<a class="brand mastBrand logoBox" href="/preview/paper/">');
+    expect(js).not.toMatch(/logo\.png|logo-dark-ink/);
     expect(html.match(/<link rel="stylesheet"/g)).toHaveLength(3);
     expect(html).toContain('/assets/fonts/noto-serif-kr/font.css');
   });
@@ -121,23 +113,11 @@ describe('NEWS-Q27 결정 3 — 위 띠 관련 사이트 글자 진하게', () =
   });
 });
 
-describe('NEWS-Q27 결정 4 — 구간 바탕(구간마다 · 흰색과 번갈아 · 색 둘)', () => {
-  it('오늘 들어온 기사 = 강조 칸 색 · 해외 = 연한 미색 · 주요 뉴스 · 분야별 · 방송 = 흰색', () => {
-    expect(js.match(/<section class="today strip tint">/g)).toHaveLength(3);
-    expect(js.match(/<section class="abroad tint">/g)).toHaveLength(2);
-    expect(js).not.toMatch(
-      /<section class="(lead|columns|casts|feature)[^"]*tint/,
-    );
-    expect(css).toContain('.paper > .tint.today { --tint: var(--emph-bg); }');
-    expect(css).toContain('.paper > .tint.abroad { --tint: var(--warm-bg); }');
-    expect((css.match(/--tint: var\(/g) || []).length).toBe(2);
+// 구간 전체 색 띠는 NEWS-Q28 결정 3 으로 걷음(기사 칸마다 바탕 — q28 시험). 연한 미색 이름 · 명암 · 분야 점 색은 그대로.
+describe('NEWS-Q27 결정 4 — 연한 미색 · 명암 · 분야 점 색', () => {
+  it('연한 미색(--warm-bg) = #fbf7f0 · 강조 칸 색과 다름', () => {
     expect(token('warm-bg')).toBe('#fbf7f0');
     expect(token('warm-bg')).not.toBe(token('emph-bg'));
-  });
-  it('가로 폭 전체에 깔되 가로 스크롤 0(box-shadow 펼침 + clip-path) · 안쪽 여백', () => {
-    expect(css).toMatch(
-      /\.paper > \.tint \{[^}]*padding-top: var\(--space-4\); padding-bottom: var\(--space-4\);[^}]*box-shadow: 0 0 0 100vmax var\(--tint\);[^}]*clip-path: inset\(0 -100vmax\);/,
-    );
     expect(css).toMatch(/\.page \{ overflow-x: clip;/);
   });
   it('새 바탕 둘 위 글자 · 흐린 글자 · 링크 · 나라 글자 명암비 4.5 이상 · 분야 점 색 그대로', () => {
@@ -166,12 +146,8 @@ describe('NEWS-Q27 결정 4 — 구간 바탕(구간마다 · 흰색과 번갈�
   });
 });
 
-describe('NEWS-Q27 결정 5 — 1440 오른쪽 단: 중독백과 칸 = 주요 뉴스 단 높이 · 풀이 줄 늘림(새 내용 0)', () => {
-  it('두 단일 때 칸이 늘어남(flex) · 한 단(1099 아래)에서는 늘지 않음', () => {
-    expect(css).toMatch(/\.enc\.emph \{[^}]*flex: 1 0 auto;/);
-    expect(css).toMatch(/\.frontSide \{ display: flex; flex-direction: column;/);
-    expect(media('max-width: 1099px')).toContain('.enc.emph { flex: none; }');
-  });
+// 칸을 주요 뉴스 높이까지 늘림(flex)은 NEWS-Q28 결정 4 로 거둠(q28 시험). 풀이 줄 늘림은 그대로.
+describe('NEWS-Q27 결정 5 — 1440 오른쪽 단: 풀이 줄 늘림(새 내용 0)', () => {
   it('풀이 줄 = 기본 4 + 남는 높이만큼 · 풀이 전체 줄 수를 넘지 않음 · 두 단일 때만', () => {
     expect(js).toContain('var ENC_LINES = 4;');
     expect(css).toMatch(/\.encDef \{[^}]*-webkit-line-clamp: 4;/);
@@ -179,6 +155,7 @@ describe('NEWS-Q27 결정 5 — 1440 오른쪽 단: 중독백과 칸 = 주요 �
       /var n = Math\.min\(all, ENC_LINES \+ Math\.max\(0, Math\.floor\(slack \/ lh\)\)\);/,
     );
     expect(js).toContain("window.matchMedia('(min-width: 1100px)')");
-    expect(js).toMatch(/slot\.innerHTML = encBody\(items\);\s*fitEnc\(\);/);
+    // NEWS-Q28 리뷰 2-8: 같은 줄에서 자리 잡기 높이도 끔 → 그다음 줄이 fitEnc()
+    expect(js).toMatch(/slot\.innerHTML = encBody\(items\);[^\n]*\n\s*fitEnc\(\);/);
   });
 });
