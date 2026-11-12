@@ -265,9 +265,10 @@ describe('NEWS-Q25 신문 대문 미리보기 쪽', () => {
     expect(live).toContain('/assets/home/home.js');
   });
 
-  it('구간 차례 = 주요 뉴스(머리 + 버금) | 오늘 들어온 기사 · 오늘의 중독백과 → 분야 단 → 중독이슈 → 해외 → 방송 하나', () => {
+  // NEWS-Q26(오너 11-12)이 차례를 바꿈: 오늘의 중독백과가 오른쪽 단 맨 위 · 오늘 들어온 기사는 주요 뉴스 아래 · 중독이슈 대신 기획(q26_paper.spec 이 자세히 잼)
+  it('구간 차례 = 주요 뉴스(머리 + 버금) | 오늘의 중독백과 → 오늘 들어온 기사 → 분야 단 → 기획 → 해외 → 방송 하나(NEWS-Q26 차례)', () => {
     expect(js).toMatch(
-      /leadBlock\(lead, subs\)[\s\S]*todayBlock\(plain\)[\s\S]*encSlot[\s\S]*columnsBlock\(grouped, skip\) \+ issuesBlock\(shownIssues, issues\.length\) \+ abroadBlock\(grouped, skip\) \+ broadcastBlock\(casts\)/,
+      /leadBlock\(lead, subs\)[\s\S]*encBlock\(\)[\s\S]*todayBlock\(plain\) \+\s*columnsBlock\(grouped, skip\) \+ featureBlock\(feature\) \+ abroadBlock\(grouped, skip\) \+ broadcastBlock\(casts\)/,
     );
     expect(js).not.toContain('chronicleSection');
   });

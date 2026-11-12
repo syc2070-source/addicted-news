@@ -1,11 +1,17 @@
 // NEWS-Q25 ■1 · ■2 · ■3 — 신문 대문 미리보기(/preview/paper). 운영 대문(/ · assets/home)은 건드리지 않는다.
-// 모양(결정 11): 머리기사 하나 + 버금 넷 | 오른쪽 좁은 단(오늘 들어온 기사 · 오늘의 중독백과) → 분야 단 넷 → 중독이슈 → 해외 → 중독을 다룬 방송.
+// NEWS-Q26(오너 11-12): 위 띠(바깥 사이트 다섯) → 제호(운영 대문 글자 제호를 크게) → 머리기사 + 버금 넷 | 오늘의 중독백과(강조 칸)
+//   → 오늘 들어온 기사(가로 · 두 줄) → 분야 단 넷 → 기획(Statory 랩 공개 호 · 없으면 숨김) → 해외 → 중독을 다룬 방송(「지난 방송 보기」) → 라파뉴스.
+//   중독이슈 구간은 부르지 않는다(함수와 이름 규칙은 남김 · 지우기 0).
 // 자료 = 공개 API GET 만 · 규칙 = paper_rules.js · 글 = messages/preview/paper.ko.json · LLM 0.
 (function () {
   'use strict';
   var API = window.API_BASE;
   var R = window.PaperRules;
   var SOCIETY = 'https://www.addictionsociety.net';
+  // 기획 공개 호 목록 주소(결정 3). ■0 ②(11-12): Statory 공개 주소에 중독 주간 보고서 공개 호 목록 없음
+  // (/ko/lab/reports 는 로그인한 사람 자기 리포트 · /ko/lab 의 Addiction Lab 은 도박 자가점검 하나) → 비움 = 읽지 않음 = 구간 숨김.
+  // 공개 목록(JSON · { items: [{ title, summary, date, url }] })이 서면 여기에 그 주소 한 줄.
+  var FEATURE_SOURCE = '';
   var app = document.getElementById('app');
   var M = {};
   var loadedAt = Date.now();
@@ -91,14 +97,25 @@
     var d = new Date(Date.now() + 9 * 3600000);
     return fill(M.dateLine, { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), w: M.weekdays[d.getUTCDay()] });
   }
+  // 위 띠 바깥 사이트(결정 6): 찾은 것만(messages outs.list · 주소 없는 줄은 그리지 않음) · 새 창 · 390 에서는 「관련 사이트」 하나로 접음
+  function outLinks(cls) {
+    return (M.outs.list || []).filter(function (o) { return /^https:\/\//.test(String(o.url || '')); }).map(function (o) {
+      return '<a class="' + cls + '" href="' + href(o.url) + '" target="_blank" rel="noopener noreferrer">' + esc(o.label) +
+        (o.kind ? '<span class="outKind">' + esc(o.kind) + '</span>' : '') + '</a>';
+    }).join('');
+  }
   function headHtml() {
     var n = M.nav;
     var cat = function (name, label) { return '<a href="/category.html?cat=' + encodeURIComponent(name) + '">' + esc(label) + '</a>'; };
     return '<div class="band">' + esc(M.band) + ' · <a href="/">운영 대문</a></div>' +
-      '<div class="mast"><div class="mastInner">' +
+      '<div class="topBar"><div class="topInner">' +
         '<p class="mastDate">' + esc(dateLine()) + '</p>' +
-        '<a class="mastBrand" href="/preview/paper/"><img src="/assets/images/logo.png" alt="" width="40" height="40"><span class="mastKo">' + esc(M.brand) + '</span></a>' +
-        '<p class="mastEn">' + esc(M.brandEn) + '</p>' +
+        '<nav class="outs" aria-label="' + esc(M.outs.label) + '"><span class="outsLabel">' + esc(M.outs.label) + '</span>' + outLinks('outLink') + '</nav>' +
+        '<details class="outsFold"><summary>' + esc(M.outs.label) + '</summary><div class="outsMenu">' + outLinks('outLink') + '</div></details>' +
+      '</div></div>' +
+      // 제호(결정 5): 운영 대문의 제호 = 글자 「중독뉴스」 + 「addiction news」(Noto Serif KR · head.css .brand) — 그림을 새로 그리지 않고 같은 글 · 같은 글꼴을 크게
+      '<div class="mast"><div class="mastInner">' +
+        '<h1 class="mastTitle"><a class="brand mastBrand" href="/preview/paper/"><span class="brandKo">' + esc(M.brand) + '</span><span class="brandEn">' + esc(M.brandEn) + '</span></a></h1>' +
       '</div></div>' +
       '<header class="head"><div class="headInner"><nav class="nav">' +
         '<a href="/preview/paper/" aria-current="page">' + esc(n.home) + '</a>' +
@@ -106,8 +123,7 @@
         cat('게임·디지털중독', n.game) + cat('중독사회와 회복', n.issue) +
         '<a href="/rapha.html">' + esc(n.rapha) + '</a><a href="/feature.html">' + esc(n.feature) + '</a>' +
         '<a href="/encyclopedia.html">' + esc(n.encyclopedia) + '</a><a href="/reports.html">' + esc(n.reports) + '</a>' +
-        '<a href="/about.html">' + esc(n.about) + '</a>' +
-        '<a class="out" href="' + SOCIETY + '" target="_blank" rel="noopener noreferrer">' + esc(n.society) + '</a></nav>' +
+        '<a href="/about.html">' + esc(n.about) + '</a></nav>' +
       '</div></header>';
   }
 
@@ -134,27 +150,32 @@
     return '<section class="lead">' + sectionHead(M.lead.title) + main + '<div class="subs">' + sub + '</div></section>';
   }
 
-  // ── 오른쪽 단: 오늘 들어온 기사(결정 7) ──
+  // ── 오늘 들어온 기사: 주요 뉴스 바로 아래 가로 · 두 줄(넓은 화면 네 칸 × 두 줄 = 여덟) · 나머지는 「더 보기」(NEWS-Q26 결정 1) ──
+  var TODAY_FIRST = 8;
   function todayBlock(plain) {
-    if (!plain) return '<section class="today side">' + sectionHead(M.today.title) + emptyLine(null) + '</section>';
+    if (!plain) return '<section class="today strip">' + sectionHead(M.today.title) + emptyLine(null) + '</section>';
     var t = R.todayArticles(plain.items || []);
-    if (!t.items.length) return '<section class="today side">' + sectionHead(M.today.title) + emptyLine(plain) + '</section>';
+    if (!t.items.length) return '<section class="today strip">' + sectionHead(M.today.title) + emptyLine(plain) + '</section>';
     var isToday = t.day === R.kstDay(new Date().toISOString());
-    var row = function (a) {
+    var cell = function (a) {
       var cat = M.categories[a.category] || '';
-      return '<li class="todayRow">' + link(a, 'todayTitle') +
-        '<p class="meta"><span class="time">' + esc(hm(a.publishedTs || a.createdAt)) + '</span>' + place(a) +
-        '<span>' + esc(a.source || '') + '</span>' + (cat ? '<span>' + esc(cat) + '</span>' : '') + '</p></li>';
+      return '<li class="todayCell"><p class="meta"><span class="time">' + esc(hm(a.publishedTs || a.createdAt)) + '</span>' +
+        (cat ? '<span>' + esc(cat) + '</span>' : '') + place(a) + '</p>' + link(a, 'todayTitle') +
+        '<p class="todaySrc">' + esc(a.source || '') + '</p></li>';
     };
-    var first = t.items.slice(0, 10), rest = t.items.slice(10);
-    return '<section class="today side">' +
+    var first = t.items.slice(0, TODAY_FIRST), rest = t.items.slice(TODAY_FIRST);
+    return '<section class="today strip">' +
       sectionHead(isToday ? M.today.title : fill(M.today.titleDay, { date: monthDay(t.day) }), fill(M.today.count, { n: t.items.length })) +
-      '<ul class="todayList">' + first.map(row).join('') + '</ul>' +
-      (rest.length ? '<details class="todayMore"><summary>' + esc(fill(M.today.more, { n: rest.length })) + '</summary><ul class="todayList">' + rest.map(row).join('') + '</ul></details>' : '') +
+      '<ul class="todayGrid">' + first.map(cell).join('') + '</ul>' +
+      (rest.length ? '<details class="todayMore"><summary>' + esc(fill(M.today.more, { n: rest.length })) + '</summary><ul class="todayGrid">' + rest.map(cell).join('') + '</ul></details>' : '') +
       '<p class="note">' + esc(M.today.note) + '</p></section>';
   }
 
-  // ── 오른쪽 단: 오늘의 중독백과(자리를 미리 잡음 · 결정 12) ──
+  // ── 오른쪽 단 맨 위: 오늘의 중독백과 강조 칸(자리를 미리 잡음 · NEWS-Q25 결정 12 · NEWS-Q26 결정 2) ──
+  function encBlock() {
+    return '<section class="enc emph">' + '<h2 class="encKicker">' + esc(M.enc.title) + '</h2>' +
+      '<div id="encSlot" class="encSlot"><p class="empty">' + esc(M.enc.loading) + '</p></div></section>';
+  }
   function encPick(items) {
     var pool = items.filter(function (x) { return x.trend; });
     var list = pool.length ? pool : items;
@@ -185,7 +206,35 @@
       }).join('') + '</div></section>';
   }
 
-  // ── 중독이슈(결정 8 · 이슈 셋 미만이면 구간을 접음) ──
+  // ── 기획(NEWS-Q26 결정 3): Statory 랩 중독 주간 보고서 공개 호 · 최신 차례 · 호 0 이거나 읽기 실패면 구간 자체를 그리지 않음 ──
+  function featureBlock(data) {
+    var list = R.featureIssues(data, 6);
+    if (!list.length) return '';
+    return '<section class="feature">' + sectionHead(M.feature.title, '', M.feature.desc) +
+      '<div class="featureGrid">' + list.map(function (x) {
+        return '<article class="featureItem emph"><p class="featureDate">' + esc(x.date) + '</p>' +
+          '<h3 class="featureTitle"><a href="' + href(x.url) + '" target="_blank" rel="noopener noreferrer">' + esc(x.title) + '</a></h3>' +
+          (x.summary ? '<p class="featureSummary">' + esc(x.summary) + '</p>' : '') +
+          '<p class="more"><a class="moreLink" href="' + href(x.url) + '" target="_blank" rel="noopener noreferrer">' + esc(M.feature.more) + '</a></p></article>';
+      }).join('') + '</div></section>';
+  }
+
+  // ── 라파뉴스(NEWS-Q26 결정 6): 라파공동체 유튜브 최신 영상 · 실패 · 0 이면 그리지 않음 ──
+  function raphaBlock(data) {
+    var list = R.raphaVideos(data, 4);
+    if (!list.length) return '';
+    var ch = data && /^https:\/\/www\.youtube\.com\/channel\/UC[\w-]{22}$/.test(String(data.channelUrl || '')) ? data.channelUrl : '';
+    return '<section class="rapha">' + sectionHead(M.rapha.title, '', M.rapha.desc) +
+      '<div class="raphaGrid">' + list.map(function (v) {
+        return '<article class="castCard"><div class="castPic"><img src="' + esc(v.thumb) + '" alt="" loading="lazy" referrerpolicy="no-referrer"></div>' +
+          '<div class="castText"><a class="castTitle" href="' + href(v.url) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + '</a>' +
+          '<p class="meta"><span>' + esc(R.kstDay(v.publishedAt)) + '</span></p></div></article>';
+      }).join('') + '</div>' +
+      (ch ? '<p class="more"><a class="moreLink" href="' + href(ch) + '" target="_blank" rel="noopener noreferrer">' + esc(M.rapha.more) + '</a></p>' : '') +
+      '</section>';
+  }
+
+  // ── 중독이슈(NEWS-Q25 결정 8) — NEWS-Q26 결정 3 으로 대문에서 부르지 않음(지우기 0 · 이름 규칙은 paper_rules.js 에 남김) ──
   function issuesBlock(issues, total) {
     if (!issues.length) return '';
     return '<section class="issues">' + sectionHead(M.issues.title, fill(M.issues.count, { n: total, k: issues.length }), M.issues.desc) +
@@ -225,15 +274,19 @@
       return '<article class="castCard"><div class="castPic">' + (validImg(a.imageUrl) ? '<img src="' + esc(a.imageUrl) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</div>' +
         '<div class="castText">' + link(a, 'castTitle', a.title) + meta(a) + '</div></article>';
     }).join('');
+    // 지난 방송(NEWS-Q26 결정 4): 처음에는 단추 하나 · 누르면 해마다 목록(강조 칸)
+    var pastN = 0;
     var years = b.years.map(function (y) {
-      return '<details class="year"><summary>' + esc(fill(M.broadcast.year, { y: y.year, n: y.items.length })) + '</summary><ul>' +
+      pastN += y.items.length;
+      return '<div class="year"><h3 class="yearTitle">' + esc(fill(M.broadcast.year, { y: y.year, n: y.items.length })) + '</h3><ul>' +
         y.items.map(function (a) {
           return '<li><span class="eventDate">' + esc(ymd(a)) + '</span>' + link(a, 'yearLink', a.title) + '<span class="yearSrc">' + esc(a.source || '') + '</span></li>';
-        }).join('') + '</ul></details>';
+        }).join('') + '</ul></div>';
     }).join('');
     return '<section class="casts">' + sectionHead(M.broadcast.title, fill(M.broadcast.count, { n: b.total }), M.broadcast.desc) +
       (b.total ? '<div class="castGrid">' + cards + '</div>' : emptyLine(casts)) +
-      (years ? '<div class="years"><h3 class="yearsTitle">' + esc(M.broadcast.older) + '</h3>' + years + '</div>' : '') + '</section>';
+      (years ? '<details class="past"><summary class="pastBtn">' + esc(fill(M.broadcast.older, { n: pastN })) + '</summary>' +
+        '<div class="pastBody emph">' + years + '</div></details>' : '') + '</section>';
   }
 
   function bottomHtml(version) {
@@ -243,42 +296,37 @@
         '<p>' + esc(b.publisher) + ' · ' + esc(b.address) + '</p>' +
         '<p>' + esc(b.together) + ' <a href="' + SOCIETY + '" target="_blank" rel="noopener noreferrer">' + esc(b.society) + '</a> · ' +
           '<a href="https://statory.org" target="_blank" rel="noopener noreferrer">' + esc(b.statory) + '</a> · ' +
-          '<a href="https://www.raphacom.net" target="_blank" rel="noopener noreferrer">' + esc(b.rapha) + '</a></p>' +
+          '<a href="https://raphacom.org/" target="_blank" rel="noopener noreferrer">' + esc(b.rapha) + '</a></p>' +
       '</div><div class="bottomInner bottomSmall"><p>' + esc(b.copyright) + '</p>' +
         '<p>' + (commit ? esc(fill(b.build, { commit: commit })) + ' · ' : '') + '<a href="/admin.html" rel="nofollow">' + esc(b.admin) + '</a></p></div></footer>';
   }
 
   function render(r) {
-    var top = r[0] || [], grouped = r[1], plain = r[2], casts = r[3], version = r[4];
+    var top = r[0] || [], grouped = r[1], plain = r[2], casts = r[3], version = r[4], feature = r[5];
     var items = (grouped && grouped.items) || [];
     items.forEach(function (a) { if (a.isForeign && a.source) foreignSources[a.source] = 1; });
-    var issues = R.buildIssues(items, Date.now());
-    // 머리기사 = 주요 뉴스 1위. 이슈 구간은 머리기사 묶음만 빼고 매체 많은 차례로 여덟.
-    // 버금 넷 = 주요 뉴스 2·3위 → 이슈 구간에 안 실린 여러 매체 묶음 → 새 기사(겹침 0 · 해외 뺌 · 이슈의 큰 묶음을 버금이 빼앗지 않게)
+    // 머리기사 = 주요 뉴스 1위(같은 소식 n건 모아 보기 = 묶음 계산 그대로).
+    // 버금 넷 = 주요 뉴스 2·3위 → 여러 매체 묶음 → 새 기사(겹침 0 · 해외 뺌). 중독이슈 구간은 NEWS-Q26 에서 내림.
     var lead = top[0] || items[0] || null;
     var takeKey = function (a) { return a.clusterId ? 'c' + a.clusterId : 'i' + a.id; };
     var taken = {};
     if (lead) taken[takeKey(lead)] = 1;
-    var shownIssues = issues.filter(function (x) { return !taken[takeKey(x.lead)]; }).slice(0, 8);
-    if (shownIssues.length < 3) shownIssues = [];
-    var inIssue = {};
-    shownIssues.forEach(function (x) { inIssue[takeKey(x.lead)] = 1; });
     var subs = [];
     var multi = items.filter(function (a) { return (a.clusterSize || 1) > 1; });
     top.slice(1).concat(multi).concat(items).forEach(function (a) {
-      if (subs.length >= 4 || !a || a.isForeign || taken[takeKey(a)] || inIssue[takeKey(a)]) return;
+      if (subs.length >= 4 || !a || a.isForeign || taken[takeKey(a)]) return;
       taken[takeKey(a)] = 1;
       subs.push(a);
     });
     var skip = {};
-    items.forEach(function (a) { if (taken[takeKey(a)] || inIssue[takeKey(a)]) skip[a.id] = 1; });
+    items.forEach(function (a) { if (taken[takeKey(a)]) skip[a.id] = 1; });
 
     app.innerHTML = headHtml() + '<main class="paper">' +
       '<div class="front"><div class="frontMain">' + leadBlock(lead, subs) + '</div>' +
-        '<aside class="frontSide">' + todayBlock(plain) +
-          '<section class="enc side">' + sectionHead(M.enc.title) + '<div id="encSlot" class="encSlot"><p class="empty">' + esc(M.enc.loading) + '</p></div></section>' +
-        '</aside></div>' +
-      columnsBlock(grouped, skip) + issuesBlock(shownIssues, issues.length) + abroadBlock(grouped, skip) + broadcastBlock(casts) +
+        '<aside class="frontSide">' + encBlock() + '</aside></div>' +
+      todayBlock(plain) +
+      columnsBlock(grouped, skip) + featureBlock(feature) + abroadBlock(grouped, skip) + broadcastBlock(casts) +
+      '<div id="raphaSlot"></div>' +
       '</main>' + bottomHtml(version);
     app.setAttribute('data-ready', '1');
     // 머리기사 그림이 깨지면 글만 넓게(빈 남색 판 0)
@@ -293,24 +341,33 @@
     for (var i = 0; i < imgs.length; i++) imgs[i].addEventListener('error', function () { this.remove(); });
   }
 
-  var encLoad = null;
+  var encLoad = null, raphaLoad = null;
   json('/messages/preview/paper.ko.json').then(function (messages) {
     M = messages;
     document.title = M.pageTitle;
     app.innerHTML = headHtml();
     encLoad = api('/encyclopedia');
+    raphaLoad = api('/articles/rapha-videos?limit=4'); // 따로 읽음 — 유튜브가 늦어도 위 구간을 잡지 않게(맨 아래라 밀리는 것은 바닥글뿐)
     return Promise.all([
       api('/articles/top'),
       api('/articles/latest-paged?limit=220&page=1'),
       api('/articles/latest-paged?limit=100&page=1&group=none'),
       api('/articles/latest-paged?kind=broadcast&limit=200&page=1&group=none'),
       json('/version.json').catch(function () { return null; }),
+      FEATURE_SOURCE ? json(FEATURE_SOURCE).catch(function () { return null; }) : null,
     ]);
   }).then(function (r) {
     render(r);
     encLoad.then(function (items) {
       var slot = document.getElementById('encSlot');
       if (slot) slot.innerHTML = encBody(items);
+    });
+    raphaLoad.then(function (data) {
+      var slot = document.getElementById('raphaSlot');
+      if (!slot) return;
+      slot.outerHTML = raphaBlock(data);
+      var imgs = app.querySelectorAll('.rapha .castPic img');
+      for (var i = 0; i < imgs.length; i++) imgs[i].addEventListener('error', function () { this.remove(); });
     });
   }).catch(function (e) {
     console.error('대문 실패', e);

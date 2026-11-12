@@ -215,9 +215,54 @@
     return { head: head, years: years.map(function (y) { return { year: y, items: byYear[y] }; }), total: list.length };
   }
 
+  /**
+   * 기획(NEWS-Q26 결정 3): Statory 랩 중독 주간 보고서의 공개 호 → 최신 차례 max 개.
+   * 받는 꼴 = 배열 또는 { items: [...] } · 한 호 = { title, summary?, date(YYYY-MM-DD…), url }.
+   * 링크는 Statory 주소(https://statory.org · https://www.statory.org)만 · 제목 · 날짜 · 링크 중 하나라도 없으면 그 호는 뺌.
+   * 읽기 실패(null) · 호 0 → 빈 배열(구간을 숨김 · 「준비 중」 문구 0).
+   */
+  function featureIssues(data, max) {
+    max = max || 6;
+    var list = Array.isArray(data) ? data : data && Array.isArray(data.items) ? data.items : [];
+    return list.filter(function (x) {
+      return x && String(x.title || '').trim() && /^\d{4}-\d{2}-\d{2}/.test(String(x.date || '')) &&
+        /^https:\/\/(www\.)?statory\.org\//i.test(String(x.url || ''));
+    }).map(function (x) {
+      return { title: String(x.title).trim(), summary: String(x.summary || '').trim(), date: String(x.date).slice(0, 10), url: String(x.url) };
+    }).sort(function (a, b) { return b.date.localeCompare(a.date); }).slice(0, max);
+  }
+
+  /** 라파뉴스(NEWS-Q26 결정 6): /articles/rapha-videos 응답 → 영상 줄(유튜브 주소만 · 새것 먼저 · n 개). 실패면 빈 배열(구간 숨김). */
+  function raphaVideos(data, n) {
+    var list = data && Array.isArray(data.items) ? data.items : [];
+    return list.filter(function (v) {
+      return v && /^[\w-]{11}$/.test(String(v.videoId || '')) && String(v.title || '').trim();
+    }).sort(function (a, b) { return String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')); })
+      .slice(0, n || 4).map(function (v) {
+        return {
+          videoId: v.videoId, title: String(v.title).trim(), publishedAt: String(v.publishedAt || ''),
+          url: 'https://www.youtube.com/watch?v=' + v.videoId, thumb: 'https://i.ytimg.com/vi/' + v.videoId + '/hqdefault.jpg',
+        };
+      });
+  }
+
+  /** 명암비(WCAG 2) — 강조 칸 색 시험용(결정 7: 4.5 이상). */
+  function contrast(hex1, hex2) {
+    function lum(hex) {
+      var h = String(hex).replace('#', '');
+      var c = [0, 2, 4].map(function (i) {
+        var v = parseInt(h.slice(i, i + 2), 16) / 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    }
+    var a = lum(hex1), b = lum(hex2);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  }
+
   return {
     kstDay: kstDay, cleanTitle: cleanTitle, bareTitle: bareTitle, issueName: issueName, outletsOf: outletsOf,
     buildIssues: buildIssues, todayArticles: todayArticles, categoryColumns: categoryColumns, countryOf: countryOf,
-    broadcastBlocks: broadcastBlocks,
+    broadcastBlocks: broadcastBlocks, featureIssues: featureIssues, raphaVideos: raphaVideos, contrast: contrast,
   };
 });

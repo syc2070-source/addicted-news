@@ -1,10 +1,18 @@
 {
-  "_comment": "NEWS-Q25 ■1 · ■2: 신문 대문 미리보기(/preview/paper) 글. 운영 대문 글(messages/ko.json)과 따로 둔다. 영어 표제 0.",
+  "_comment": "NEWS-Q25 ■1 · ■2 · NEWS-Q26: 신문 대문 미리보기(/preview/paper) 글. 운영 대문 글(messages/ko.json)과 따로 둔다. 영어 표제 0.",
   "pageTitle": "중독뉴스 신문 대문 미리보기",
   "brand": "중독뉴스",
   "brandEn": "addiction news",
   "band": "미리보기 — 운영 대문은 바뀌지 않았습니다",
-  "weekdays": ["일", "월", "화", "수", "목", "금", "토"],
+  "weekdays": [
+    "일",
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토"
+  ],
   "dateLine": "{y}년 {m}월 {d}일 {w}요일",
   "nav": {
     "home": "종합",
@@ -17,8 +25,34 @@
     "feature": "기획기사",
     "encyclopedia": "중독백과",
     "reports": "리포트",
-    "about": "소개",
-    "society": "중독사회 ↗"
+    "about": "소개"
+  },
+  "outs": {
+    "label": "관련 사이트",
+    "list": [
+      {
+        "label": "중독사회",
+        "url": "https://www.addictionsociety.net"
+      },
+      {
+        "label": "Statory",
+        "url": "https://statory.org"
+      },
+      {
+        "label": "중독이야기",
+        "kind": "유튜브",
+        "url": "https://www.youtube.com/channel/UCNLL7-k2it9ngjN9BUma4Og"
+      },
+      {
+        "label": "라파공동체",
+        "url": "https://raphacom.org/"
+      },
+      {
+        "label": "라파공동체",
+        "kind": "유튜브",
+        "url": "https://www.youtube.com/channel/UC-v25CDSY82CAd36pJIvmMw"
+      }
+    ]
   },
   "lead": {
     "title": "주요 뉴스",
@@ -28,10 +62,22 @@
     "title": "분야별 새 기사",
     "more": "더 보기 →",
     "list": [
-      { "cat": "도박중독", "label": "도박" },
-      { "cat": "알코올·약물중독", "label": "알코올·약물" },
-      { "cat": "게임·디지털중독", "label": "게임·디지털" },
-      { "cat": "중독정책", "label": "정책" }
+      {
+        "cat": "도박중독",
+        "label": "도박"
+      },
+      {
+        "cat": "알코올·약물중독",
+        "label": "알코올·약물"
+      },
+      {
+        "cat": "게임·디지털중독",
+        "label": "게임·디지털"
+      },
+      {
+        "cat": "중독정책",
+        "label": "정책"
+      }
     ]
   },
   "issues": {
@@ -54,7 +100,7 @@
     "count": "모두 {n}편",
     "desc": "탐사·시사·다큐 가운데 중독이 주제인 편입니다. 날짜는 원래 방송된 날입니다.",
     "year": "{y}년 방송 {n}편",
-    "older": "지난 방송 해마다 보기"
+    "older": "지난 방송 보기 ({n}편)"
   },
   "abroad": {
     "title": "해외",
@@ -94,5 +140,15 @@
     "중독사회와 회복": "사회·회복"
   },
   "empty": "지금은 보여 드릴 소식이 없습니다.",
-  "failed": "소식을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요."
+  "failed": "소식을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.",
+  "feature": {
+    "title": "기획",
+    "desc": "Statory 랩의 중독 주간 보고서입니다. 물음 · 자료 · 풀이 · 한계를 갖춘 글을 새 호부터 싣습니다.",
+    "more": "Statory 에서 읽기 →"
+  },
+  "rapha": {
+    "title": "라파뉴스",
+    "desc": "라파공동체 유튜브에 새로 올라온 영상입니다.",
+    "more": "라파공동체 유튜브에서 더 보기 →"
+  }
 }
