@@ -232,21 +232,7 @@
     }).sort(function (a, b) { return b.date.localeCompare(a.date); }).slice(0, max);
   }
 
-  /** 라파뉴스(NEWS-Q26 결정 6): /articles/rapha-videos 응답 → 영상 줄(유튜브 주소만 · 새것 먼저 · n 개). 실패면 빈 배열(구간 숨김). */
-  function raphaVideos(data, n) {
-    var list = data && Array.isArray(data.items) ? data.items : [];
-    return list.filter(function (v) {
-      return v && /^[\w-]{11}$/.test(String(v.videoId || '')) && String(v.title || '').trim();
-    }).sort(function (a, b) { return String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')); })
-      .slice(0, n || 4).map(function (v) {
-        return {
-          videoId: v.videoId, title: String(v.title).trim(), publishedAt: String(v.publishedAt || ''),
-          url: 'https://www.youtube.com/watch?v=' + v.videoId, thumb: 'https://i.ytimg.com/vi/' + v.videoId + '/hqdefault.jpg',
-        };
-      });
-  }
-
-  /** 명암비(WCAG 2) — 강조 칸 색 시험용(결정 7: 4.5 이상). */
+  /** 명암비(WCAG 2) — 강조 칸 색 · 구간 바탕색 시험용(NEWS-Q26 결정 7 · NEWS-Q27 결정 3 · 4). */
   function contrast(hex1, hex2) {
     function lum(hex) {
       var h = String(hex).replace('#', '');
@@ -263,6 +249,6 @@
   return {
     kstDay: kstDay, cleanTitle: cleanTitle, bareTitle: bareTitle, issueName: issueName, outletsOf: outletsOf,
     buildIssues: buildIssues, todayArticles: todayArticles, categoryColumns: categoryColumns, countryOf: countryOf,
-    broadcastBlocks: broadcastBlocks, featureIssues: featureIssues, raphaVideos: raphaVideos, contrast: contrast,
+    broadcastBlocks: broadcastBlocks, featureIssues: featureIssues, contrast: contrast,
   };
 });

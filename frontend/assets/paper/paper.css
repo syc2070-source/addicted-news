@@ -3,6 +3,8 @@
  * NEWS-Q26 1440: 위 띠(날짜 · 관련 사이트) → 제호 → 왼쪽 넓은 단(머리기사 · 버금 넷) + 오른쪽 단(오늘의 중독백과 강조 칸)
  *   → 오늘 들어온 기사(가로 네 칸 × 두 줄) → 분야 단 넷 → 기획(있을 때만) → 해외 → 방송(지난 방송 보기) → 라파뉴스.
  * 390: 한 단.
+ * NEWS-Q27: 제호 = 남색 로고체 칸(중독사회 머리와 같은 모양) · 라파뉴스 구간 없음 · 위 띠 링크 진하게 ·
+ *   구간 바탕 흰색 → 연한 파랑(오늘 들어온 기사) → 흰색 → 연한 미색(해외) → 흰색 · 1440 에서 중독백과 칸 = 주요 뉴스 단 높이.
  */
 :root {
   --blue-0: #2b4763;
@@ -18,6 +20,12 @@
      이 바탕 위 명암비는 q26 시험이 잰다(글자 · 흐린 글자 · 링크 모두 4.5 이상). */
   --emph-bg: #f4f7fa;
   --emph-edge: #1f3850;
+  /* 구간 바탕(NEWS-Q27 결정 4): 구간마다(기사마다 아님) 흰색과 번갈아. 색은 둘만 —
+     강조 칸 색(--emph-bg · 연한 파랑) = 오늘 들어온 기사 · 연한 미색(--warm-bg) = 해외. 명암비는 q27 시험이 잰다(4.5 이상). */
+  --warm-bg: #fbf7f0;
+  /* 제호 로고체(NEWS-Q27 결정 1): 남색 = 중독사회 머리 바탕(rgb 31 56 80 · 실측) = --blue-deep */
+  --logo-bg: #1f3850;
+  --logo-ink: #ffffff;
   --line: #dde4ea;
   --line-strong: #28323a;
   --text: #28323a;
@@ -67,30 +75,42 @@ a { color: inherit; }
 .topInner { max-width: 1240px; margin: 0 auto; padding: 6px var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: 4px var(--space-3); flex-wrap: wrap; position: relative; }
 .mastDate { color: var(--muted); }
 .outs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-2); }
+/* NEWS-Q27 결정 3: 링크 = 본문 글자색(--text · 흰 바탕 13.1) · 굵기 600 · 15px(한 단계 위) · 머리말 「관련 사이트」는 흐린 글자 400 14px 그대로 */
 .outsLabel { color: var(--muted); }
-.outLink { color: var(--link); text-decoration: none; white-space: nowrap; }
+.outLink { color: var(--text); font-weight: 600; font-size: 0.9375rem; text-decoration: none; white-space: nowrap; }
 .outLink::after { content: ' ↗'; font-size: 0.75em; }
-.outKind { margin-left: 4px; font-size: 0.75rem; color: var(--muted); }
+.outKind { margin-left: 4px; font-size: 0.8125rem; font-weight: 500; color: var(--text); }
 .outsFold { display: none; }
-.outsFold summary { cursor: pointer; color: var(--link); list-style: none; }
+.outsFold summary { cursor: pointer; color: var(--text); font-weight: 600; font-size: 0.9375rem; list-style: none; }
 .outsFold summary::-webkit-details-marker { display: none; }
 .outsFold summary::after { content: ' ▾'; }
 .outsFold[open] summary::after { content: ' ▴'; }
 .outsMenu { position: absolute; right: var(--space-2); top: 100%; z-index: 5; min-width: 200px; max-width: calc(100vw - 32px); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); padding: 6px 0; display: flex; flex-direction: column; }
 .outsMenu .outLink { padding: 8px var(--space-2); }
 
-/* 제호(NEWS-Q26 결정 5): 운영 대문 머리띠의 글자 제호(.brand · .brandKo · .brandEn · Noto Serif KR)를 그대로 크게 */
+/* 제호(NEWS-Q27 결정 1): 중독사회 머리의 로고체 — 남색 칸 · 흰 굵은 고딕 · 넓은 글자 사이 · 아래 작은 영문 한 줄.
+   그림(옛 221×72 · 중독사회 logo-dark-ink.png)을 늘리지 않고 글자와 칸으로 그림 · 글꼴 = 이미 쓰는 고딕(body 글꼴 줄) · 새 글꼴 파일 0.
+   값의 기준(■0 ① 실측 · 한글 잉크 높이 H 에 대한 비): 글자 사이 중독사회 0.30~0.37 · 옛 그림 0.26~0.31 → 0.2em(≈0.32H) ·
+   획 굵기 중독사회 0.15H · 옛 그림 0.21H → 800(맑은 고딕에서는 Bold) · 영문 잉크 높이 옛 그림 0.44H → 21px · 남색 = 중독사회 머리 바탕.
+   크기: 칸 높이 1440 ≈ 96px · 390 ≈ 60px. */
 .mast { border-bottom: 3px double var(--line-strong); background: var(--bg); }
-.mastInner { max-width: 1240px; margin: 0 auto; padding: var(--space-4) var(--space-3) var(--space-3); display: flex; justify-content: center; }
-.mast .mastBrand { text-align: center; text-decoration: none; color: var(--text); }
-.mast .mastTitle { margin: 0; font-weight: inherit; }
-.mast .brandKo { font-size: 2.75rem; font-size: clamp(2.75rem, 1.6rem + 3.6vw, 4.5rem); line-height: 1.1; letter-spacing: 0.06em; }
-.mast .brandEn { margin-top: 6px; font-size: 0.875rem; font-size: clamp(0.8125rem, 0.7rem + 0.4vw, 1rem); color: var(--muted); letter-spacing: 0.32em; }
+.mastInner { max-width: 1240px; margin: 0 auto; padding: var(--space-3) var(--space-3) var(--space-3); display: flex; justify-content: center; }
+.mast .mastTitle { margin: 0; font-weight: inherit; line-height: 0; }
+.mast .logoBox { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; height: 96px; padding: 0 30px; background: var(--logo-bg); color: var(--logo-ink); text-decoration: none; text-align: center; }
+.mast .logoBox:hover { text-decoration: none; }
+.mast .brandKo { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: 0.2em; margin-right: -0.2em; color: var(--logo-ink); }
+.mast .brandEn { margin-top: 9px; font-size: 21px; font-weight: 500; line-height: 1; letter-spacing: 0.06em; margin-right: -0.06em; color: var(--logo-ink); }
 .mastKo { font-family: var(--serif); font-size: 2.25rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1.2; }
 .mastEn { justify-self: end; font-size: var(--fs-sm); color: var(--muted); letter-spacing: 0.08em; }
 
 /* 강조 칸(결정 7) */
 .emph { background: var(--emph-bg); border-radius: var(--radius); }
+
+/* 구간 바탕 띠(NEWS-Q27 결정 4): 구간 상자는 본문 폭(1240) 그대로 두고, 바탕만 화면 가로 끝까지 칠함(box-shadow 펼침 + clip-path 로 위아래는 자름 ·
+   가로 스크롤을 만들지 않음) · 안쪽 위아래 여백. */
+.paper > .tint { position: relative; padding-top: var(--space-4); padding-bottom: var(--space-4); box-shadow: 0 0 0 100vmax var(--tint); -webkit-clip-path: inset(0 -100vmax); clip-path: inset(0 -100vmax); background: var(--tint); }
+.paper > .tint.today { --tint: var(--emph-bg); }
+.paper > .tint.abroad { --tint: var(--warm-bg); }
 
 /* 본문 */
 .paper { max-width: 1240px; margin: 0 auto; padding: var(--space-3) var(--space-3) var(--space-5); }
@@ -152,8 +172,9 @@ a:hover { text-decoration: underline; }
 .time { font-variant-numeric: tabular-nums; color: var(--text); }
 .todayMore summary { margin-top: 10px; cursor: pointer; color: var(--link); font-size: var(--fs-sm); }
 
-/* 오늘의 중독백과 — 오른쪽 단 맨 위 강조 칸(NEWS-Q26 결정 2) · 자리를 미리 잡아 아래가 밀리지 않게 */
-.enc.emph { margin-top: var(--space-2); border-top: 4px solid var(--emph-edge); padding: var(--space-3); }
+/* 오늘의 중독백과 — 오른쪽 단 맨 위 강조 칸(NEWS-Q26 결정 2) · 자리를 미리 잡아 아래가 밀리지 않게
+   NEWS-Q27 결정 5: 두 단일 때 칸이 주요 뉴스 단 아래 끝까지 늘어남(flex) · 풀이 줄 수는 paper.js fitEnc 가 늘림 */
+.enc.emph { margin-top: var(--space-2); border-top: 4px solid var(--emph-edge); padding: var(--space-3); flex: 1 0 auto; }
 .encKicker { font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.04em; color: var(--emph-edge); }
 .encSlot { min-height: 300px; margin-top: 12px; }
 .encTerm { font-family: var(--serif); font-size: 1.875rem; font-weight: 600; line-height: 1.3; }
@@ -224,9 +245,6 @@ a:hover { text-decoration: underline; }
 .featureTitle a { text-decoration: none; }
 .featureSummary { margin-top: 6px; font-size: 0.9375rem; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 
-/* 라파뉴스(NEWS-Q26 결정 6 · 영상이 있을 때만) */
-.raphaGrid { margin-top: var(--space-2); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
-
 /* 바닥 */
 .bottom { background: var(--blue-deep); color: var(--blue-muted); padding: var(--space-3); font-size: var(--fs-sm); }
 .bottomInner { max-width: 1240px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px var(--space-3); }
@@ -237,8 +255,9 @@ a:hover { text-decoration: underline; }
 @media (max-width: 1099px) {
   .front { grid-template-columns: minmax(0, 1fr); }
   .frontSide { border-left: 0; padding-left: 0; }
-  .colGrid, .todayGrid, .raphaGrid, .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .colGrid, .todayGrid, .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .encSlot { min-height: 240px; }
+  .enc.emph { flex: none; }
 }
 @media (max-width: 899px) {
   .outs { display: none; }
@@ -249,12 +268,15 @@ a:hover { text-decoration: underline; }
 }
 @media (max-width: 599px) {
   .paper { padding: var(--space-2) var(--space-2) var(--space-5); }
-  .mastInner { padding: var(--space-3) var(--space-2) var(--space-2); }
+  .mastInner { padding: var(--space-2); }
   .topInner { padding: 6px var(--space-2); }
   .band { padding: 6px var(--space-2); }
   .colGrid, .castGrid, .todayGrid { grid-template-columns: minmax(0, 1fr); }
-  .raphaGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .enc.emph { padding: var(--space-2); }
+  .paper > .tint { padding-top: var(--space-3); padding-bottom: var(--space-3); }
+  .mast .logoBox { height: 60px; padding: 0 18px; }
+  .mast .brandKo { font-size: 25px; }
+  .mast .brandEn { margin-top: 5px; font-size: 13px; }
   .pastBody { padding: 12px var(--space-2); }
   .issue { padding: 12px var(--space-2); }
   .year li { grid-template-columns: minmax(0, 1fr); }

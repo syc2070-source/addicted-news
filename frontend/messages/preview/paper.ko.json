@@ -1,5 +1,5 @@
 {
-  "_comment": "NEWS-Q25 ■1 · ■2 · NEWS-Q26: 신문 대문 미리보기(/preview/paper) 글. 운영 대문 글(messages/ko.json)과 따로 둔다. 영어 표제 0.",
+  "_comment": "NEWS-Q25 ■1 · ■2 · NEWS-Q26 · NEWS-Q27: 신문 대문 미리보기(/preview/paper) 글. 운영 대문 글(messages/ko.json)과 따로 둔다. 영어 표제 0. 라파뉴스 구간 글은 NEWS-Q27 결정 2 로 걷어 냄.",
   "pageTitle": "중독뉴스 신문 대문 미리보기",
   "brand": "중독뉴스",
   "brandEn": "addiction news",
@@ -145,10 +145,5 @@
     "title": "기획",
     "desc": "Statory 랩의 중독 주간 보고서입니다. 물음 · 자료 · 풀이 · 한계를 갖춘 글을 새 호부터 싣습니다.",
     "more": "Statory 에서 읽기 →"
-  },
-  "rapha": {
-    "title": "라파뉴스",
-    "desc": "라파공동체 유튜브에 새로 올라온 영상입니다.",
-    "more": "라파공동체 유튜브에서 더 보기 →"
   }
 }

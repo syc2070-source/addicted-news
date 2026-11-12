@@ -1,22 +1,14 @@
-// NEWS-Q26 — 오너 11-12 미리보기 고침: 배치 · 기획(공개 호 · 없으면 숨김) · 지난 방송 단추 · 제호 · 바깥 링크 · 라파뉴스 · 강조 칸 색.
+// NEWS-Q26 — 오너 11-12 미리보기 고침: 배치 · 기획(공개 호 · 없으면 숨김) · 지난 방송 단추 · 제호 · 바깥 링크 · 강조 칸 색.
+// NEWS-Q27: 라파뉴스(영상 목록 길 · 규칙 · 시험)는 결정 2 로 걷어 냄(태그 pre-remove-rapha-news-20261112) · 제호 값은 q27_paper.spec 이 잰다.
 import * as fs from 'fs';
 import * as path from 'path';
-import { BroadcastItem } from '../crawler/broadcast';
-import {
-  RAPHA_BACKOFF_MS,
-  RAPHA_CACHE_MS,
-  RaphaVideos,
-  loadRaphaChannel,
-} from './rapha_videos';
 
 const FRONT = path.join(__dirname, '../../../frontend');
 const read = (p: string) => fs.readFileSync(path.join(FRONT, p), 'utf8');
 
 type Feature = { title: string; summary: string; date: string; url: string };
-type Video = { videoId: string; title: string; url: string; thumb: string };
 interface Rules {
   featureIssues(data: unknown, max?: number): Feature[];
-  raphaVideos(data: unknown, n?: number): Video[];
   contrast(a: string, b: string): number;
 }
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -120,17 +112,12 @@ describe('NEWS-Q26 배치 · 방송 · 제호 · 바깥 링크(결정 1 · 2 · 
     expect(text.broadcast.older).toBe('지난 방송 보기 ({n}편)');
   });
 
-  it('제호 = 운영 대문 글자 제호(.brand · brandKo · brandEn)를 크게 · 옛 그림(logo.png) 안 씀', () => {
+  it('제호 = 글자(brandKo · brandEn) · 옛 그림(logo.png)을 늘려 쓰지 않음 · 쪽의 h1 (모양은 NEWS-Q27 로고체 — q27 시험)', () => {
     expect(js).toContain(
-      '<a class="brand mastBrand" href="/preview/paper/"><span class="brandKo">',
+      '<h1 class="mastTitle"><a class="brand mastBrand logoBox" href="/preview/paper/"><span class="brandKo">',
     );
     expect(js).not.toContain('logo.png');
     expect(read('assets/home/home.js')).toContain('<a class="brand" href="');
-    expect(css).toMatch(
-      /\.mast \.brandKo \{ font-size: 2\.75rem; font-size: clamp\(2\.75rem, [^)]+, 4\.5rem\)/,
-    );
-    // 옛 Safari 가 clamp 를 못 읽어도 크게(리뷰 1) · 제호는 쪽의 h1
-    expect(js).toContain('<h1 class="mastTitle"><a class="brand mastBrand"');
   });
 
   it('바깥 링크 다섯 = 찾은 주소만 · https · 새 창 · 899 아래는 「관련 사이트」 하나로 접음', () => {
@@ -174,145 +161,6 @@ describe('NEWS-Q26 강조 칸 색(결정 7)', () => {
         'class="featureItem emph"',
         'class="pastBody emph"',
       ].sort(),
-    );
-  });
-});
-
-describe('NEWS-Q26 라파뉴스(결정 6) — 공개 RSS · DB · LLM 0', () => {
-  const item = (n: number, day: number): BroadcastItem => ({
-    videoId: `vid${String(n).padStart(8, '0')}`,
-    title: `영상 ${n}`,
-    description: '',
-    publishedAt: `2026-11-${String(day).padStart(2, '0')}T00:00:00Z`,
-    url: `https://www.youtube.com/watch?v=vid${String(n).padStart(8, '0')}`,
-    thumbnailUrl: null,
-  });
-  const ch = {
-    channelTitle: '라파공동체',
-    channelId: 'UC-v25CDSY82CAd36pJIvmMw',
-    channelUrl: 'https://www.youtube.com/channel/UC-v25CDSY82CAd36pJIvmMw',
-  };
-
-  it('채널 = 저장소 자료 파일(찾은 곳 raphacom.org) · 모양이 틀리면 null', () => {
-    expect(loadRaphaChannel()).toEqual(ch);
-    expect(loadRaphaChannel('x', () => '{"channel_id":"nope"}')).toBeNull();
-    expect(loadRaphaChannel('x', () => '{')).toBeNull();
-  });
-
-  it('30분 들고 있기 · 낡으면 들고 있던 것을 곧바로 주고 뒤에서 새로 읽음 · 실패 뒤 5분 쉼 · 빈 피드는 앞 목록을 지우지 않음 · 처음부터 실패면 빈 목록', async () => {
-    const warn = jest
-      .spyOn(console, 'warn')
-      .mockImplementation(() => undefined);
-    let t = 0;
-    let calls = 0;
-    let mode: 'ok' | 'fail' | 'hang' | 'empty' = 'ok';
-    const v = new RaphaVideos(
-      ch,
-      () => {
-        calls++;
-        if (mode === 'fail') return Promise.reject(new Error('503'));
-        if (mode === 'hang')
-          return new Promise<BroadcastItem[]>(() => undefined);
-        if (mode === 'empty') return Promise.resolve([]);
-        return Promise.resolve([item(1, 11), item(2, 10)]);
-      },
-      () => t,
-    );
-    const a = await v.get(4);
-    expect(a.ok).toBe(true);
-    expect(a.items.map((x) => x.title)).toEqual(['영상 1', '영상 2']);
-    t += RAPHA_CACHE_MS - 1;
-    await v.get(4);
-    expect(calls).toBe(1);
-    // 낡음 + 유튜브가 멈춤 → 요청은 기다리지 않고 들고 있던 것을 받음 · 동시에 여러 번 물어도 읽기는 하나
-    t += 2;
-    mode = 'hang';
-    const h1 = await v.get(4);
-    const h2 = await v.get(4);
-    expect(h1.items).toHaveLength(2);
-    expect(h2.items).toHaveLength(2);
-    expect(calls).toBe(2);
-    // 실패 → 앞 목록 그대로 · ok=false · 5분 동안 다시 묻지 않음
-    const v2 = new RaphaVideos(
-      ch,
-      () => {
-        calls++;
-        if (mode === 'fail') return Promise.reject(new Error('503'));
-        if (mode === 'empty') return Promise.resolve([]);
-        return Promise.resolve([item(1, 11), item(2, 10)]);
-      },
-      () => t,
-    );
-    mode = 'ok';
-    calls = 0;
-    await v2.get(4);
-    t += RAPHA_CACHE_MS + 1;
-    mode = 'fail';
-    await v2.get(4);
-    await v2.settle();
-    const b = await v2.get(4);
-    expect(calls).toBe(2);
-    expect(b.ok).toBe(false);
-    expect(b.items).toHaveLength(2);
-    t += RAPHA_BACKOFF_MS - 1;
-    await v2.get(4);
-    expect(calls).toBe(2);
-    t += 2;
-    mode = 'empty';
-    await v2.get(4);
-    await v2.settle();
-    const c = await v2.get(4);
-    expect(calls).toBe(3);
-    expect(c.ok).toBe(true);
-    expect(c.items.map((x) => x.title)).toEqual(['영상 1', '영상 2']);
-    const fresh = new RaphaVideos(
-      ch,
-      () => Promise.reject(new Error('x')),
-      () => 0,
-    );
-    expect((await fresh.get()).items).toEqual([]);
-    warn.mockRestore();
-    const none = new RaphaVideos(null, () => Promise.resolve([item(1, 1)]));
-    expect(await none.get()).toMatchObject({ ok: false, items: [] });
-  });
-
-  it('대문 규칙: 실패 · 0 → 빈 목록(구간 숨김) · 새것 먼저 · 영상 주소는 유튜브만', () => {
-    expect(R.raphaVideos(null)).toEqual([]);
-    expect(R.raphaVideos({ items: [] })).toEqual([]);
-    const out = R.raphaVideos(
-      {
-        items: [
-          { videoId: 'aaaaaaaaaaa', title: '옛', publishedAt: '2026-11-01' },
-          { videoId: 'bbbbbbbbbbb', title: '새', publishedAt: '2026-11-11' },
-          { videoId: 'bad', title: '틀린 id', publishedAt: '2026-11-12' },
-        ],
-      },
-      4,
-    );
-    expect(out.map((x) => x.title)).toEqual(['새', '옛']);
-    expect(out[0].url).toBe('https://www.youtube.com/watch?v=bbbbbbbbbbb');
-    const js = read('assets/paper/paper.js');
-    expect(js).toMatch(
-      /function raphaBlock\(data\) \{\s*var list = R\.raphaVideos\(data, 4\);\s*if \(!list\.length\) return '';/,
-    );
-  });
-
-  it('길: GET /articles/rapha-videos 한 줄 · 방송 관문 · DB 저장소 · DeepSeek 부르지 않음', () => {
-    const ctl = fs.readFileSync(
-      path.join(__dirname, 'articles.controller.ts'),
-      'utf8',
-    );
-    expect(ctl).toMatch(/@Get\('rapha-videos'\)[\s\S]*?raphaVideos\.get\(/);
-    expect(ctl.indexOf("@Get('rapha-videos')")).toBeLessThan(
-      ctl.indexOf("@Get(':id')"),
-    );
-    // 주석(「방송 관문(핵심어 · DeepSeek) 0」 같은 설명)은 빼고 코드만 잼
-    const src = fs
-      .readFileSync(path.join(__dirname, 'rapha_videos.ts'), 'utf8')
-      .replace(/^\s*\/\/.*$/gm, '')
-      .replace(/\/\*\*[\s\S]*?\*\//g, '');
-    expect(src).not.toMatch(
-      /Repository|deepseek|judge|decideBroadcast|passesIngestionGate/i,
     );
   });
 });

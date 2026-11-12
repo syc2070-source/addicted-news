@@ -2,7 +2,6 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { ArticlesService, parseKind, parseTier } from './articles.service';
 import { parseGroup } from './cluster_view';
-import { raphaVideos } from './rapha_videos';
 
 // 목록·검색은 기본 기사만 · ?kind=broadcast 면 방송만(NEWS-Q1 ■4ⓓ)
 // 기본 publish 층만 · ?tier=archive 면 보관만(NEWS-Q2 ■6). 응답 칸 isFresh·publishedTs(■7).
@@ -41,12 +40,6 @@ export class ArticlesController {
   @Get('rapha')
   getRaphaNews() {
     return this.articlesService.getRaphaNews();
-  }
-
-  // 라파뉴스 영상 — 라파공동체 유튜브 최신(공개 RSS · 30분 들고 있음 · DB · LLM 0 · NEWS-Q26 결정 6)
-  @Get('rapha-videos')
-  getRaphaVideos(@Query('limit') limit?: string) {
-    return raphaVideos.get(Number(limit) || 6);
   }
 
   // 이슈 (isIssue=true인 기사 · 없으면 묶음 단위 최신)

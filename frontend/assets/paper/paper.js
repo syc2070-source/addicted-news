@@ -1,7 +1,9 @@
 // NEWS-Q25 ■1 · ■2 · ■3 — 신문 대문 미리보기(/preview/paper). 운영 대문(/ · assets/home)은 건드리지 않는다.
-// NEWS-Q26(오너 11-12): 위 띠(바깥 사이트 다섯) → 제호(운영 대문 글자 제호를 크게) → 머리기사 + 버금 넷 | 오늘의 중독백과(강조 칸)
-//   → 오늘 들어온 기사(가로 · 두 줄) → 분야 단 넷 → 기획(Statory 랩 공개 호 · 없으면 숨김) → 해외 → 중독을 다룬 방송(「지난 방송 보기」) → 라파뉴스.
+// NEWS-Q26(오너 11-12): 위 띠(바깥 사이트 다섯) → 제호 → 머리기사 + 버금 넷 | 오늘의 중독백과(강조 칸)
+//   → 오늘 들어온 기사(가로 · 두 줄) → 분야 단 넷 → 기획(Statory 랩 공개 호 · 없으면 숨김) → 해외 → 중독을 다룬 방송(「지난 방송 보기」).
 //   중독이슈 구간은 부르지 않는다(함수와 이름 규칙은 남김 · 지우기 0).
+// NEWS-Q27(오너 11-12 다시 봄): 제호 = 중독사회 머리와 같은 남색 로고체(글자와 칸) · 라파뉴스 구간 없앰(라파공동체는 위 띠 링크 둘만) ·
+//   위 띠 링크 진하게 · 구간 바탕 흰색/연한 색 번갈아 · 1440 에서 중독백과 칸을 주요 뉴스 단 높이에 맞춤.
 // 자료 = 공개 API GET 만 · 규칙 = paper_rules.js · 글 = messages/preview/paper.ko.json · LLM 0.
 (function () {
   'use strict';
@@ -113,9 +115,9 @@
         '<nav class="outs" aria-label="' + esc(M.outs.label) + '"><span class="outsLabel">' + esc(M.outs.label) + '</span>' + outLinks('outLink') + '</nav>' +
         '<details class="outsFold"><summary>' + esc(M.outs.label) + '</summary><div class="outsMenu">' + outLinks('outLink') + '</div></details>' +
       '</div></div>' +
-      // 제호(결정 5): 운영 대문의 제호 = 글자 「중독뉴스」 + 「addiction news」(Noto Serif KR · head.css .brand) — 그림을 새로 그리지 않고 같은 글 · 같은 글꼴을 크게
+      // 제호(NEWS-Q27 결정 1): 중독사회 머리의 로고체 — 남색 칸 · 흰 굵은 고딕 · 넓은 글자 사이 · 아래 작은 영문. 그림을 늘리지 않고 글자와 칸으로 그림(값은 paper.css .logoBox)
       '<div class="mast"><div class="mastInner">' +
-        '<h1 class="mastTitle"><a class="brand mastBrand" href="/preview/paper/"><span class="brandKo">' + esc(M.brand) + '</span><span class="brandEn">' + esc(M.brandEn) + '</span></a></h1>' +
+        '<h1 class="mastTitle"><a class="brand mastBrand logoBox" href="/preview/paper/"><span class="brandKo">' + esc(M.brand) + '</span><span class="brandEn">' + esc(M.brandEn) + '</span></a></h1>' +
       '</div></div>' +
       '<header class="head"><div class="headInner"><nav class="nav">' +
         '<a href="/preview/paper/" aria-current="page">' + esc(n.home) + '</a>' +
@@ -153,9 +155,9 @@
   // ── 오늘 들어온 기사: 주요 뉴스 바로 아래 가로 · 두 줄(넓은 화면 네 칸 × 두 줄 = 여덟) · 나머지는 「더 보기」(NEWS-Q26 결정 1) ──
   var TODAY_FIRST = 8;
   function todayBlock(plain) {
-    if (!plain) return '<section class="today strip">' + sectionHead(M.today.title) + emptyLine(null) + '</section>';
+    if (!plain) return '<section class="today strip tint">' + sectionHead(M.today.title) + emptyLine(null) + '</section>';
     var t = R.todayArticles(plain.items || []);
-    if (!t.items.length) return '<section class="today strip">' + sectionHead(M.today.title) + emptyLine(plain) + '</section>';
+    if (!t.items.length) return '<section class="today strip tint">' + sectionHead(M.today.title) + emptyLine(plain) + '</section>';
     var isToday = t.day === R.kstDay(new Date().toISOString());
     var cell = function (a) {
       var cat = M.categories[a.category] || '';
@@ -164,7 +166,7 @@
         '<p class="todaySrc">' + esc(a.source || '') + '</p></li>';
     };
     var first = t.items.slice(0, TODAY_FIRST), rest = t.items.slice(TODAY_FIRST);
-    return '<section class="today strip">' +
+    return '<section class="today strip tint">' +
       sectionHead(isToday ? M.today.title : fill(M.today.titleDay, { date: monthDay(t.day) }), fill(M.today.count, { n: t.items.length })) +
       '<ul class="todayGrid">' + first.map(cell).join('') + '</ul>' +
       (rest.length ? '<details class="todayMore"><summary>' + esc(fill(M.today.more, { n: rest.length })) + '</summary><ul class="todayGrid">' + rest.map(cell).join('') + '</ul></details>' : '') +
@@ -219,21 +221,6 @@
       }).join('') + '</div></section>';
   }
 
-  // ── 라파뉴스(NEWS-Q26 결정 6): 라파공동체 유튜브 최신 영상 · 실패 · 0 이면 그리지 않음 ──
-  function raphaBlock(data) {
-    var list = R.raphaVideos(data, 4);
-    if (!list.length) return '';
-    var ch = data && /^https:\/\/www\.youtube\.com\/channel\/UC[\w-]{22}$/.test(String(data.channelUrl || '')) ? data.channelUrl : '';
-    return '<section class="rapha">' + sectionHead(M.rapha.title, '', M.rapha.desc) +
-      '<div class="raphaGrid">' + list.map(function (v) {
-        return '<article class="castCard"><div class="castPic"><img src="' + esc(v.thumb) + '" alt="" loading="lazy" referrerpolicy="no-referrer"></div>' +
-          '<div class="castText"><a class="castTitle" href="' + href(v.url) + '" target="_blank" rel="noopener noreferrer">' + esc(v.title) + '</a>' +
-          '<p class="meta"><span>' + esc(R.kstDay(v.publishedAt)) + '</span></p></div></article>';
-      }).join('') + '</div>' +
-      (ch ? '<p class="more"><a class="moreLink" href="' + href(ch) + '" target="_blank" rel="noopener noreferrer">' + esc(M.rapha.more) + '</a></p>' : '') +
-      '</section>';
-  }
-
   // ── 중독이슈(NEWS-Q25 결정 8) — NEWS-Q26 결정 3 으로 대문에서 부르지 않음(지우기 0 · 이름 규칙은 paper_rules.js 에 남김) ──
   function issuesBlock(issues, total) {
     if (!issues.length) return '';
@@ -257,9 +244,9 @@
 
   // ── 해외(결정 10) ──
   function abroadBlock(grouped, skip) {
-    if (!grouped) return '<section class="abroad">' + sectionHead(M.abroad.title) + emptyLine(null) + '</section>';
+    if (!grouped) return '<section class="abroad tint">' + sectionHead(M.abroad.title) + emptyLine(null) + '</section>';
     var list = (grouped.items || []).filter(function (a) { return a.isForeign && !skip[a.id]; }).slice(0, 8);
-    return '<section class="abroad">' + sectionHead(M.abroad.title, '', M.abroad.desc) +
+    return '<section class="abroad tint">' + sectionHead(M.abroad.title, '', M.abroad.desc) +
       (list.length ? '<div class="abroadGrid">' + list.map(function (a) {
         return '<article class="abroadRow"><p class="country">' + esc(R.countryOf(a) || M.abroad.unknown) + '</p>' + link(a, 'abroadTitle') +
           '<p class="subLine">' + esc(oneLine(a)) + '</p>' + meta(a) + '</article>';
@@ -326,7 +313,6 @@
         '<aside class="frontSide">' + encBlock() + '</aside></div>' +
       todayBlock(plain) +
       columnsBlock(grouped, skip) + featureBlock(feature) + abroadBlock(grouped, skip) + broadcastBlock(casts) +
-      '<div id="raphaSlot"></div>' +
       '</main>' + bottomHtml(version);
     app.setAttribute('data-ready', '1');
     // 머리기사 그림이 깨지면 글만 넓게(빈 남색 판 0)
@@ -336,18 +322,41 @@
       this.parentNode.remove();
       story.classList.remove('hasPic');
       story.classList.add('noPic');
+      fitEnc(); // 주요 뉴스 단이 낮아짐 → 중독백과 풀이 줄 다시 맞춤(리뷰 1-1)
     });
     var imgs = app.querySelectorAll('.castPic img');
     for (var i = 0; i < imgs.length; i++) imgs[i].addEventListener('error', function () { this.remove(); });
   }
 
-  var encLoad = null, raphaLoad = null;
+  // 오른쪽 단 맞춤(NEWS-Q27 결정 5): 넓은 화면(두 단)에서 중독백과 칸은 CSS 로 주요 뉴스 단 높이까지 늘고(.enc flex),
+  // 늘어난 높이만큼 풀이 줄 수를 늘린다(기본 4줄 → 칸에 들어가는 만큼 · 풀이 전체 줄 수까지). 새 내용 0.
+  var ENC_LINES = 4;
+  function fitEnc() {
+    var enc = app.querySelector('.enc'), def = app.querySelector('.encDef'), main = app.querySelector('.frontMain');
+    if (!enc || !def || !main) return;
+    def.style.webkitLineClamp = '';
+    if (!window.matchMedia('(min-width: 1100px)').matches) return;
+    // 늘이기 전 제 높이(칸 flex · 자리 잡기 min-height 를 잠깐 끄고 잼 — 빈 자리까지 남는 높이로 셈 · 리뷰 1-2)
+    var slot = document.getElementById('encSlot');
+    enc.style.flex = 'none';
+    if (slot) slot.style.minHeight = '0';
+    var lh = parseFloat(getComputedStyle(def).lineHeight) || 27;
+    var slack = main.getBoundingClientRect().bottom - enc.getBoundingClientRect().bottom;
+    var all = Math.round(def.scrollHeight / lh);
+    enc.style.flex = '';
+    if (slot) slot.style.minHeight = '';
+    var n = Math.min(all, ENC_LINES + Math.max(0, Math.floor(slack / lh)));
+    if (n > ENC_LINES) def.style.webkitLineClamp = String(n);
+  }
+  var fitTimer = null;
+  window.addEventListener('resize', function () { clearTimeout(fitTimer); fitTimer = setTimeout(fitEnc, 150); });
+
+  var encLoad = null;
   json('/messages/preview/paper.ko.json').then(function (messages) {
     M = messages;
     document.title = M.pageTitle;
     app.innerHTML = headHtml();
     encLoad = api('/encyclopedia');
-    raphaLoad = api('/articles/rapha-videos?limit=4'); // 따로 읽음 — 유튜브가 늦어도 위 구간을 잡지 않게(맨 아래라 밀리는 것은 바닥글뿐)
     return Promise.all([
       api('/articles/top'),
       api('/articles/latest-paged?limit=220&page=1'),
@@ -361,13 +370,9 @@
     encLoad.then(function (items) {
       var slot = document.getElementById('encSlot');
       if (slot) slot.innerHTML = encBody(items);
-    });
-    raphaLoad.then(function (data) {
-      var slot = document.getElementById('raphaSlot');
-      if (!slot) return;
-      slot.outerHTML = raphaBlock(data);
-      var imgs = app.querySelectorAll('.rapha .castPic img');
-      for (var i = 0; i < imgs.length; i++) imgs[i].addEventListener('error', function () { this.remove(); });
+      fitEnc();
+      // 글꼴(Noto Serif KR)이 늦게 서면 주요 뉴스 단 높이가 바뀜 → 다시 맞춤
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitEnc);
     });
   }).catch(function (e) {
     console.error('대문 실패', e);
